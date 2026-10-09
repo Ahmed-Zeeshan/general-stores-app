@@ -1,0 +1,21 @@
+import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
+
+/** Audit trail of every stock change. `qty` is signed (+ in, - out). */
+const StockMovementSchema = new Schema(
+  {
+    product: { type: Schema.Types.ObjectId, ref: "Product", required: true, index: true },
+    type: { type: String, enum: ["sale", "purchase", "return", "adjustment", "wastage", "opening"], required: true },
+    qty: { type: Number, required: true },
+    stockAfter: { type: Number },
+    refNo: { type: String },
+    note: { type: String },
+    user: { type: Schema.Types.ObjectId, ref: "User" },
+  },
+  { timestamps: true },
+);
+
+StockMovementSchema.index({ product: 1, createdAt: -1 });
+
+export type StockMovementDoc = InferSchemaType<typeof StockMovementSchema>;
+export const StockMovement: Model<StockMovementDoc> =
+  models.StockMovement || model<StockMovementDoc>("StockMovement", StockMovementSchema);

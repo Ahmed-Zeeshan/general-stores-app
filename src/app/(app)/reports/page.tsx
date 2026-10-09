@@ -1,0 +1,179 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { BadgeDollarSign, Printer, Receipt, ShoppingBag, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { Button, Card, PageHeader, Spinner, StatCard, Table, Td, Th } from "@/components/ui";
+import { DateRange } from "@/components/date-range";
+import { SalesBarChart } from "@/components/charts";
+import { useToast } from "@/components/toast";
+import { api, PAYMENT_LABELS, todayISO, UNIT_LABELS } from "@/lib/client";
+import { formatPKR, formatQty } from "@/lib/money";
+
+type Report = {
+  summary: {
+    bills: number;
+    grossSales: number;
+    discount: number;
+    tax: number;
+    netSales: number;
+    cost: number;
+    grossProfit: number;
+    expenses: number;
+    netProfit: number;
+    credit: number;
+    avgBill: number;
+    purchases: number;
+    returns: number;
+    returnCount: number;
+  };
+  byMethod: { _id: string; total: number; count: number }[];
+  byDay: { date: string; total: number; profit: number; bills: number }[];
+  topItems: { _id: string; unit: string; qty: number; total: number; profit: number }[];
+  expenses: { _id: string; total: number }[];
+};
+
+export default function ReportsPage() {
+  const toast = useToast();
+  const [range, setRange] = useState({ from: todayISO(-6), to: todayISO() });
+  const [data, setData] = useState<Report | null>(null);
+
+  useEffect(() => {
+    setData(null);
+    api<Report>(`/api/reports?from=${range.from}&to=${range.to}`).then(setData).catch((e) => toast.error(e.message));
+  }, [range, toast]);
+
+  const s = data?.summary;
+  return (
+    <div>
+      <PageHeader
+        title="Reports"
+        urdu="رپورٹس"
+        subtitle="Profit & loss, best sellers and payment summary"
+        actions={<Button variant="outline" icon={<Printer className="h-4 w-4" />} onClick={() => window.print()}>Print</Button>}
+      />
+      <div className="no-print mb-6">
+        <DateRange from={range.from} to={range.to} onChange={setRange} />
+      </div>
+      {!data || !s ? (
+        <Spinner />
+      ) : (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard label="Net sales" value={formatPKR(s.netSales)} icon={<TrendingUp className="h-5 w-5" />} hint={`${s.bills} bills · avg ${formatPKR(s.avgBill)}`} />
+            <StatCard label="Gross profit" value={formatPKR(s.grossProfit)} icon={<BadgeDollarSign className="h-5 w-5" />} tone="violet" hint="Sales − cost of goods − tax" />
+            <StatCard label="Expenses" value={formatPKR(s.expenses)} icon={<Wallet className="h-5 w-5" />} tone="amber" />
+            <StatCard
+              label="Net profit"
+              value={<span className={s.netProfit < 0 ? "text-rose-600" : "text-emerald-700"}>{formatPKR(s.netProfit)}</span>}
+              icon={s.netProfit < 0 ? <TrendingDown className="h-5 w-5" /> : <TrendingUp className="h-5 w-5" />}
+              tone={s.netProfit < 0 ? "rose" : "green"}
+              hint="Gross profit − expenses"
+            />
+          </div>
+
+          <div className="mt-6 grid gap-6 lg:grid-cols-3">
+            <Card className="p-5 lg:col-span-2">
+              <h2 className="mb-4 font-bold text-slate-900">Daily sales & profit</h2>
+              {data.byDay.length ? <SalesBarChart data={data.byDay} /> : <p className="py-16 text-center text-sm text-slate-500">No sales in this period.</p>}
+            </Card>
+            <Card className="p-5">
+              <h2 className="mb-4 font-bold text-slate-900">Profit & Loss</h2>
+              <dl className="space-y-2.5 text-sm">
+                <PL label="Sales (as billed)" value={s.netSales} />
+                <PL label="− Sales tax collected" value={-s.tax} />
+                <PL label="= Sales excl. tax" value={s.netSales - s.tax} bold />
+                <PL label="− Cost of goods sold" value={-s.cost} />
+                <PL label="= Gross profit" value={s.grossProfit} bold />
+                <PL label="− Expenses" value={-s.expenses} />
+                <div className="border-t border-dashed border-slate-200 pt-2.5">
+                  <PL label="Net profit" value={s.netProfit} bold big />
+                </div>
+              </dl>
+              <div className="mt-5 space-y-1.5 rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+                <div className="flex justify-between"><span>Discounts given</span><b>{formatPKR(s.discount)}</b></div>
+                <div className="flex justify-between"><span>Stock purchased</span><b>{formatPKR(s.purchases)}</b></div>
+                <div className="flex justify-between"><span>Given on udhaar</span><b>{formatPKR(s.credit)}</b></div>
+                <div className="flex justify-between"><span>Returned bills ({s.returnCount})</span><b>{formatPKR(s.returns)}</b></div>
+              </div>
+            </Card>
+          </div>
+
+          <div className="mt-6 grid gap-6 lg:grid-cols-3">
+            <Card className="lg:col-span-2">
+              <div className="border-b border-slate-100 px-5 py-4">
+                <h2 className="font-bold text-slate-900">Top selling items</h2>
+              </div>
+              {data.topItems.length === 0 ? (
+                <p className="py-12 text-center text-sm text-slate-500">No sales.</p>
+              ) : (
+                <Table>
+                  <thead>
+                    <tr>
+                      <Th>#</Th>
+                      <Th>Item</Th>
+                      <Th className="text-right">Qty sold</Th>
+                      <Th className="text-right">Sales</Th>
+                      <Th className="text-right">Profit</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.topItems.map((t, i) => (
+                      <tr key={t._id}>
+                        <Td className="text-slate-400">{i + 1}</Td>
+                        <Td className="font-medium">{t._id}</Td>
+                        <Td className="text-right">{formatQty(t.qty)} {UNIT_LABELS[t.unit] ?? t.unit}</Td>
+                        <Td className="text-right font-semibold">{formatPKR(t.total)}</Td>
+                        <Td className={`text-right font-semibold ${t.profit < 0 ? "text-rose-600" : "text-emerald-700"}`}>{formatPKR(t.profit)}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              )}
+            </Card>
+            <div className="space-y-6">
+              <Card className="p-5">
+                <h2 className="mb-3 flex items-center gap-2 font-bold text-slate-900"><Receipt className="h-4 w-4" /> Payment methods</h2>
+                {data.byMethod.length === 0 ? (
+                  <p className="text-sm text-slate-500">No sales.</p>
+                ) : (
+                  <ul className="space-y-2 text-sm">
+                    {data.byMethod.map((m) => (
+                      <li key={m._id} className="flex justify-between">
+                        <span className="text-slate-600">{PAYMENT_LABELS[m._id] ?? m._id} <span className="text-slate-400">({m.count})</span></span>
+                        <b>{formatPKR(m.total)}</b>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+              <Card className="p-5">
+                <h2 className="mb-3 flex items-center gap-2 font-bold text-slate-900"><ShoppingBag className="h-4 w-4" /> Expenses</h2>
+                {data.expenses.length === 0 ? (
+                  <p className="text-sm text-slate-500">No expenses.</p>
+                ) : (
+                  <ul className="space-y-2 text-sm">
+                    {data.expenses.map((e) => (
+                      <li key={e._id} className="flex justify-between">
+                        <span className="text-slate-600">{e._id}</span>
+                        <b>{formatPKR(e.total)}</b>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function PL({ label, value, bold, big }: { label: string; value: number; bold?: boolean; big?: boolean }) {
+  return (
+    <div className="flex justify-between">
+      <dt className={bold ? "font-semibold text-slate-800" : "text-slate-500"}>{label}</dt>
+      <dd className={`${bold ? "font-bold" : "font-medium"} ${big ? "text-lg" : ""} ${value < 0 && big ? "text-rose-600" : "text-slate-900"}`}>{formatPKR(value)}</dd>
+    </div>
+  );
+}
