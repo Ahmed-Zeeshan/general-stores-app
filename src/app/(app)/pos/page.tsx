@@ -52,6 +52,7 @@ import {
 import { formatPKR, formatQty, round2 } from "@/lib/money";
 import { sellPrice, type PackLike } from "@/lib/pricing";
 import { applyPromotions, type PromoLike } from "@/lib/promotions";
+import { getPrintPrefs, printInFrame, receiptUrl, setPrintPrefs } from "@/lib/print";
 
 type Product = {
   _id: string;
@@ -109,7 +110,9 @@ export default function PosPage() {
   const [pickCustomer, setPickCustomer] = useState(false);
   const [looseFor, setLooseFor] = useState<Product | null>(null);
   const [payOpen, setPayOpen] = useState(false);
-  const [done, setDone] = useState<{ _id: string; invoiceNo: string; total: number; change: number } | null>(null);
+  const [done, setDone] = useState<{ _id: string; invoiceNo: string; total: number; change: number; creditAmount?: number; printed?: boolean } | null>(null);
+  const [autoPrint, setAutoPrint] = useState(false);
+  useEffect(() => setAutoPrint(getPrintPrefs().auto), []);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [heldOpen, setHeldOpen] = useState(false);
@@ -718,7 +721,10 @@ export default function PosPage() {
         }}
         onDone={(sale) => {
           setPayOpen(false);
-          setDone(sale);
+          // Receipt prints straight away on this computer if "print automatically" is on.
+          const printed = getPrintPrefs().auto;
+          if (printed) printInFrame(receiptUrl(sale._id, { print: true, creditAmount: sale.creditAmount }));
+          setDone({ ...sale, printed });
           resetBill();
           loadProducts();
         }}
@@ -828,13 +834,27 @@ export default function PosPage() {
               </div>
             )}
             <div className="mt-6 grid grid-cols-2 gap-3">
-              <Button variant="outline" size="lg" icon={<Printer className="h-5 w-5" />} onClick={() => window.open(`/receipt/${done._id}?print=1`, "_blank")}>
+              <Button variant="outline" size="lg" icon={<Printer className="h-5 w-5" />} onClick={() => window.open(receiptUrl(done._id, { print: true, creditAmount: done.creditAmount }), "_blank")}>
                 Print
               </Button>
               <Button size="lg" onClick={() => setDone(null)}>
                 Next bill
               </Button>
             </div>
+            {done.printed && <p className="mt-3 text-xs text-slate-500">Receipt sent to the printer.</p>}
+            <label className="mt-4 flex cursor-pointer items-center justify-center gap-2 text-xs text-slate-500">
+              <input
+                type="checkbox"
+                checked={autoPrint}
+                onChange={(e) => {
+                  setAutoPrint(e.target.checked);
+                  setPrintPrefs({ auto: e.target.checked });
+                }}
+                className="h-4 w-4 accent-brand-600"
+                aria-label="Print automatically"
+              />
+              Print the receipt automatically after every bill (this computer)
+            </label>
           </div>
         )}
       </Modal>
@@ -941,7 +961,7 @@ function PaymentModal({
   customer: PartyLite | null;
   onChooseCustomer: () => void;
   payload: { items: unknown[]; discount: number; customerId?: string; redeemPoints?: number };
-  onDone: (sale: { _id: string; invoiceNo: string; total: number; change: number }) => void;
+  onDone: (sale: { _id: string; invoiceNo: string; total: number; change: number; creditAmount?: number }) => void;
   onOffline: (bill: Omit<OutboxBill, "lines">) => void;
 }) {
   const toast = useToast();
@@ -994,7 +1014,7 @@ function PaymentModal({
           : { ...payload, paymentMethod: "credit", amountPaid: 0, clientId: clientId.current }
         : { ...payload, paymentMethod: method, amountPaid: receivedNum, ...(ref.trim() && method !== "cash" && method !== "credit" ? { paymentRef: ref.trim() } : {}), clientId: clientId.current };
     try {
-      const sale = await api<{ _id: string; invoiceNo: string; total: number; change: number }>("/api/sales", { body });
+      const sale = await api<{ _id: string; invoiceNo: string; total: number; change: number; creditAmount?: number }>("/api/sales", { body });
       onDone(sale);
     } catch (err) {
       if (err instanceof NetworkError) {

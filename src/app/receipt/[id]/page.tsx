@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Printer } from "lucide-react";
 import QRCode from "qrcode";
 import { api, formatDate, PAYMENT_LABELS, UNIT_LABELS } from "@/lib/client";
+import { getPrintPrefs } from "@/lib/print";
 import { formatPKR, formatQty } from "@/lib/money";
 
 type Sale = {
@@ -52,6 +53,9 @@ function Receipt({ id }: { id: string }) {
   const [branchInfo, setBranchInfo] = useState<{ name: string; address?: string; phone?: string }[]>([]);
   const [error, setError] = useState("");
   const [qr, setQr] = useState("");
+  // 58 mm printers are set per computer in Settings → Printing.
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => setNarrow(getPrintPrefs().paper === "58"), []);
   const [returns, setReturns] = useState<{ _id: string; returnNo: string; createdAt: string; total: number; items: { name: string; qty: number }[] }[]>([]);
   useEffect(() => {
     api<typeof returns>(`/api/sales/${id}/return`).then(setReturns).catch(() => {});
@@ -85,19 +89,9 @@ function Receipt({ id }: { id: string }) {
 
   if (error) return <p className="p-10 text-center text-rose-600">{error}</p>;
   if (!sale || !settings) return <p className="p-10 text-center text-slate-500">Loading…</p>;
-
-  return (
-    <div className="min-h-screen bg-slate-100 py-8 print:bg-white print:py-0">
-      <style>{`@page { size: 80mm auto; margin: 4mm; }`}</style>
-      <div className="no-print mx-auto mb-4 flex max-w-[320px] justify-center gap-2">
-        <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 font-semibold text-white shadow-sm hover:bg-brand-700">
-          <Printer className="h-4 w-4" /> Print receipt
-        </button>
-        <button onClick={() => window.close()} className="rounded-xl bg-white px-5 py-2.5 font-semibold text-slate-700 shadow-sm">
-          Close
-        </button>
-      </div>
-      <div className="mx-auto w-[300px] bg-white p-4 font-mono text-[12px] leading-snug text-black shadow-lg print:w-full print:p-0 print:shadow-none">
+  const copies = search.get("copies") === "2" ? 2 : 1;
+  const body = (
+    <>
         <div className="text-center">
           <div className="text-base font-bold uppercase">{settings.shopName}</div>
           {branchCount > 1 && sale.branchName && <div className="font-bold">{sale.branchName}</div>}
@@ -204,7 +198,34 @@ function Receipt({ id }: { id: string }) {
         <Divider />
         <div className="text-center">{settings.receiptFooter}</div>
         <div className="mt-2 text-center text-[10px]">Items: {sale.items.length}</div>
+    </>
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-100 py-8 print:bg-white print:py-0">
+      <style>{`@page { size: ${narrow ? "58mm" : "80mm"} auto; margin: ${narrow ? "2mm" : "4mm"}; }`}</style>
+      <div className="no-print mx-auto mb-4 flex max-w-[320px] justify-center gap-2">
+        <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 font-semibold text-white shadow-sm hover:bg-brand-700">
+          <Printer className="h-4 w-4" /> Print receipt
+        </button>
+        <button onClick={() => window.close()} className="rounded-xl bg-white px-5 py-2.5 font-semibold text-slate-700 shadow-sm">
+          Close
+        </button>
       </div>
+      {Array.from({ length: copies }, (_, n) => (
+        <div
+          key={n}
+          className={`mx-auto bg-white p-4 font-mono text-[12px] leading-snug text-black shadow-lg print:w-full print:p-0 print:shadow-none ${narrow ? "w-[220px] text-[11px]" : "w-[300px]"} ${n > 0 ? "mt-6 print:mt-0 print:break-before-page" : ""}`}
+        >
+          {n > 0 && <div className="mb-1 text-center font-bold">*** SHOP COPY ***</div>}
+          {body}
+          {n > 0 && sale.creditAmount > 0 && (
+            <div className="mt-8 border-t border-black pt-1 text-center text-[11px]">
+              Customer signature — {sale.customerName} accepts udhaar of {formatPKR(sale.creditAmount)}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

@@ -99,6 +99,19 @@ Run it on one shop computer (or a server) and open `http://<that-computer-ip>:30
 
 Install **WhatsApp Desktop** on the shop PC (or keep **web.whatsapp.com** logged in). In the Udhaar Report choose *WhatsApp Desktop* or *WhatsApp Web* (remembered per computer). Clicking *WhatsApp* opens the chat with the message typed; you only press Send. After a customer pays, the *WhatsApp* button on the payment screen (or the payment receipt) sends a thank-you with the receipt number and remaining balance. Edit both messages in **Settings → WhatsApp messages**. To send a full statement, open *Statement*, choose *Print → Save as PDF* and attach the PDF in WhatsApp.
 
+### Receipt printer, silent printing & cash drawer
+
+1. **Install the printer** (any 80 mm or 58 mm thermal printer: Black Copper, XPrinter, Epson TM, Sewoo …) with its Windows driver and make it the **default printer**. In the driver's *Printing Preferences* choose the paper size (80 × 297 mm / 58 mm, or "Roll paper") and set margins to the minimum.
+2. **Cash drawer:** plug the drawer's RJ11 cable into the printer's *DK / Cash Drawer* port. In the printer's *Printing Preferences → Cash Drawer* (sometimes *Device Settings → Peripherals*) choose **"Open drawer before printing"** (Drawer #1, pulse 50–100 ms). The drawer now opens with every receipt — no extra software needed.
+3. **Silent printing (no print window):** make a Chrome shortcut for the counter and add `--kiosk-printing` to it, e.g.
+
+   ```
+   "C:\Program Files\Google\Chrome\Application\chrome.exe" --kiosk-printing --app=http://localhost:3000/pos
+   ```
+
+   (`--app` opens the POS in its own clean window; add `--kiosk` for full screen.) Close all Chrome windows before starting from this shortcut. Printing then goes straight to the default printer.
+4. In the app: **Settings → Printing (this computer)** — turn on *Print the receipt automatically*, choose 80 mm or 58 mm, optionally a *shop copy* for udhaar bills, and press **Print a test receipt**. Cashiers can also switch automatic printing on or off from the *Bill saved* window. These settings are stored per computer, so set them on every counter.
+
 ### Backups & restore
 
 - Shop owners: **Settings → Data → Download backup** (one JSON file per shop) and **Restore from backup**.

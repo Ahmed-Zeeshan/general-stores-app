@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Database, Download, FileUp, Gift, KeyRound, MapPin, MessageCircle, Pencil, Plus, RefreshCw, Save, ShieldCheck, Store, UserCog, Users } from "lucide-react";
+import { Database, Download, FileUp, Gift, KeyRound, Printer, MapPin, MessageCircle, Pencil, Plus, RefreshCw, Save, ShieldCheck, Store, UserCog, Users } from "lucide-react";
 import { Badge, Button, Card, Field, Input, Modal, PageHeader, Select, Spinner, Table, Td, Th, Textarea } from "@/components/ui";
 import { useSession, type ShopSettings } from "@/components/session";
 import { useToast } from "@/components/toast";
 import { useConfirm } from "@/components/confirm";
 import { api } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
+import { getPrintPrefs, printInFrame, setPrintPrefs, type PrintPrefs } from "@/lib/print";
 import { RestoreButton } from "@/components/restore";
 import { WaModePicker } from "@/components/wa-mode";
 import { DEFAULT_WA_PAYMENT_TEMPLATE, DEFAULT_WA_TEMPLATE, paymentMessage, reminderMessage } from "@/lib/whatsapp";
@@ -178,6 +179,7 @@ export default function SettingsPage() {
               )}
             </div>
           </Card>
+          <PrintingCard />
           <Card className="p-6">
             <h2 className="mb-5 flex items-center gap-2 font-bold text-slate-900"><Gift className="h-5 w-5 text-violet-600" /> Loyalty points</h2>
             <div className="space-y-4">
@@ -614,3 +616,34 @@ function BranchesCard({ data, onChanged }: { data: BranchData; onChanged: () => 
   );
 }
 
+
+/** Printer settings are kept per computer: each counter can have its own printer and paper. */
+function PrintingCard() {
+  const [prefs, setPrefs] = useState<PrintPrefs | null>(null);
+  useEffect(() => setPrefs(getPrintPrefs()), []);
+  if (!prefs) return null;
+  const update = (p: Partial<PrintPrefs>) => {
+    setPrintPrefs(p);
+    setPrefs({ ...prefs, ...p });
+  };
+  return (
+    <Card className="p-6">
+      <h2 className="mb-1 flex items-center gap-2 font-bold text-slate-900"><Printer className="h-5 w-5 text-slate-600" /> Printing (this computer)</h2>
+      <p className="mb-4 text-xs text-slate-500">Saved on this computer only — set it on every counter.</p>
+      <div className="space-y-3">
+        <Toggle checked={prefs.auto} onChange={(v) => update({ auto: v })} title="Print the receipt automatically" text="After every bill, without clicking Print. Use Chrome with silent printing (see README) so no print window appears." />
+        <Toggle checked={prefs.udhaarCopy} onChange={(v) => update({ udhaarCopy: v })} title="Shop copy for udhaar bills" text="Prints a second copy marked “SHOP COPY” when part of the bill goes to udhaar — ask the customer to sign it." />
+        <Field label="Receipt paper">
+          <Select value={prefs.paper} onChange={(e) => update({ paper: e.target.value as "80" | "58" })} aria-label="Receipt paper">
+            <option value="80">80 mm (3 inch) — most thermal printers</option>
+            <option value="58">58 mm (2 inch) — small printers</option>
+          </Select>
+        </Field>
+        <Button type="button" variant="outline" icon={<Printer className="h-4 w-4" />} onClick={() => printInFrame("/receipt/test?print=1")}>
+          Print a test receipt
+        </Button>
+        <p className="text-xs text-slate-500">Cash drawer: in the printer&apos;s Windows settings turn on “open cash drawer before printing” — the drawer then opens with every receipt.</p>
+      </div>
+    </Card>
+  );
+}
