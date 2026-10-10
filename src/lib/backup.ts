@@ -9,7 +9,9 @@ import {
   LedgerEntry,
   Party,
   Product,
+  PointsEntry,
   Production,
+  Promotion,
   Purchase,
   PurchaseReturn,
   Recipe,
@@ -48,6 +50,8 @@ const SHOP_DATA: [string, Model<any>][] = [
   ["production", Production],
   ["transfers", Transfer],
   ["reminders", Reminder],
+  ["promotions", Promotion],
+  ["pointsHistory", PointsEntry],
   ["shifts", Shift],
 ];
 
@@ -70,6 +74,10 @@ const RESTORABLE_SETTINGS = [
   "fbrDefaultPct",
   "waTemplate",
   "waPaymentTemplate",
+  "loyaltyEnabled",
+  "loyaltyEarnPer",
+  "loyaltyPointValue",
+  "loyaltyMinRedeem",
 ] as const;
 
 /** Full JSON export of one shop's data (passwords and secrets excluded). */

@@ -10,7 +10,11 @@ import { formatPKR, formatQty } from "@/lib/money";
 type Sale = {
   invoiceNo: string;
   createdAt: string;
-  items: { name: string; qty: number; unit: string; price: number; discount: number; total: number; pack?: { name: string; size: number; count: number; price: number } }[];
+  items: { name: string; qty: number; unit: string; price: number; discount: number; total: number; pack?: { name: string; size: number; count: number; price: number }; promo?: { name: string; amount: number } }[];
+  promo?: { name: string; amount: number };
+  pointsRedeemed?: number;
+  pointsValue?: number;
+  pointsEarned?: number;
   subtotal: number;
   discount: number;
   tax: number;
@@ -136,11 +140,14 @@ function Receipt({ id }: { id: string }) {
               </span>
               <span className="w-20 text-right">{formatPKR(i.total, { symbol: false })}</span>
             </div>
+            {i.promo && <div className="pl-2 text-[11px]">* {i.promo.name}: -{formatPKR(i.promo.amount, { symbol: false })}</div>}
           </div>
         ))}
         <Divider />
         <Line label="Subtotal" value={sale.subtotal} />
-        {sale.discount > 0 && <Line label="Discount" value={-sale.discount} />}
+        {sale.promo && sale.promo.amount > 0 && <Line label={`Offer: ${sale.promo.name}`} value={-sale.promo.amount} />}
+        {(sale.pointsValue ?? 0) > 0 && <Line label={`Points used (${sale.pointsRedeemed})`} value={-(sale.pointsValue ?? 0)} />}
+        {sale.discount - (sale.promo?.amount ?? 0) - (sale.pointsValue ?? 0) > 0.004 && <Line label="Discount" value={-(sale.discount - (sale.promo?.amount ?? 0) - (sale.pointsValue ?? 0))} />}
         {sale.tax > 0 && <Line label={`Sales Tax ${sale.taxRate}%${Math.abs(sale.total - (sale.subtotal - sale.discount)) < 0.01 ? " (included)" : ""}`} value={sale.tax} />}
         <div className="mt-1 flex justify-between text-base font-bold">
           <span>TOTAL</span>
@@ -157,6 +164,7 @@ function Receipt({ id }: { id: string }) {
         ) : null}
         {sale.change > 0 && <Line label="Change" value={sale.change} />}
         {sale.creditAmount > 0 && <Line label="Udhaar" value={sale.creditAmount} />}
+        {(sale.pointsEarned ?? 0) > 0 && <div className="mt-1 text-center">Points earned on this bill: {sale.pointsEarned}</div>}
         {returns.length > 0 && (
           <>
             <Divider />

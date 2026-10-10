@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ApiError, handle, requireTenant } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
-import { LedgerEntry, Party, User } from "@/models";
+import { LedgerEntry, Party, PointsEntry, User } from "@/models";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -14,7 +14,8 @@ export const GET = handle<Ctx>(async (_req, { params }) => {
   const users = await User.find({ tenant: tid }).select("name").lean();
   const names = new Map(users.map((u) => [String(u._id), u.name]));
   const ledger = entries.map((e) => ({ ...e, user: e.user ? { name: names.get(String(e.user)) ?? "" } : null }));
-  return { party, ledger };
+  const points = party.type === "customer" ? await PointsEntry.find({ tenant: tid, party: id }).sort({ createdAt: -1 }).limit(100).lean() : [];
+  return { party, ledger, points };
 });
 
 const Body = z.object({

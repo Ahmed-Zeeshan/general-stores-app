@@ -35,6 +35,10 @@ const Body = z.object({
   fbrToken: z.string().trim().optional(),
   waTemplate: z.string().trim().max(1000).optional(),
   waPaymentTemplate: z.string().trim().max(1000).optional(),
+  loyaltyEnabled: z.boolean().optional(),
+  loyaltyEarnPer: z.coerce.number().min(1).max(1_000_000).optional(),
+  loyaltyPointValue: z.coerce.number().min(0).max(100_000).optional(),
+  loyaltyMinRedeem: z.coerce.number().int().min(0).max(1_000_000).optional(),
 });
 
 const SETTING_LABELS: Record<string, string> = {
@@ -56,6 +60,10 @@ const SETTING_LABELS: Record<string, string> = {
   fbrToken: "FBR token",
   waTemplate: "WhatsApp reminder message",
   waPaymentTemplate: "WhatsApp payment message",
+  loyaltyEnabled: "loyalty points on/off",
+  loyaltyEarnPer: "points earning rate",
+  loyaltyPointValue: "point value",
+  loyaltyMinRedeem: "minimum points to spend",
 };
 
 export const PUT = handle(async (req) => {

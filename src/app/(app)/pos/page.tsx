@@ -51,6 +51,7 @@ import {
 } from "@/lib/offline";
 import { formatPKR, formatQty, round2 } from "@/lib/money";
 import { sellPrice, type PackLike } from "@/lib/pricing";
+import { applyPromotions, type PromoLike } from "@/lib/promotions";
 
 type Product = {
   _id: string;
@@ -146,6 +147,20 @@ export default function PosPage() {
         } else toast.error(e.message);
       });
   }, [toast, productsKey]);
+
+  const [promos, setPromos] = useState<PromoLike[]>([]);
+  const [usePoints, setUsePoints] = useState(false);
+  // A different customer starts without points applied.
+  useEffect(() => setUsePoints(false), [customer?._id]);
+  useEffect(() => {
+    // Offers are applied on the server too; here they show the customer the same total. Saved for offline use.
+    api<PromoLike[]>("/api/promotions")
+      .then((list) => {
+        setPromos(list);
+        cache.set(`${tenantId}:promotions`, list);
+      })
+      .catch(() => setPromos(cache.get<PromoLike[]>(`${tenantId}:promotions`, [])));
+  }, [tenantId]);
 
   useEffect(() => {
     loadProducts();
@@ -275,8 +290,34 @@ export default function PosPage() {
   const updateItem = (key: string, patch: Partial<CartItem>) => setCart((c) => c.map((i) => (i.key === key ? { ...i, ...patch } : i)));
   const removeItem = (key: string) => setCart((c) => c.filter((i) => i.key !== key));
 
-  const subtotal = round2(cart.reduce((s, i) => s + round2(i.qty * i.price) - i.discount, 0));
-  const discount = Math.min(Number(billDiscount) || 0, subtotal);
+  const offers = useMemo(
+    () =>
+      applyPromotions(
+        cart.map((i) => ({
+          productId: i.product._id,
+          categoryId: i.product.category?._id ?? null,
+          qty: i.pack ? i.qty * i.pack.size : i.qty,
+          unitPrice: i.pack ? i.price / i.pack.size : i.price,
+          gross: round2(i.qty * i.price),
+          manualDiscount: i.discount,
+          isPack: !!i.pack,
+          customPrice: !!i.custom,
+        })),
+        promos,
+        { wholesale },
+      ),
+    [cart, promos, wholesale],
+  );
+  const subtotal = round2(cart.reduce((s, i, idx) => s + round2(i.qty * i.price) - i.discount - (offers.lines[idx]?.discount ?? 0), 0));
+  const billOffer = offers.bill ? Math.min(offers.bill.discount, subtotal) : 0;
+  const manualDiscount = Math.min(Number(billDiscount) || 0, subtotal);
+  // Loyalty points the customer can spend now (same rules as the server).
+  const loyalty = settings?.loyaltyEnabled ? { per: settings.loyaltyPointValue ?? 1, min: settings.loyaltyMinRedeem ?? 0 } : null;
+  const canRedeem = !!(loyalty && customer && (customer.points ?? 0) >= loyalty.min && (customer.points ?? 0) > 0);
+  const pointsLeftRoom = loyalty && loyalty.per > 0 ? Math.floor(Math.max(0, subtotal - Math.min(subtotal, manualDiscount + billOffer)) / loyalty.per) : 0;
+  const redeemPoints = usePoints && canRedeem ? Math.min(customer!.points ?? 0, pointsLeftRoom) : 0;
+  const pointsValue = loyalty ? round2(redeemPoints * loyalty.per) : 0;
+  const discount = Math.min(round2(manualDiscount + billOffer + pointsValue), subtotal);
   const afterDiscount = round2(subtotal - discount);
   const taxRate = settings?.taxEnabled ? settings.taxRate : 0;
   const inclusive = settings?.pricesIncludeTax ?? true;
@@ -287,6 +328,7 @@ export default function PosPage() {
   function resetBill() {
     setCart([]);
     setCustomer(null);
+    setUsePoints(false);
     setBillDiscount("");
     setQ("");
     searchRef.current?.focus();
@@ -498,6 +540,7 @@ export default function PosPage() {
             </div>
             <div className="text-xs text-slate-500">
               {customer ? (customer.balance > 0 ? `Old udhaar: ${formatPKR(customer.balance)}` : "No old udhaar") : "Tap to choose a customer (needed for udhaar)"}
+              {customer && loyalty && ` · ${customer.points ?? 0} points`}
             </div>
           </div>
           {customer && (
@@ -524,7 +567,8 @@ export default function PosPage() {
             <ul className="space-y-2">
               {cart.map((item) => {
                 const loose = !item.pack && LOOSE_UNITS.has(item.product.unit);
-                const line = round2(item.qty * item.price - item.discount);
+                const offer = offers.lines[cart.indexOf(item)];
+                const line = round2(item.qty * item.price - item.discount - (offer?.discount ?? 0));
                 return (
                   <li key={item.key} className="rounded-xl bg-slate-50 p-3">
                     <div className="flex items-start justify-between gap-2">
@@ -535,6 +579,7 @@ export default function PosPage() {
                             {formatPKR(item.price)} / {item.pack ? `${item.pack.name} (${formatQty(item.pack.size)} ${UNIT_LABELS[item.product.unit] ?? item.product.unit})` : UNIT_LABELS[item.product.unit]}
                           </span>
                           {wholesale && !item.custom && <Badge color="violet">Wholesale</Badge>}
+                          {offer && <Badge color="green">{offer.name} −{formatPKR(offer.discount)}</Badge>}
                         </div>
                         {(item.product.packs?.length ?? 0) > 0 && (
                           <select
@@ -605,6 +650,21 @@ export default function PosPage() {
         <div className="border-t border-slate-100 bg-white px-5 py-4">
           <div className="space-y-1.5 text-sm">
             <Row label="Subtotal" value={formatPKR(subtotal)} />
+            {offers.bill && billOffer > 0 && (
+              <div className="flex justify-between text-emerald-700">
+                <span>Offer: {offers.bill.name}</span>
+                <span className="font-semibold">−{formatPKR(billOffer)}</span>
+              </div>
+            )}
+            {canRedeem && (
+              <label className="flex cursor-pointer items-center justify-between gap-2 rounded-lg bg-violet-50 px-2 py-1.5 text-violet-800">
+                <span className="flex items-center gap-2">
+                  <input type="checkbox" checked={usePoints} onChange={(e) => setUsePoints(e.target.checked)} className="h-4 w-4 accent-violet-600" aria-label="Use points" />
+                  Use {customer!.points} points
+                </span>
+                <span className="font-semibold">{usePoints ? `−${formatPKR(pointsValue)}` : `worth ${formatPKR(round2((customer!.points ?? 0) * loyalty!.per))}`}</span>
+              </label>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-slate-500">Discount</span>
               <input
@@ -652,8 +712,9 @@ export default function PosPage() {
         onChooseCustomer={() => setPickCustomer(true)}
         payload={{
           items: cart.map((i) => ({ productId: i.product._id, qty: i.qty, ...(i.custom ? { price: i.price } : {}), discount: i.discount, ...(i.pack ? { pack: i.pack.name } : {}) })),
-          discount,
+          discount: manualDiscount,
           customerId: customer?._id,
+          ...(redeemPoints > 0 ? { redeemPoints } : {}),
         }}
         onDone={(sale) => {
           setPayOpen(false);
@@ -879,7 +940,7 @@ function PaymentModal({
   total: number;
   customer: PartyLite | null;
   onChooseCustomer: () => void;
-  payload: { items: unknown[]; discount: number; customerId?: string };
+  payload: { items: unknown[]; discount: number; customerId?: string; redeemPoints?: number };
   onDone: (sale: { _id: string; invoiceNo: string; total: number; change: number }) => void;
   onOffline: (bill: Omit<OutboxBill, "lines">) => void;
 }) {

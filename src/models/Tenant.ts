@@ -39,6 +39,15 @@ const TenantSchema = new Schema(
       default:
         "Assalam o Alaikum {name},\n{shop} ki taraf se yaad-dehani: aap ke khate mein {amount} baqaya hai.\nMeharbani farma kar jald ada kar dein. Shukriya!\n{shop} {shopPhone}",
     },
+    // --- Loyalty points ---
+    loyaltyEnabled: { type: Boolean, default: false },
+    /** Customer earns 1 point for every this many rupees paid. */
+    loyaltyEarnPer: { type: Number, default: 100, min: 1 },
+    /** What one point is worth when spent (Rs). */
+    loyaltyPointValue: { type: Number, default: 1, min: 0 },
+    /** Points needed before they can be spent. */
+    loyaltyMinRedeem: { type: Number, default: 100, min: 0 },
+
     /** Sent after a customer pays udhaar. Empty = the built-in message. */
     waPaymentTemplate: { type: String, trim: true },
 

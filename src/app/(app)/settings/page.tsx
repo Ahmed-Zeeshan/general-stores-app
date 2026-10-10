@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Database, Download, FileUp, KeyRound, MapPin, MessageCircle, Pencil, Plus, RefreshCw, Save, ShieldCheck, Store, UserCog, Users } from "lucide-react";
+import { Database, Download, FileUp, Gift, KeyRound, MapPin, MessageCircle, Pencil, Plus, RefreshCw, Save, ShieldCheck, Store, UserCog, Users } from "lucide-react";
 import { Badge, Button, Card, Field, Input, Modal, PageHeader, Select, Spinner, Table, Td, Th, Textarea } from "@/components/ui";
 import { useSession, type ShopSettings } from "@/components/session";
 import { useToast } from "@/components/toast";
 import { useConfirm } from "@/components/confirm";
 import { api } from "@/lib/client";
+import { formatPKR } from "@/lib/money";
 import { RestoreButton } from "@/components/restore";
 import { WaModePicker } from "@/components/wa-mode";
 import { DEFAULT_WA_PAYMENT_TEMPLATE, DEFAULT_WA_TEMPLATE, paymentMessage, reminderMessage } from "@/lib/whatsapp";
@@ -80,6 +81,10 @@ export default function SettingsPage() {
           fbrToken: form.fbrToken,
           waTemplate: form.waTemplate,
           waPaymentTemplate: form.waPaymentTemplate,
+          loyaltyEnabled: !!form.loyaltyEnabled,
+          loyaltyEarnPer: Number(form.loyaltyEarnPer) || 100,
+          loyaltyPointValue: Number(form.loyaltyPointValue) || 0,
+          loyaltyMinRedeem: Number(form.loyaltyMinRedeem) || 0,
         },
       });
       toast.success("Settings saved");
@@ -170,6 +175,28 @@ export default function SettingsPage() {
                   </Field>
                   <FbrPending count={form.fbrPending ?? 0} onDone={loadSettings} />
                 </>
+              )}
+            </div>
+          </Card>
+          <Card className="p-6">
+            <h2 className="mb-5 flex items-center gap-2 font-bold text-slate-900"><Gift className="h-5 w-5 text-violet-600" /> Loyalty points</h2>
+            <div className="space-y-4">
+              <Toggle checked={!!form.loyaltyEnabled} onChange={(v) => setForm({ ...form, loyaltyEnabled: v })} title="Give customers loyalty points" text="Customers chosen on a bill earn points on what they pay and can spend them later as a discount." />
+              {form.loyaltyEnabled && (
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <Field label="1 point for every (Rs)">
+                    <Input type="number" min="1" value={form.loyaltyEarnPer ?? 100} onChange={(e) => setForm({ ...form, loyaltyEarnPer: Number(e.target.value) })} aria-label="Rupees per point" />
+                  </Field>
+                  <Field label="1 point is worth (Rs)">
+                    <Input type="number" min="0" step="any" value={form.loyaltyPointValue ?? 1} onChange={(e) => setForm({ ...form, loyaltyPointValue: Number(e.target.value) })} aria-label="Point value" />
+                  </Field>
+                  <Field label="Spend from (points)">
+                    <Input type="number" min="0" value={form.loyaltyMinRedeem ?? 100} onChange={(e) => setForm({ ...form, loyaltyMinRedeem: Number(e.target.value) })} aria-label="Minimum points" />
+                  </Field>
+                  <p className="text-xs text-slate-500 sm:col-span-3">
+                    Example: a Rs {(form.loyaltyEarnPer ?? 100) * 20} bill earns 20 points = {formatPKR(20 * (form.loyaltyPointValue ?? 1))} off a later bill. Udhaar earns points only when it is paid on the bill; returns take points back.
+                  </p>
+                </div>
               )}
             </div>
           </Card>

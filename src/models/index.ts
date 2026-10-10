@@ -20,3 +20,5 @@ export * from "./Shift";
 export * from "./PurchaseReturn";
 export * from "./StockBatch";
 export * from "./ActivityLog";
+export * from "./Promotion";
+export * from "./PointsEntry";

@@ -14,7 +14,8 @@ import { formatPKR } from "@/lib/money";
 import { openWhatsApp, reminderMessage, waNumber } from "@/lib/whatsapp";
 
 type PartyType = "customer" | "supplier";
-type Party = { _id: string; type: PartyType; name: string; phone?: string; address?: string; creditLimit: number; balance: number; notes?: string; updatedAt: string; priceLevel?: "retail" | "wholesale" };
+type Party = { _id: string; type: PartyType; name: string; phone?: string; address?: string; creditLimit: number; balance: number; notes?: string; updatedAt: string; priceLevel?: "retail" | "wholesale"; points?: number };
+type PointsRow = { _id: string; kind: "earn" | "redeem" | "return" | "adjust"; points: number; balanceAfter: number; refNo?: string; createdAt: string };
 type Entry = {
   _id: string;
   kind: string;
@@ -240,12 +241,12 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
   const can = useCan();
   const confirm = useConfirm();
   const { settings } = useSession();
-  const [data, setData] = useState<{ party: Party; ledger: Entry[] } | null>(null);
+  const [data, setData] = useState<{ party: Party; ledger: Entry[]; points?: PointsRow[] } | null>(null);
   const [txn, setTxn] = useState<"payment" | "charge" | null>(null);
   const [editing, setEditing] = useState(false);
 
   const load = useCallback(() => {
-    api<{ party: Party; ledger: Entry[] }>(`/api/parties/${id}`).then(setData).catch((e) => toast.error(e.message));
+    api<{ party: Party; ledger: Entry[]; points?: PointsRow[] }>(`/api/parties/${id}`).then(setData).catch((e) => toast.error(e.message));
   }, [id, toast]);
   useEffect(load, [load]);
 
@@ -326,6 +327,11 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
               <div className="text-sm text-slate-300">{party.balance >= 0 ? t.oweHint : "Advance / extra paid"}</div>
               <div className={`text-4xl font-extrabold ${party.balance > 0 ? "text-amber-300" : "text-emerald-300"}`}>{formatPKR(Math.abs(party.balance))}</div>
               {party.creditLimit > 0 && <div className="text-xs text-slate-400">Limit: {formatPKR(party.creditLimit)}</div>}
+              {type === "customer" && settings?.loyaltyEnabled && (
+                <div className="mt-1 text-sm font-semibold text-violet-200">
+                  {party.points ?? 0} loyalty points · worth {formatPKR((party.points ?? 0) * (settings.loyaltyPointValue ?? 1))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -428,6 +434,36 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
       </Card>
 
       <ReceivePaymentModal open={txn === "payment"} party={party} onClose={() => setTxn(null)} onSaved={load} />
+      {type === "customer" && (data.points?.length ?? 0) > 0 && (
+        <Card className="mt-6">
+          <div className="border-b border-slate-100 px-5 py-4">
+            <h2 className="font-bold text-slate-900">Loyalty points</h2>
+          </div>
+          <Table>
+            <thead>
+              <tr>
+                <Th>Date</Th>
+                <Th>Details</Th>
+                <Th className="text-right">Points</Th>
+                <Th className="text-right">Balance</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.points!.map((p) => (
+                <tr key={p._id}>
+                  <Td className="text-slate-500">{formatDate(p.createdAt, true)}</Td>
+                  <Td>
+                    {{ earn: "Earned on bill", redeem: "Spent on bill", return: "Taken back (return)", adjust: "Adjusted" }[p.kind]} {p.refNo && <span className="text-xs text-slate-400">{p.refNo}</span>}
+                  </Td>
+                  <Td className={`text-right font-semibold ${p.points > 0 ? "text-emerald-700" : "text-rose-600"}`}>{p.points > 0 ? `+${p.points}` : p.points}</Td>
+                  <Td className="text-right font-bold">{p.balanceAfter}</Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </Card>
+      )}
+
       <TxnModal type={type} mode={txn === "charge" ? "charge" : null} party={party} onClose={() => setTxn(null)} onSaved={() => { setTxn(null); load(); }} />
       <PartyForm type={type} open={editing} party={party} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); load(); }} />
     </div>

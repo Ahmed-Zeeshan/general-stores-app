@@ -1,6 +1,7 @@
 import type { Types } from "mongoose";
 import { ApiError } from "./api";
 import { round2 } from "./money";
+import { reversePoints } from "./loyalty";
 import { moveStock, postLedger } from "./services";
 import { nextNumber, Sale, SaleReturn } from "@/models";
 
@@ -94,6 +95,11 @@ export async function createReturn(opts: {
 
     // Claim the bill: only succeeds if nobody returned from it since we read it.
     const inc: Record<string, number> = { returnSeq: 1, returnedTotal: priced.total, creditReturned: priced.creditReduced };
+    // Points earned on the returned part are taken back (the last return takes what is left).
+    const earned = sale.pointsEarned ?? 0;
+    const already = sale.pointsReversed ?? 0;
+    const pointsBack = earned > 0 && sale.customer ? Math.max(0, priced.willReturnAll ? earned - already : Math.min(earned - already, Math.round((earned * priced.total) / (sale.total || 1)))) : 0;
+    if (pointsBack > 0) inc.pointsReversed = pointsBack;
     for (const it of priced.items) inc[`items.${it.index}.returnedQty`] = it.qty;
     // Put units back into the batches they were sold from (latest expiry first), never more than was taken.
     const restorePlan = new Map<number, { batch: Types.ObjectId; qty: number }[]>();
@@ -164,6 +170,7 @@ export async function createReturn(opts: {
         });
       }
     }
+    if (pointsBack > 0 && sale.customer) await reversePoints(tid, sale.customer, { points: pointsBack, returnId: ret._id, returnNo, userId: opts.user.id });
     const khataCredit = round2(priced.creditReduced + (refundMethod === "khata" ? priced.refund : 0));
     if (sale.customer && khataCredit > 0) {
       await postLedger({

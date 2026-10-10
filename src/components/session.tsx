@@ -24,6 +24,10 @@ export type ShopSettings = {
   fbrDefaultPct?: string;
   waTemplate?: string;
   waPaymentTemplate?: string;
+  loyaltyEnabled?: boolean;
+  loyaltyEarnPer?: number;
+  loyaltyPointValue?: number;
+  loyaltyMinRedeem?: number;
 };
 
 export type BranchInfo = { _id: string; name: string; address?: string; phone?: string };

@@ -13,6 +13,8 @@ const PartySchema = new Schema(
     address: { type: String, trim: true },
     /** Wholesale customers get the wholesale prices automatically. */
     priceLevel: { type: String, enum: ["retail", "wholesale"], default: "retail" },
+    /** Loyalty points balance (customers). */
+    points: { type: Number, default: 0 },
     creditLimit: { type: Number, default: 0, min: 0 },
     balance: { type: Number, default: 0 },
     notes: { type: String, trim: true },

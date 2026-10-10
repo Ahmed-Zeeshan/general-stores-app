@@ -21,6 +21,8 @@ const SaleItemSchema = new Schema(
     pack: { type: new Schema({ name: String, size: Number, count: Number, price: Number }, { _id: false }), default: undefined },
     /** Price level used (wholesale customers). */
     wholesale: { type: Boolean, default: undefined },
+    /** Offer applied to this line (its discount is included in `discount`). */
+    promo: { type: new Schema({ name: String, amount: Number }, { _id: false }), default: undefined },
     /** Expiry batches the units came from (products with "track expiry"); `returned` = put back so far. */
     batches: {
       type: [{ batch: { type: Schema.Types.ObjectId, ref: "StockBatch" }, qty: Number, expiryDate: Date, returned: { type: Number, default: 0 }, _id: false }],
@@ -73,6 +75,14 @@ const SaleSchema = new Schema(
     creditReturned: { type: Number, default: 0 },
     /** Increases with every return; protects against two returns at the same moment. */
     returnSeq: { type: Number, default: 0 },
+    /** Bill offer (included in `discount`) and all offers on this bill together. */
+    promo: { type: new Schema({ name: String, amount: Number }, { _id: false }), default: undefined },
+    promoTotal: { type: Number },
+    /** Loyalty points spent (their value is included in `discount`), earned, and taken back by returns. */
+    pointsRedeemed: { type: Number },
+    pointsValue: { type: Number },
+    pointsEarned: { type: Number },
+    pointsReversed: { type: Number, default: 0 },
     note: { type: String },
     // FBR POS integration
     fbrStatus: { type: String, enum: ["none", "synced", "pending", "failed"], default: "none" },

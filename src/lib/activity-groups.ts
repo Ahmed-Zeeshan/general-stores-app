@@ -5,7 +5,7 @@ export const ACTIVITY_GROUPS: Record<string, string[]> = {
   stock: ["stock.adjust", "stock.wastage", "stock.writeoff", "stock.transfer", "product.price", "product.remove", "product.import", "purchase.create", "purchase.return", "purchase.cancel"],
   drawer: ["drawer.open", "drawer.in", "drawer.out", "drawer.close"],
   staff: ["login", "login.failed", "user.create", "user.update"],
-  shop: ["settings.update", "branch.create", "branch.update", "backup.download", "backup.restore", "admin.update"],
+  shop: ["settings.update", "branch.create", "branch.update", "backup.download", "backup.restore", "admin.update", "promo.create", "promo.update", "promo.delete"],
 };
 
 export const GROUP_LABELS: Record<string, string> = {
@@ -53,6 +53,9 @@ export const ACTION_LABELS: Record<string, string> = {
   "backup.download": "Backup downloaded",
   "backup.restore": "Backup restored",
   "admin.update": "Administrator change",
+  "promo.create": "Offer created",
+  "promo.update": "Offer changed",
+  "promo.delete": "Offer deleted",
 };
 
 /** Actions that deserve attention (shown in red). */

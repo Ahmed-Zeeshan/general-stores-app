@@ -4,10 +4,12 @@ import { logActivity } from "@/lib/activity";
 import { reportBranchFilter, requireBranch } from "@/lib/branches";
 import { syncSaleToFbr } from "@/lib/fbr";
 import { round2 } from "@/lib/money";
+import { recordPoints } from "@/lib/loyalty";
 import { findPack, sellPrice } from "@/lib/pricing";
+import { applyPromotions, pointsEarned, type PromoLike, type PromoLine } from "@/lib/promotions";
 import { optionalId } from "@/lib/schemas";
 import { moveStock, postLedger } from "@/lib/services";
-import { nextNumber, PAYMENT_METHODS, Party, Product, Sale, TENDER_METHODS, Tenant } from "@/models";
+import { nextNumber, PAYMENT_METHODS, Party, Product, Promotion, Sale, TENDER_METHODS, Tenant } from "@/models";
 
 export const GET = handle(async (req) => {
   const ctx = await requireBranch();
@@ -49,6 +51,8 @@ const Body = z.object({
   /** Single payment: method and amount received (omitted = paid in full, or nothing for udhaar). */
   paymentMethod: z.enum(PAYMENT_METHODS).optional(),
   amountPaid: z.coerce.number().min(0).optional(),
+  /** Loyalty points the customer spends on this bill. */
+  redeemPoints: z.coerce.number().int().min(0).max(10_000_000).optional(),
   /** Transaction ID for a single card / JazzCash / Easypaisa / bank payment. */
   paymentRef: z.string().trim().max(40).optional(),
   /** Split payment: several methods for one bill. Cash may be more than needed (change is given). */
@@ -100,6 +104,7 @@ export const POST = handle(async (req) => {
   }
   const wholesale = customer?.priceLevel === "wholesale";
   const priceChanges: string[] = [];
+  const promoLines: PromoLine[] = [];
 
   const items = body.items.map((i) => {
     const p = byId.get(i.productId);
@@ -113,6 +118,16 @@ export const POST = handle(async (req) => {
     const gross = round2(i.qty * price);
     const discount = Math.min(round2(i.discount), gross);
     const qty = pack ? Math.round(i.qty * pack.size * 1000) / 1000 : i.qty;
+    promoLines.push({
+      productId: String(p._id),
+      categoryId: p.category ? String(p.category) : null,
+      qty,
+      unitPrice: pack ? price / pack.size : price,
+      gross,
+      manualDiscount: discount,
+      isPack: !!pack,
+      customPrice: Math.abs(price - listPrice) > 0.004,
+    });
     return {
       product: p._id,
       name: p.name,
@@ -127,8 +142,33 @@ export const POST = handle(async (req) => {
     };
   });
 
+  // Offers run automatically (not for wholesale customers or prices typed by hand).
+  const manualLineDiscount = round2(items.reduce((a, i) => a + i.discount, 0));
+  const promos = wholesale ? [] : ((await Promotion.find({ tenant: tid, active: true }).lean()) as unknown as PromoLike[]);
+  const applied = applyPromotions(promoLines, promos, { wholesale, now: soldAt ?? new Date() });
+  for (const [i, lp] of applied.lines.entries()) {
+    if (!lp) continue;
+    const it = items[i] as (typeof items)[number] & { promo?: { name: string; amount: number } };
+    it.discount = round2(it.discount + lp.discount);
+    it.total = round2(it.total - lp.discount);
+    it.promo = { name: lp.name, amount: lp.discount };
+  }
   const subtotal = round2(items.reduce((s, i) => s + i.total, 0));
-  const discount = Math.min(round2(body.discount), subtotal);
+  const billPromo = applied.bill ? Math.min(applied.bill.discount, subtotal) : 0;
+  let discount = Math.min(round2(body.discount + billPromo), subtotal);
+
+  // Loyalty points spent on this bill work like a discount.
+  let pointsRedeemed = 0;
+  let pointsValue = 0;
+  if (body.redeemPoints) {
+    if (!settings?.loyaltyEnabled) throw new ApiError(400, "Loyalty points are switched off in Settings.");
+    if (!customer) throw new ApiError(400, "Choose the customer whose points are being used.");
+    if (!offline && body.redeemPoints < (settings.loyaltyMinRedeem ?? 0)) throw new ApiError(400, `At least ${settings.loyaltyMinRedeem} points are needed to use them.`);
+    const worth = settings.loyaltyPointValue ?? 1;
+    pointsRedeemed = Math.min(body.redeemPoints, worth > 0 ? Math.floor((subtotal - discount) / worth) : 0);
+    pointsValue = round2(pointsRedeemed * worth);
+    discount = round2(discount + pointsValue);
+  }
   const afterDiscount = round2(subtotal - discount);
   const taxRate = settings?.taxEnabled ? settings.taxRate ?? 0 : 0;
   let tax = 0;
@@ -155,34 +195,56 @@ export const POST = handle(async (req) => {
     }
   }
 
+  // Take the points before saving, so the same points cannot be spent twice.
+  if (pointsRedeemed > 0) {
+    const took = await Party.updateOne({ _id: customer!._id, tenant: tid, ...(offline ? {} : { points: { $gte: pointsRedeemed } }) }, { $inc: { points: -pointsRedeemed } });
+    if (!took.modifiedCount) throw new ApiError(400, `${customer!.name} does not have ${pointsRedeemed} points.`);
+  }
+  const promoTotal = round2(applied.lines.reduce((a, l) => a + (l?.discount ?? 0), 0) + billPromo);
+  const pointsEarnedNow = customer && settings?.loyaltyEnabled ? pointsEarned(amountPaid, settings.loyaltyEarnPer ?? 100) : 0;
+
   const invoiceNo = await nextNumber(tid, "sale", "INV");
-  const sale = await Sale.create({
-    tenant: tid,
-    invoiceNo,
-    branch: branch._id,
-    branchName: branch.name,
-    clientId: body.clientId,
-    offline,
-    ...(soldAt ? { createdAt: soldAt } : {}),
-    items,
-    subtotal,
-    discount,
-    tax,
-    taxRate,
-    total,
-    costTotal,
-    paymentMethod,
-    payments,
-    amountPaid,
-    change,
-    creditAmount,
-    customer: customer?._id,
-    customerName: customer?.name,
-    cashier: user.id,
-    cashierName: user.name,
-    note: body.note,
-    fbrStatus: settings?.fbrEnabled ? "pending" : "none",
-  });
+  let sale;
+  try {
+    sale = await Sale.create({
+      tenant: tid,
+      invoiceNo,
+      branch: branch._id,
+      branchName: branch.name,
+      clientId: body.clientId,
+      offline,
+      ...(soldAt ? { createdAt: soldAt } : {}),
+      items,
+      subtotal,
+      discount,
+      tax,
+      taxRate,
+      total,
+      costTotal,
+      paymentMethod,
+      payments,
+      amountPaid,
+      change,
+      creditAmount,
+      customer: customer?._id,
+      customerName: customer?.name,
+      cashier: user.id,
+      cashierName: user.name,
+      note: body.note,
+      fbrStatus: settings?.fbrEnabled ? "pending" : "none",
+      ...(applied.bill && billPromo > 0 ? { promo: { name: applied.bill.name, amount: billPromo } } : {}),
+      ...(promoTotal > 0 ? { promoTotal } : {}),
+      ...(pointsRedeemed > 0 ? { pointsRedeemed, pointsValue } : {}),
+      ...(pointsEarnedNow > 0 ? { pointsEarned: pointsEarnedNow } : {}),
+    });
+  } catch (err) {
+    // Give the points back if the bill could not be saved.
+    if (pointsRedeemed > 0) await Party.updateOne({ _id: customer!._id, tenant: tid }, { $inc: { points: pointsRedeemed } });
+    throw err;
+  }
+  if (customer && (pointsRedeemed > 0 || pointsEarnedNow > 0)) {
+    await recordPoints(tid, customer._id, { redeemed: pointsRedeemed, earned: pointsEarnedNow, saleId: sale._id, invoiceNo, userId: user.id });
+  }
 
   const batchSet: Record<string, unknown> = {};
   for (const [i, item] of items.entries()) {
@@ -203,23 +265,24 @@ export const POST = handle(async (req) => {
       userId: user.id,
     });
   }
-  const lineDiscounts = round2(items.reduce((a, i) => a + i.discount, 0));
-  if (priceChanges.length || discount > 0 || lineDiscounts > 0) {
+  // Only discounts typed by hand are worth recording (offers and points are automatic).
+  const manualBill = round2(Math.min(body.discount, subtotal));
+  if (priceChanges.length || manualBill > 0 || manualLineDiscount > 0) {
     await logActivity(
       { tid, user, branchId: branch._id },
       {
         action: priceChanges.length ? "sale.price" : "sale.discount",
         summary: `${invoiceNo} (${total}): ${[
           priceChanges.length && `price changed — ${priceChanges.join(", ")}`,
-          discount > 0 && `bill discount Rs ${discount}`,
-          lineDiscounts > 0 && `item discounts Rs ${lineDiscounts}`,
+          manualBill > 0 && `bill discount Rs ${manualBill}`,
+          manualLineDiscount > 0 && `item discounts Rs ${manualLineDiscount}`,
         ]
           .filter(Boolean)
           .join("; ")}`,
         refType: "sale",
         refId: sale._id,
         refNo: invoiceNo,
-        amount: round2(discount + lineDiscounts),
+        amount: round2(manualBill + manualLineDiscount),
       },
     );
   }
