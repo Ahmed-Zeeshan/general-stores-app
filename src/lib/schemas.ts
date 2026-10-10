@@ -23,6 +23,7 @@ export const ProductInput = z.object({
     .optional()
     .nullable()
     .transform((v) => (v ? new Date(v) : null)),
+  pctCode: z.string().trim().optional(),
   active: z.boolean().optional(),
 });
 

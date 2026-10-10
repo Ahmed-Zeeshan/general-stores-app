@@ -1,3 +1,4 @@
+import { tenantScoped } from "./tenant-plugin";
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
 
 const PurchaseItemSchema = new Schema(
@@ -14,7 +15,7 @@ const PurchaseItemSchema = new Schema(
 
 const PurchaseSchema = new Schema(
   {
-    purchaseNo: { type: String, required: true, unique: true },
+    purchaseNo: { type: String, required: true },
     supplier: { type: Schema.Types.ObjectId, ref: "Party" },
     supplierName: { type: String },
     supplierInvoice: { type: String, trim: true },
@@ -27,7 +28,10 @@ const PurchaseSchema = new Schema(
   { timestamps: true },
 );
 
-PurchaseSchema.index({ createdAt: -1 });
+PurchaseSchema.plugin(tenantScoped);
+
+PurchaseSchema.index({ tenant: 1, purchaseNo: 1 }, { unique: true });
+PurchaseSchema.index({ tenant: 1, createdAt: -1 });
 
 export type PurchaseDoc = InferSchemaType<typeof PurchaseSchema>;
 export const Purchase: Model<PurchaseDoc> =

@@ -6,6 +6,9 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   BarChart3,
   BookOpen,
+  Building2,
+  ChefHat,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -18,19 +21,22 @@ import {
   PackagePlus,
   X,
 } from "lucide-react";
-import { ToastProvider } from "@/components/toast";
+import { ToastProvider, useToast } from "@/components/toast";
 import { SessionContext, type ShopSettings } from "@/components/session";
 import { Logo } from "@/components/logo";
-import { Spinner, cn } from "@/components/ui";
+import { Button, Field, Input, Modal, Spinner, cn } from "@/components/ui";
 import { api } from "@/lib/client";
 import type { Role, SessionUser } from "@/lib/session";
 
-const NAV: { href: string; label: string; urdu: string; icon: typeof Package; roles?: Role[] }[] = [
-  { href: "/", label: "Dashboard", urdu: "ڈیش بورڈ", icon: LayoutDashboard },
-  { href: "/pos", label: "New Bill", urdu: "نیا بل", icon: ShoppingCart },
-  { href: "/sales", label: "Sales History", urdu: "فروخت", icon: Receipt },
-  { href: "/products", label: "Products & Stock", urdu: "اشیاء", icon: Package },
-  { href: "/customers", label: "Customers Khata", urdu: "کھاتہ", icon: BookOpen },
+const SHOP: Role[] = ["owner", "manager", "cashier"];
+const NAV: { href: string; label: string; urdu: string; icon: typeof Package; roles: Role[] }[] = [
+  { href: "/admin", label: "Shops", urdu: "دکانیں", icon: Building2, roles: ["superadmin"] },
+  { href: "/", label: "Dashboard", urdu: "ڈیش بورڈ", icon: LayoutDashboard, roles: SHOP },
+  { href: "/pos", label: "New Bill", urdu: "نیا بل", icon: ShoppingCart, roles: SHOP },
+  { href: "/sales", label: "Sales History", urdu: "فروخت", icon: Receipt, roles: SHOP },
+  { href: "/products", label: "Products & Stock", urdu: "اشیاء", icon: Package, roles: SHOP },
+  { href: "/customers", label: "Customers Khata", urdu: "کھاتہ", icon: BookOpen, roles: SHOP },
+  { href: "/production", label: "Production", urdu: "تیاری", icon: ChefHat, roles: ["owner", "manager"] },
   { href: "/purchases", label: "Purchases", urdu: "خریداری", icon: PackagePlus, roles: ["owner", "manager"] },
   { href: "/suppliers", label: "Suppliers", urdu: "سپلائرز", icon: Truck, roles: ["owner", "manager"] },
   { href: "/expenses", label: "Expenses", urdu: "اخراجات", icon: Wallet, roles: ["owner", "manager"] },
@@ -38,13 +44,14 @@ const NAV: { href: string; label: string; urdu: string; icon: typeof Package; ro
   { href: "/settings", label: "Settings", urdu: "ترتیبات", icon: SettingsIcon, roles: ["owner"] },
 ];
 
-const ROLE_LABEL: Record<Role, string> = { owner: "Owner", manager: "Manager", cashier: "Cashier" };
+const ROLE_LABEL: Record<Role, string> = { superadmin: "Super Admin", owner: "Owner", manager: "Manager", cashier: "Cashier" };
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [data, setData] = useState<{ user: SessionUser; settings: ShopSettings | null } | null>(null);
   const [open, setOpen] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
 
   const load = useCallback(() => {
     api<{ user: SessionUser; settings: ShopSettings | null }>("/api/auth/me").then(setData).catch(() => {});
@@ -58,8 +65,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (!data) return <Spinner className="min-h-screen" />;
-  const nav = NAV.filter((n) => !n.roles || n.roles.includes(data.user.role));
+  const nav = NAV.filter((n) => n.roles.includes(data.user.role));
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  const isAdmin = data.user.role === "superadmin";
 
   const sidebar = (
     <div className="flex h-full flex-col">
@@ -67,7 +75,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <Logo />
       </div>
       <div className="mx-4 mb-3 rounded-xl bg-brand-50 px-3 py-2.5">
-        <div className="truncate text-sm font-bold text-brand-900">{data.settings?.shopName ?? "My Shop"}</div>
+        <div className="truncate text-sm font-bold text-brand-900">{isAdmin ? "Admin Panel" : data.settings?.shopName ?? "My Shop"}</div>
         <div className="text-xs text-brand-700">
           {data.user.name} · {ROLE_LABEL[data.user.role]}
         </div>
@@ -88,7 +96,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </Link>
         ))}
       </nav>
-      <div className="border-t border-slate-100 p-3">
+      <div className="space-y-1 border-t border-slate-100 p-3">
+        <button
+          onClick={() => setPwOpen(true)}
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+        >
+          <KeyRound className="h-5 w-5" /> Change password
+        </button>
         <button
           onClick={logout}
           className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-rose-50 hover:text-rose-700"
@@ -121,15 +135,63 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <button onClick={() => setOpen(true)} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100" aria-label="Open menu">
               <Menu className="h-6 w-6" />
             </button>
-            <span className="truncate px-2 font-bold text-slate-900">{data.settings?.shopName}</span>
-            <Link href="/pos" className="rounded-lg bg-brand-600 p-2 text-white" aria-label="New bill">
-              <ShoppingCart className="h-5 w-5" />
-            </Link>
+            <span className="truncate px-2 font-bold text-slate-900">{isAdmin ? "Admin Panel" : data.settings?.shopName}</span>
+            {isAdmin ? (
+              <span className="w-9" />
+            ) : (
+              <Link href="/pos" className="rounded-lg bg-brand-600 p-2 text-white" aria-label="New bill">
+                <ShoppingCart className="h-5 w-5" />
+              </Link>
+            )}
           </header>
 
           <main className={pathname === "/pos" ? "" : "mx-auto max-w-7xl p-4 sm:p-6 lg:p-8"}>{children}</main>
         </div>
+        <ChangePasswordModal open={pwOpen} onClose={() => setPwOpen(false)} />
       </ToastProvider>
     </SessionContext.Provider>
+  );
+}
+
+function ChangePasswordModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const toast = useToast();
+  const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirm: "" });
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (open) setForm({ currentPassword: "", newPassword: "", confirm: "" });
+  }, [open]);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (form.newPassword !== form.confirm) return toast.error("New passwords do not match.");
+    setSaving(true);
+    try {
+      await api("/api/auth/password", { body: { currentPassword: form.currentPassword, newPassword: form.newPassword } });
+      toast.success("Password changed");
+      onClose();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Change password" size="sm">
+      <form onSubmit={save} className="space-y-4">
+        <Field label="Current password">
+          <Input type="password" required autoFocus autoComplete="current-password" value={form.currentPassword} onChange={(e) => setForm({ ...form, currentPassword: e.target.value })} />
+        </Field>
+        <Field label="New password" hint="At least 6 characters">
+          <Input type="password" required minLength={6} autoComplete="new-password" value={form.newPassword} onChange={(e) => setForm({ ...form, newPassword: e.target.value })} />
+        </Field>
+        <Field label="Repeat new password">
+          <Input type="password" required minLength={6} autoComplete="new-password" value={form.confirm} onChange={(e) => setForm({ ...form, confirm: e.target.value })} />
+        </Field>
+        <Button type="submit" size="lg" className="w-full" loading={saving}>
+          Save new password
+        </Button>
+      </form>
+    </Modal>
   );
 }

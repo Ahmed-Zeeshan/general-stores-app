@@ -2,11 +2,14 @@ import { Schema, model, models, type InferSchemaType, type Model } from "mongoos
 
 const UserSchema = new Schema(
   {
+    // Empty for the platform super admin; every shop user belongs to exactly one tenant.
+    tenant: { type: Schema.Types.ObjectId, ref: "Tenant", index: true },
     name: { type: String, required: true, trim: true },
     username: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true, select: false },
-    role: { type: String, enum: ["owner", "manager", "cashier"], default: "cashier" },
+    role: { type: String, enum: ["superadmin", "owner", "manager", "cashier"], default: "cashier" },
     active: { type: Boolean, default: true },
+    lastLoginAt: { type: Date },
   },
   { timestamps: true },
 );

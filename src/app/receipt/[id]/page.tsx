@@ -3,6 +3,7 @@
 import { Suspense, use, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Printer } from "lucide-react";
+import QRCode from "qrcode";
 import { api, formatDate, PAYMENT_LABELS, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty } from "@/lib/money";
 
@@ -22,6 +23,9 @@ type Sale = {
   customerName?: string;
   cashierName?: string;
   status: string;
+  fbrStatus?: string;
+  fbrInvoiceNumber?: string;
+  fbrReturnInvoiceNumber?: string;
 };
 type Settings = { shopName: string; phone?: string; address?: string; ntn?: string; strn?: string; receiptFooter?: string };
 
@@ -39,6 +43,7 @@ function Receipt({ id }: { id: string }) {
   const [sale, setSale] = useState<Sale | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [error, setError] = useState("");
+  const [qr, setQr] = useState("");
 
   useEffect(() => {
     Promise.all([api<Sale>(`/api/sales/${id}`), api<{ settings: Settings }>("/api/auth/me")])
@@ -50,8 +55,15 @@ function Receipt({ id }: { id: string }) {
   }, [id]);
 
   useEffect(() => {
-    if (sale && search.get("print") === "1") setTimeout(() => window.print(), 300);
-  }, [sale, search]);
+    if (sale?.fbrInvoiceNumber) {
+      QRCode.toDataURL(sale.fbrInvoiceNumber, { margin: 0, width: 220, errorCorrectionLevel: "M" }).then(setQr).catch(() => {});
+    }
+  }, [sale]);
+
+  const fbrReady = !sale?.fbrInvoiceNumber || !!qr;
+  useEffect(() => {
+    if (sale && fbrReady && search.get("print") === "1") setTimeout(() => window.print(), 300);
+  }, [sale, fbrReady, search]);
 
   if (error) return <p className="p-10 text-center text-rose-600">{error}</p>;
   if (!sale || !settings) return <p className="p-10 text-center text-slate-500">Loading…</p>;
@@ -101,7 +113,7 @@ function Receipt({ id }: { id: string }) {
         <Divider />
         <Line label="Subtotal" value={sale.subtotal} />
         {sale.discount > 0 && <Line label="Discount" value={-sale.discount} />}
-        {sale.tax > 0 && <Line label={`Sales Tax ${sale.taxRate}%`} value={sale.tax} />}
+        {sale.tax > 0 && <Line label={`Sales Tax ${sale.taxRate}%${Math.abs(sale.total - (sale.subtotal - sale.discount)) < 0.01 ? " (included)" : ""}`} value={sale.tax} />}
         <div className="mt-1 flex justify-between text-base font-bold">
           <span>TOTAL</span>
           <span>{formatPKR(sale.total)}</span>
@@ -110,6 +122,27 @@ function Receipt({ id }: { id: string }) {
         <Line label={`Paid (${PAYMENT_LABELS[sale.paymentMethod]})`} value={sale.amountPaid + sale.change} />
         {sale.change > 0 && <Line label="Change" value={sale.change} />}
         {sale.creditAmount > 0 && <Line label="Udhaar" value={sale.creditAmount} />}
+        {sale.fbrInvoiceNumber && (
+          <>
+            <Divider />
+            <div className="text-center">
+              <div className="font-bold">FBR POS Invoice</div>
+              <div className="break-all">{sale.fbrInvoiceNumber}</div>
+              {sale.fbrReturnInvoiceNumber && <div className="break-all">Return: {sale.fbrReturnInvoiceNumber}</div>}
+              {qr && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={qr} alt="FBR invoice QR code" className="mx-auto mt-2 h-24 w-24" />
+              )}
+              <div className="mt-1 text-[10px]">Verify this invoice via FBR&apos;s Tax Asaan app</div>
+            </div>
+          </>
+        )}
+        {sale.fbrStatus === "pending" && !sale.fbrInvoiceNumber && (
+          <>
+            <Divider />
+            <div className="text-center text-[11px]">FBR invoice number pending</div>
+          </>
+        )}
         <Divider />
         <div className="text-center">{settings.receiptFooter}</div>
         <div className="mt-2 text-center text-[10px]">Items: {sale.items.length}</div>

@@ -26,8 +26,8 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await api("/api/auth/login", { body: { username, password } });
-      router.replace("/");
+      const r = await api<{ role: string }>("/api/auth/login", { body: { username, password } });
+      router.replace(r.role === "superadmin" ? "/admin" : "/");
       router.refresh();
     } catch (err) {
       toast.error((err as Error).message);
@@ -71,7 +71,7 @@ export default function LoginPage() {
           Log in
         </Button>
       </form>
-      <p className="mt-8 text-center text-sm text-slate-500">Forgot your password? Ask the shop owner to reset it from Settings.</p>
+      <p className="mt-8 text-center text-sm text-slate-500">Forgot your password? Staff: ask your shop owner. Shop owners: ask the administrator.</p>
     </div>
   );
 }

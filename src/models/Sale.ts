@@ -1,3 +1,4 @@
+import { tenantScoped } from "./tenant-plugin";
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
 
 import { PAYMENT_METHODS } from "@/lib/constants";
@@ -20,7 +21,7 @@ const SaleItemSchema = new Schema(
 
 const SaleSchema = new Schema(
   {
-    invoiceNo: { type: String, required: true, unique: true },
+    invoiceNo: { type: String, required: true },
     items: { type: [SaleItemSchema], required: true },
     subtotal: { type: Number, required: true },
     discount: { type: Number, default: 0 },
@@ -39,12 +40,22 @@ const SaleSchema = new Schema(
     status: { type: String, enum: ["completed", "returned"], default: "completed" },
     returnedAt: { type: Date },
     note: { type: String },
+    // FBR POS integration
+    fbrStatus: { type: String, enum: ["none", "synced", "pending", "failed"], default: "none" },
+    fbrInvoiceNumber: { type: String },
+    fbrReturnInvoiceNumber: { type: String },
+    fbrError: { type: String },
+    fbrAttempts: { type: Number, default: 0 },
   },
   { timestamps: true },
 );
 
-SaleSchema.index({ createdAt: -1 });
-SaleSchema.index({ status: 1, createdAt: -1 });
+SaleSchema.plugin(tenantScoped);
+
+SaleSchema.index({ tenant: 1, invoiceNo: 1 }, { unique: true });
+SaleSchema.index({ tenant: 1, createdAt: -1 });
+SaleSchema.index({ tenant: 1, status: 1, createdAt: -1 });
+SaleSchema.index({ tenant: 1, fbrStatus: 1 });
 
 export type SaleDoc = InferSchemaType<typeof SaleSchema>;
 export const Sale: Model<SaleDoc> = models.Sale || model<SaleDoc>("Sale", SaleSchema);

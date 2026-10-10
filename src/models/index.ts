@@ -1,5 +1,5 @@
 export * from "./User";
-export * from "./Settings";
+export * from "./Tenant";
 export * from "./Category";
 export * from "./Product";
 export * from "./Party";
@@ -9,3 +9,5 @@ export * from "./Purchase";
 export * from "./Expense";
 export * from "./StockMovement";
 export * from "./Counter";
+export * from "./Recipe";
+export * from "./Production";

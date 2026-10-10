@@ -1,11 +1,11 @@
-import { handle, requireUser } from "@/lib/api";
+import { handle, requireTenant } from "@/lib/api";
 import { Expense } from "@/models";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export const DELETE = handle<Ctx>(async (_req, { params }) => {
-  await requireUser(["owner"]);
+  const { tid } = await requireTenant(["owner"]);
   const { id } = await params;
-  await Expense.findByIdAndDelete(id);
+  await Expense.deleteOne({ _id: id, tenant: tid });
   return { ok: true };
 });

@@ -14,6 +14,13 @@ export type ShopSettings = {
   taxRate: number;
   pricesIncludeTax: boolean;
   receiptFooter?: string;
+  maxUsers?: number;
+  plan?: string;
+  expiresAt?: string;
+  fbrEnabled?: boolean;
+  fbrMode?: "sandbox" | "live";
+  fbrPosId?: string;
+  fbrDefaultPct?: string;
 };
 
 type Ctx = { user: SessionUser; settings: ShopSettings | null; reload: () => void };

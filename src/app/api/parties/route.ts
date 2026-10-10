@@ -1,20 +1,20 @@
 import { z } from "zod";
-import { ApiError, escapeRegex, handle, requireUser } from "@/lib/api";
+import { ApiError, escapeRegex, handle, requireTenant } from "@/lib/api";
 import { postLedger } from "@/lib/services";
 import { Party } from "@/models";
 
 export const GET = handle(async (req) => {
-  await requireUser();
+  const { tid } = await requireTenant();
   const url = new URL(req.url);
   const type = url.searchParams.get("type") === "supplier" ? "supplier" : "customer";
   const q = url.searchParams.get("q")?.trim();
-  const query: Record<string, unknown> = { type, active: true };
+  const query: Record<string, unknown> = { tenant: tid, type, active: true };
   if (q) {
     const rx = new RegExp(escapeRegex(q), "i");
     query.$or = [{ name: rx }, { phone: rx }];
   }
   if (url.searchParams.get("due") === "1") query.balance = { $gt: 0 };
-  return Party.find(query).sort({ balance: -1, name: 1 }).limit(1000).lean();
+  return Party.find(query).sort({ balance: -1, name: 1 }).limit(2000).lean();
 });
 
 const Body = z.object({
@@ -28,14 +28,14 @@ const Body = z.object({
 });
 
 export const POST = handle(async (req) => {
-  const user = await requireUser();
+  const { user, tid } = await requireTenant();
   const { openingBalance, ...body } = Body.parse(await req.json());
   if (body.type === "supplier" && user.role === "cashier") {
     throw new ApiError(403, "Only owner or manager can add suppliers.");
   }
-  const party = await Party.create({ ...body, balance: 0 });
+  const party = await Party.create({ ...body, tenant: tid, balance: 0 });
   if (openingBalance) {
-    await postLedger({ partyId: party._id, kind: "opening", amount: openingBalance, note: "Opening balance", userId: user.id });
+    await postLedger({ tid, partyId: party._id, kind: "opening", amount: openingBalance, note: "Opening balance", userId: user.id });
   }
-  return Party.findById(party._id).lean();
+  return Party.findOne({ _id: party._id, tenant: tid }).lean();
 });

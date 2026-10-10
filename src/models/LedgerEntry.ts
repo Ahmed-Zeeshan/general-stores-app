@@ -1,3 +1,4 @@
+import { tenantScoped } from "./tenant-plugin";
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
 
 /**
@@ -21,7 +22,9 @@ const LedgerEntrySchema = new Schema(
   { timestamps: true },
 );
 
-LedgerEntrySchema.index({ party: 1, createdAt: -1 });
+LedgerEntrySchema.plugin(tenantScoped);
+
+LedgerEntrySchema.index({ tenant: 1, party: 1, createdAt: -1 });
 
 export type LedgerEntryDoc = InferSchemaType<typeof LedgerEntrySchema>;
 export const LedgerEntry: Model<LedgerEntryDoc> =

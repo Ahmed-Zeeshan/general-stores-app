@@ -1,8 +1,10 @@
 import { SignJWT, jwtVerify } from "jose";
 
 export const SESSION_COOKIE = "dukaan_session";
-export type Role = "owner" | "manager" | "cashier";
-export type SessionUser = { id: string; name: string; username: string; role: Role };
+export type Role = "superadmin" | "owner" | "manager" | "cashier";
+export type ShopRole = Exclude<Role, "superadmin">;
+/** tenantId is null only for the platform super admin. */
+export type SessionUser = { id: string; name: string; username: string; role: Role; tenantId: string | null };
 
 function secret() {
   const s = process.env.AUTH_SECRET;
@@ -27,6 +29,7 @@ export async function verifySession(token: string | undefined): Promise<SessionU
       name: String(payload.name),
       username: String(payload.username),
       role: payload.role as Role,
+      tenantId: payload.tenantId ? String(payload.tenantId) : null,
     };
   } catch {
     return null;

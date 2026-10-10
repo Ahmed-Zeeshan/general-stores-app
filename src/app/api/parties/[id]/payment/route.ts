@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ApiError, handle, requireUser } from "@/lib/api";
+import { ApiError, handle, requireTenant } from "@/lib/api";
 import { postLedger } from "@/lib/services";
 import { Party } from "@/models";
 
@@ -14,15 +14,16 @@ const Body = z.object({
 });
 
 export const POST = handle<Ctx>(async (req, { params }) => {
-  const user = await requireUser();
+  const { user, tid } = await requireTenant();
   const { id } = await params;
   const body = Body.parse(await req.json());
-  const party = await Party.findById(id).lean();
+  const party = await Party.findOne({ _id: id, tenant: tid }).lean();
   if (!party) throw new ApiError(404, "Not found.");
   if (party.type === "supplier" && user.role === "cashier") throw new ApiError(403, "Only owner or manager can pay suppliers.");
   if (body.type === "charge" && user.role === "cashier") throw new ApiError(403, "Only owner or manager can add manual udhaar.");
 
-  const entry = await postLedger({
+  return postLedger({
+    tid,
     partyId: id,
     kind: body.type === "payment" ? "payment" : "adjustment",
     amount: body.type === "payment" ? -body.amount : body.amount,
@@ -30,5 +31,4 @@ export const POST = handle<Ctx>(async (req, { params }) => {
     note: body.note,
     userId: user.id,
   });
-  return entry;
 });

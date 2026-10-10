@@ -1,22 +1,25 @@
 import { z } from "zod";
-import { ApiError, dateRange, escapeRegex, handle, requireUser } from "@/lib/api";
+import { ApiError, dateRange, escapeRegex, handle, requireTenant } from "@/lib/api";
+import { syncSaleToFbr } from "@/lib/fbr";
 import { round2 } from "@/lib/money";
 import { optionalId } from "@/lib/schemas";
 import { moveStock, postLedger } from "@/lib/services";
-import { nextNumber, PAYMENT_METHODS, Party, Product, Sale, Settings } from "@/models";
+import { nextNumber, PAYMENT_METHODS, Party, Product, Sale, Tenant } from "@/models";
 
 export const GET = handle(async (req) => {
-  await requireUser();
+  const { tid } = await requireTenant();
   const url = new URL(req.url);
   const { from, to } = dateRange(url, 0);
   const q = url.searchParams.get("q")?.trim();
-  const query: Record<string, unknown> = { createdAt: { $gte: from, $lte: to } };
+  const query: Record<string, unknown> = { tenant: tid, createdAt: { $gte: from, $lte: to } };
   if (q) {
     const rx = new RegExp(escapeRegex(q), "i");
     query.$or = [{ invoiceNo: rx }, { customerName: rx }];
   }
   const method = url.searchParams.get("method");
   if (method) query.paymentMethod = method;
+  const fbr = url.searchParams.get("fbr");
+  if (fbr) query.fbrStatus = fbr;
   return Sale.find(query).sort({ createdAt: -1 }).limit(1000).lean();
 });
 
@@ -33,17 +36,18 @@ const Body = z.object({
     .min(1, "Add at least one item"),
   discount: z.coerce.number().min(0).default(0),
   paymentMethod: z.enum(PAYMENT_METHODS),
-  amountPaid: z.coerce.number().min(0).default(0),
+  /** Omitted = paid in full (or nothing paid for udhaar). */
+  amountPaid: z.coerce.number().min(0).optional(),
   customerId: optionalId,
   note: z.string().trim().optional(),
 });
 
 export const POST = handle(async (req) => {
-  const user = await requireUser();
+  const { user, tid } = await requireTenant();
   const body = Body.parse(await req.json());
-  const settings = await Settings.findOne({ key: "shop" }).lean();
+  const settings = await Tenant.findById(tid).lean();
 
-  const products = await Product.find({ _id: { $in: body.items.map((i) => i.productId) } }).lean();
+  const products = await Product.find({ tenant: tid, _id: { $in: body.items.map((i) => i.productId) } }).lean();
   const byId = new Map(products.map((p) => [String(p._id), p]));
 
   const items = body.items.map((i) => {
@@ -81,14 +85,15 @@ export const POST = handle(async (req) => {
   }
   const costTotal = round2(items.reduce((s, i) => s + i.qty * i.cost, 0));
 
-  let amountPaid = round2(body.amountPaid);
+  let amountPaid = body.amountPaid === undefined ? (body.paymentMethod === "credit" ? 0 : total) : round2(body.amountPaid);
+  // Card / wallet / bank payments are always for the exact amount.
   if (body.paymentMethod !== "cash" && body.paymentMethod !== "credit" && amountPaid === 0) amountPaid = total;
   const change = round2(Math.max(0, amountPaid - total));
   const creditAmount = round2(Math.max(0, total - amountPaid));
 
   let customer = null;
   if (body.customerId) {
-    customer = await Party.findOne({ _id: body.customerId, type: "customer" }).lean();
+    customer = await Party.findOne({ _id: body.customerId, tenant: tid, type: "customer" }).lean();
     if (!customer) throw new ApiError(400, "Customer not found.");
   }
   if (creditAmount > 0) {
@@ -98,8 +103,9 @@ export const POST = handle(async (req) => {
     }
   }
 
-  const invoiceNo = await nextNumber("sale", "INV");
+  const invoiceNo = await nextNumber(tid, "sale", "INV");
   const sale = await Sale.create({
+    tenant: tid,
     invoiceNo,
     items,
     subtotal,
@@ -117,13 +123,15 @@ export const POST = handle(async (req) => {
     cashier: user.id,
     cashierName: user.name,
     note: body.note,
+    fbrStatus: settings?.fbrEnabled ? "pending" : "none",
   });
 
   for (const item of items) {
-    await moveStock({ productId: item.product, qty: -item.qty, type: "sale", refNo: invoiceNo, userId: user.id });
+    await moveStock({ tid, productId: item.product, qty: -item.qty, type: "sale", refNo: invoiceNo, userId: user.id });
   }
   if (customer && creditAmount > 0) {
     await postLedger({
+      tid,
       partyId: customer._id,
       kind: "sale",
       amount: creditAmount,
@@ -134,5 +142,6 @@ export const POST = handle(async (req) => {
       userId: user.id,
     });
   }
-  return sale.toObject();
+  if (settings?.fbrEnabled) await syncSaleToFbr(tid, sale._id);
+  return Sale.findOne({ _id: sale._id, tenant: tid }).lean();
 });

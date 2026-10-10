@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ApiError, handle, requireUser } from "@/lib/api";
+import { ApiError, handle, requireTenant } from "@/lib/api";
 import { moveStock } from "@/lib/services";
 import { Product } from "@/models";
 
@@ -12,10 +12,10 @@ const Body = z.object({
 });
 
 export const POST = handle<Ctx>(async (req, { params }) => {
-  const user = await requireUser(["owner", "manager"]);
+  const { user, tid } = await requireTenant(["owner", "manager"]);
   const { id } = await params;
   const { mode, qty, note } = Body.parse(await req.json());
-  const current = await Product.findById(id).lean();
+  const current = await Product.findOne({ _id: id, tenant: tid }).lean();
   if (!current) throw new ApiError(404, "Product not found.");
 
   let delta = qty;
@@ -23,12 +23,12 @@ export const POST = handle<Ctx>(async (req, { params }) => {
   if (mode === "set") delta = qty - current.stock;
   if (delta === 0) return current;
 
-  const product = await moveStock({
+  return moveStock({
+    tid,
     productId: id,
     qty: delta,
     type: mode === "wastage" ? "wastage" : "adjustment",
     note: note || (mode === "set" ? "Stock count correction" : undefined),
     userId: user.id,
   });
-  return product;
 });

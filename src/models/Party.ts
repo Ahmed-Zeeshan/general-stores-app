@@ -1,3 +1,4 @@
+import { tenantScoped } from "./tenant-plugin";
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
 
 /**
@@ -18,8 +19,10 @@ const PartySchema = new Schema(
   { timestamps: true },
 );
 
-PartySchema.index({ type: 1, name: 1 });
-PartySchema.index({ type: 1, phone: 1 });
+PartySchema.plugin(tenantScoped);
+
+PartySchema.index({ tenant: 1, type: 1, name: 1 });
+PartySchema.index({ tenant: 1, type: 1, phone: 1 });
 
 export type PartyDoc = InferSchemaType<typeof PartySchema>;
 export const Party: Model<PartyDoc> = models.Party || model<PartyDoc>("Party", PartySchema);

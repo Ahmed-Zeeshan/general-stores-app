@@ -1,11 +1,11 @@
-import { dateRange, handle, requireUser, TIMEZONE } from "@/lib/api";
+import { dateRange, handle, requireTenant, TIMEZONE } from "@/lib/api";
 import { round2 } from "@/lib/money";
 import { Expense, Purchase, Sale } from "@/models";
 
 export const GET = handle(async (req) => {
-  await requireUser(["owner", "manager"]);
+  const { tid } = await requireTenant(["owner", "manager"]);
   const { from, to } = dateRange(new URL(req.url), 6);
-  const match = { status: "completed", createdAt: { $gte: from, $lte: to } };
+  const match = { tenant: tid, status: "completed", createdAt: { $gte: from, $lte: to } };
 
   const [summary, byMethod, byDay, topItems, expenses, purchases, returns] = await Promise.all([
     Sale.aggregate([
@@ -56,16 +56,16 @@ export const GET = handle(async (req) => {
       { $limit: 20 },
     ]),
     Expense.aggregate([
-      { $match: { date: { $gte: from, $lte: to } } },
+      { $match: { tenant: tid, date: { $gte: from, $lte: to } } },
       { $group: { _id: "$category", total: { $sum: "$amount" } } },
       { $sort: { total: -1 } },
     ]),
     Purchase.aggregate([
-      { $match: { createdAt: { $gte: from, $lte: to } } },
+      { $match: { tenant: tid, createdAt: { $gte: from, $lte: to } } },
       { $group: { _id: null, total: { $sum: "$total" }, count: { $sum: 1 } } },
     ]),
     Sale.aggregate([
-      { $match: { status: "returned", returnedAt: { $gte: from, $lte: to } } },
+      { $match: { tenant: tid, status: "returned", returnedAt: { $gte: from, $lte: to } } },
       { $group: { _id: null, total: { $sum: "$total" }, count: { $sum: 1 } } },
     ]),
   ]);

@@ -72,14 +72,20 @@ export function Field({
   );
 }
 
-const inputBase =
-  "w-full rounded-xl border border-slate-300 bg-white px-3.5 text-slate-900 placeholder:text-slate-400 shadow-sm transition focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-100 disabled:bg-slate-100";
+const inputStyle =
+  "rounded-xl border border-slate-300 bg-white px-3.5 text-slate-900 placeholder:text-slate-400 shadow-sm transition focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-100 disabled:bg-slate-100";
+
+/** Full width by default, unless the caller passes its own width (e.g. "w-28") or flex sizing. */
+function inputBase(className?: string) {
+  const customWidth = /(^|\s)(w-|flex-1)/.test(className ?? "");
+  return cn(inputStyle, !customWidth && "w-full");
+}
 
 export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(function Input(
   { className, ...props },
   ref,
 ) {
-  return <input ref={ref} className={cn(inputBase, "h-11", className)} {...props} />;
+  return <input ref={ref} className={cn(inputBase(className), "h-11", className)} {...props} />;
 });
 
 export const Select = forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement>>(function Select(
@@ -87,7 +93,7 @@ export const Select = forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<H
   ref,
 ) {
   return (
-    <select ref={ref} className={cn(inputBase, "h-11 pr-8", className)} {...props}>
+    <select ref={ref} className={cn(inputBase(className), "h-11 pr-8", className)} {...props}>
       {children}
     </select>
   );
@@ -95,7 +101,7 @@ export const Select = forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<H
 
 export const Textarea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(
   function Textarea({ className, ...props }, ref) {
-    return <textarea ref={ref} className={cn(inputBase, "min-h-[80px] py-2.5", className)} {...props} />;
+    return <textarea ref={ref} className={cn(inputBase(className), "min-h-[80px] py-2.5", className)} {...props} />;
   },
 );
 

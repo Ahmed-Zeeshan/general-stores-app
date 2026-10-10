@@ -1,3 +1,4 @@
+import { tenantScoped } from "./tenant-plugin";
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
 
 import { UNITS } from "@/lib/constants";
@@ -17,14 +18,17 @@ const ProductSchema = new Schema(
     stock: { type: Number, default: 0 },
     lowStockAlert: { type: Number, default: 5, min: 0 },
     expiryDate: { type: Date },
+    /** FBR Pakistan Customs Tariff code; falls back to the shop default. */
+    pctCode: { type: String, trim: true },
     active: { type: Boolean, default: true },
   },
   { timestamps: true },
 );
 
-ProductSchema.index({ barcode: 1 }, { unique: true, partialFilterExpression: { barcode: { $type: "string", $gt: "" } } });
-ProductSchema.index({ name: "text", nameUrdu: "text", sku: "text" });
-ProductSchema.index({ active: 1, name: 1 });
+ProductSchema.plugin(tenantScoped);
+
+ProductSchema.index({ tenant: 1, barcode: 1 }, { unique: true, partialFilterExpression: { barcode: { $type: "string", $gt: "" } } });
+ProductSchema.index({ tenant: 1, active: 1, name: 1 });
 
 export type ProductDoc = InferSchemaType<typeof ProductSchema>;
 export const Product: Model<ProductDoc> = models.Product || model<ProductDoc>("Product", ProductSchema);

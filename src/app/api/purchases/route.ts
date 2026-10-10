@@ -1,14 +1,14 @@
 import { z } from "zod";
-import { ApiError, dateRange, handle, requireUser } from "@/lib/api";
+import { ApiError, dateRange, handle, requireTenant } from "@/lib/api";
 import { round2 } from "@/lib/money";
 import { optionalId } from "@/lib/schemas";
 import { moveStock, postLedger } from "@/lib/services";
 import { nextNumber, Party, Product, Purchase } from "@/models";
 
 export const GET = handle(async (req) => {
-  await requireUser(["owner", "manager"]);
+  const { tid } = await requireTenant(["owner", "manager"]);
   const { from, to } = dateRange(new URL(req.url), 30);
-  return Purchase.find({ createdAt: { $gte: from, $lte: to } }).sort({ createdAt: -1 }).limit(500).lean();
+  return Purchase.find({ tenant: tid, createdAt: { $gte: from, $lte: to } }).sort({ createdAt: -1 }).limit(500).lean();
 });
 
 const Body = z.object({
@@ -30,9 +30,9 @@ const Body = z.object({
 });
 
 export const POST = handle(async (req) => {
-  const user = await requireUser(["owner", "manager"]);
+  const { user, tid } = await requireTenant(["owner", "manager"]);
   const body = Body.parse(await req.json());
-  const products = await Product.find({ _id: { $in: body.items.map((i) => i.productId) } }).lean();
+  const products = await Product.find({ tenant: tid, _id: { $in: body.items.map((i) => i.productId) } }).lean();
   const byId = new Map(products.map((p) => [String(p._id), p]));
   const items = body.items.map((i) => {
     const p = byId.get(i.productId);
@@ -43,14 +43,15 @@ export const POST = handle(async (req) => {
 
   let supplier = null;
   if (body.supplierId) {
-    supplier = await Party.findOne({ _id: body.supplierId, type: "supplier" }).lean();
+    supplier = await Party.findOne({ _id: body.supplierId, tenant: tid, type: "supplier" }).lean();
     if (!supplier) throw new ApiError(400, "Supplier not found.");
   }
   // Without a supplier there is no khata to put the balance in, so treat it as fully paid.
   const amountPaid = supplier ? Math.min(round2(body.amountPaid ?? total), total) : total;
 
-  const purchaseNo = await nextNumber("purchase", "PUR");
+  const purchaseNo = await nextNumber(tid, "purchase", "PUR");
   const purchase = await Purchase.create({
+    tenant: tid,
     purchaseNo,
     supplier: supplier?._id,
     supplierName: supplier?.name,
@@ -63,17 +64,17 @@ export const POST = handle(async (req) => {
   });
 
   for (const item of items) {
-    await moveStock({ productId: item.product, qty: item.qty, type: "purchase", refNo: purchaseNo, userId: user.id });
+    await moveStock({ tid, productId: item.product, qty: item.qty, type: "purchase", refNo: purchaseNo, userId: user.id });
     if (body.updatePrices) {
       const set: Record<string, number> = { costPrice: item.cost };
       if (item.salePrice !== undefined && item.salePrice > 0) set.salePrice = item.salePrice;
-      await Product.updateOne({ _id: item.product }, { $set: set });
+      await Product.updateOne({ _id: item.product, tenant: tid }, { $set: set });
     }
   }
   if (supplier) {
-    await postLedger({ partyId: supplier._id, kind: "purchase", amount: total, refType: "purchase", refId: purchase._id, refNo: purchaseNo, note: `Purchase ${purchaseNo}`, userId: user.id });
+    await postLedger({ tid, partyId: supplier._id, kind: "purchase", amount: total, refType: "purchase", refId: purchase._id, refNo: purchaseNo, note: `Purchase ${purchaseNo}`, userId: user.id });
     if (amountPaid > 0) {
-      await postLedger({ partyId: supplier._id, kind: "payment", amount: -amountPaid, method: "cash", refType: "purchase", refId: purchase._id, refNo: purchaseNo, note: `Paid for ${purchaseNo}`, userId: user.id });
+      await postLedger({ tid, partyId: supplier._id, kind: "payment", amount: -amountPaid, method: "cash", refType: "purchase", refId: purchase._id, refNo: purchaseNo, note: `Paid for ${purchaseNo}`, userId: user.id });
     }
   }
   return purchase.toObject();

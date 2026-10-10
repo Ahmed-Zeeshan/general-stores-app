@@ -1,10 +1,16 @@
 import { z } from "zod";
-import { handle, requireUser } from "@/lib/api";
-import { Settings } from "@/models";
+import { handle, requireTenant } from "@/lib/api";
+import { Sale, Tenant } from "@/models";
 
 export const GET = handle(async () => {
-  await requireUser();
-  return Settings.findOne({ key: "shop" }).lean();
+  const { tid } = await requireTenant();
+  const [tenant, withToken, fbrPending] = await Promise.all([
+    Tenant.findById(tid).select("-adminNotes").lean(),
+    Tenant.findById(tid).select("+fbrToken").lean(),
+    Sale.countDocuments({ tenant: tid, fbrStatus: "pending" }),
+  ]);
+  // Never send the FBR token back to the browser; just say whether one is saved.
+  return { ...tenant, fbrTokenSet: !!withToken?.fbrToken, fbrPending };
 });
 
 const Body = z.object({
@@ -19,10 +25,18 @@ const Body = z.object({
   taxRate: z.coerce.number().min(0).max(100),
   pricesIncludeTax: z.boolean(),
   receiptFooter: z.string().trim().max(200).optional(),
+  fbrEnabled: z.boolean().optional(),
+  fbrMode: z.enum(["sandbox", "live"]).optional(),
+  fbrPosId: z.string().trim().regex(/^\d*$/, "POS ID must be a number").optional(),
+  fbrDefaultPct: z.string().trim().optional(),
+  /** Empty = keep the saved token. */
+  fbrToken: z.string().trim().optional(),
 });
 
 export const PUT = handle(async (req) => {
-  await requireUser(["owner"]);
-  const body = Body.parse(await req.json());
-  return Settings.findOneAndUpdate({ key: "shop" }, body, { new: true, upsert: true }).lean();
+  const { tid } = await requireTenant(["owner"]);
+  const { fbrToken, ...body } = Body.parse(await req.json());
+  const update: Record<string, unknown> = { ...body };
+  if (fbrToken) update.fbrToken = fbrToken;
+  return Tenant.findByIdAndUpdate(tid, update, { new: true }).select("-adminNotes").lean();
 });

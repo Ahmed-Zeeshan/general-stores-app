@@ -7,6 +7,7 @@ import {
   ArrowRight,
   BookOpen,
   CalendarClock,
+  ChefHat,
   PackagePlus,
   Receipt,
   ShoppingCart,
@@ -41,7 +42,7 @@ function greeting() {
 }
 
 export default function DashboardPage() {
-  const { user } = useSession();
+  const { user, settings } = useSession();
   const can = useCan();
   const [data, setData] = useState<Dashboard | null>(null);
 
@@ -54,7 +55,9 @@ export default function DashboardPage() {
     { href: "/customers", label: "Receive Udhaar", urdu: "وصولی", icon: BookOpen, cls: "from-sky-500 to-sky-700" },
     ...(can.manage
       ? [
-          { href: "/purchases/new", label: "Add Stock", urdu: "مال آمد", icon: PackagePlus, cls: "from-violet-500 to-violet-700" },
+          settings?.shopType === "bakery"
+            ? { href: "/production", label: "Production", urdu: "تیاری", icon: ChefHat, cls: "from-violet-500 to-violet-700" }
+            : { href: "/purchases/new", label: "Add Stock", urdu: "مال آمد", icon: PackagePlus, cls: "from-violet-500 to-violet-700" },
           { href: "/expenses", label: "Add Expense", urdu: "خرچہ", icon: Wallet, cls: "from-amber-500 to-orange-600" },
         ]
       : [{ href: "/customers?new=1", label: "New Customer", urdu: "نیا گاہک", icon: UserPlus, cls: "from-violet-500 to-violet-700" }]),

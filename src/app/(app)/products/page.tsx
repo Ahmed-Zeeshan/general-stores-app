@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Boxes, Package, Pencil, Plus, Search, SlidersHorizontal, Tags, Trash2 } from "lucide-react";
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Spinner, Table, Td, Th, Textarea } from "@/components/ui";
-import { useCan } from "@/components/session";
+import { useCan, useSession } from "@/components/session";
 import { useToast } from "@/components/toast";
 import { api, formatDate, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty } from "@/lib/money";
@@ -22,6 +22,7 @@ type Product = {
   stock: number;
   lowStockAlert: number;
   expiryDate?: string;
+  pctCode?: string;
   category?: Category | null;
 };
 
@@ -37,6 +38,7 @@ const EMPTY = {
   lowStockAlert: "5",
   expiryDate: "",
   openingStock: "",
+  pctCode: "",
 };
 
 export default function ProductsPageWrapper() {
@@ -243,6 +245,7 @@ function ProductForm({
   onSaved: () => void;
 }) {
   const toast = useToast();
+  const { settings } = useSession();
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
 
@@ -262,6 +265,7 @@ function ProductForm({
             lowStockAlert: String(product.lowStockAlert),
             expiryDate: product.expiryDate ? product.expiryDate.slice(0, 10) : "",
             openingStock: "",
+            pctCode: product.pctCode ?? "",
           }
         : EMPTY,
     );
@@ -341,6 +345,11 @@ function ProductForm({
         <Field label="Expiry date (optional)" hint="Useful for bakery, dairy and medicines">
           <Input type="date" value={form.expiryDate} onChange={set("expiryDate")} />
         </Field>
+        {settings?.fbrEnabled && (
+          <Field label="FBR PCT code" hint={`Empty = shop default (${settings.fbrDefaultPct || "11001010"})`}>
+            <Input value={form.pctCode} onChange={set("pctCode")} />
+          </Field>
+        )}
       </form>
     </Modal>
   );

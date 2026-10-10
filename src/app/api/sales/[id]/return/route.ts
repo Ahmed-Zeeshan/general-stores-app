@@ -1,16 +1,17 @@
-import { ApiError, handle, requireUser } from "@/lib/api";
+import { ApiError, handle, requireTenant } from "@/lib/api";
+import { syncSaleToFbr } from "@/lib/fbr";
 import { moveStock, postLedger } from "@/lib/services";
-import { Sale } from "@/models";
+import { Sale, Tenant } from "@/models";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** Full return of a bill: puts stock back and reverses any udhaar. */
+/** Full return of a bill: puts stock back, reverses any udhaar and reports a credit note to FBR. */
 export const POST = handle<Ctx>(async (_req, { params }) => {
-  const user = await requireUser(["owner", "manager"]);
+  const { user, tid } = await requireTenant(["owner", "manager"]);
   const { id } = await params;
   // Atomic status flip prevents returning the same bill twice.
   const sale = await Sale.findOneAndUpdate(
-    { _id: id, status: "completed" },
+    { _id: id, tenant: tid, status: "completed" },
     { status: "returned", returnedAt: new Date() },
     { new: true },
   );
@@ -18,11 +19,12 @@ export const POST = handle<Ctx>(async (_req, { params }) => {
 
   for (const item of sale.items) {
     if (item.product) {
-      await moveStock({ productId: item.product, qty: item.qty, type: "return", refNo: sale.invoiceNo, userId: user.id });
+      await moveStock({ tid, productId: item.product, qty: item.qty, type: "return", refNo: sale.invoiceNo, userId: user.id });
     }
   }
   if (sale.customer && sale.creditAmount > 0) {
     await postLedger({
+      tid,
       partyId: sale.customer,
       kind: "return",
       amount: -sale.creditAmount,
@@ -33,5 +35,11 @@ export const POST = handle<Ctx>(async (_req, { params }) => {
       userId: user.id,
     });
   }
-  return sale.toObject();
+
+  const tenant = await Tenant.findById(tid).select("fbrEnabled").lean();
+  if (tenant?.fbrEnabled && sale.fbrInvoiceNumber) {
+    await Sale.updateOne({ _id: sale._id, tenant: tid }, { fbrStatus: "pending" });
+    await syncSaleToFbr(tid, sale._id, "return");
+  }
+  return Sale.findOne({ _id: sale._id, tenant: tid }).lean();
 });

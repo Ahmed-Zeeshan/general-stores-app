@@ -21,6 +21,9 @@ type Sale = {
   status: string;
   items: unknown[];
   creditAmount: number;
+  fbrStatus?: string;
+  fbrInvoiceNumber?: string;
+  fbrError?: string;
 };
 
 export default function SalesPage() {
@@ -92,7 +95,11 @@ export default function SalesPage() {
                     <div className="text-xs text-slate-400">{s.items.length} items · {s.cashierName}</div>
                   </Td>
                   <Td className="text-slate-500">{formatDate(s.createdAt, true)}</Td>
-                  <Td>{s.customerName ?? <span className="text-slate-400">Walk-in</span>}</Td>
+                  <Td>
+                    {s.customerName ?? <span className="text-slate-400">Walk-in</span>}
+                    {s.fbrStatus === "synced" && <div className="text-xs text-emerald-700">FBR ✓</div>}
+                    {s.fbrStatus === "pending" && <div className="text-xs text-amber-700" title={s.fbrError}>FBR pending</div>}
+                  </Td>
                   <Td>
                     {s.status === "returned" ? (
                       <Badge color="red">Returned</Badge>
