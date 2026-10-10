@@ -69,6 +69,8 @@ export const ok = (cond, msg) => {
 };
 const near = (a, b) => typeof a === "number" && typeof b === "number" && Math.abs(a - b) < 0.006;
 export const eq = (a, b, msg) => ok(a === b || near(a, b), `${msg} (${JSON.stringify(a)}${a === b || near(a, b) ? "" : ` expected ${JSON.stringify(b)}`})`);
+/** Text read from the page with non-breaking spaces (used inside amounts) turned into plain spaces. */
+export const norm = (t) => String(t).replace(/\u00a0/g, " ");
 export const section = (t) => console.log(`\n== ${t}`);
 export const r2 = (n) => Math.round(n * 100) / 100;
 export const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi" }).format(new Date());

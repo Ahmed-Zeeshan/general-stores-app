@@ -1,5 +1,5 @@
 import { chromium } from "playwright";
-import { B } from "../lib/harness.mjs";
+import { B, norm } from "../lib/harness.mjs";
 const out = process.argv[2];
 const ok = (c, m) => { if (!c) { console.log("  ✗", m); process.exitCode = 1; } else console.log("  ✓", m); };
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -25,9 +25,9 @@ await post("/api/products", { name: "Lux Soap", unit: "pcs", costPrice: 80, sale
 await page.goto(B + "/pos");
 await page.waitForSelector("text=نیا بل");
 await page.click("button:has-text('Lux Soap')");
-const t = await page.locator("body").innerText();
+const t = await page.locator("body").innerText().then(norm);
 ok(t.includes("بل کی اشیاء") && t.includes("رقم وصول کریں") && t.includes("ٹوٹل") && t.includes("Rs 100"), "POS in Urdu, amounts in digits");
-ok((await page.locator("nav").innerText()).includes("کھاتہ"), "menu in Urdu");
+ok((await page.locator("nav").innerText().then(norm)).includes("کھاتہ"), "menu in Urdu");
 await page.screenshot({ path: `${out}/ur-pos.png` });
 await page.click("button:has-text('رقم وصول کریں')");
 await page.waitForSelector("text=کل ادائیگی");

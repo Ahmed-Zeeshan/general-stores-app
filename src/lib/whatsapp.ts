@@ -1,6 +1,9 @@
 "use client";
 
-import { formatPKR } from "./money";
+import { formatPKR as formatAmount } from "./money";
+
+/** Plain spaces in messages so they copy and paste cleanly. */
+const formatPKR = (n: number) => formatAmount(n).replace(/\u00a0/g, " ");
 
 export type WaMode = "app" | "web" | "auto";
 const MODE_KEY = "dukaan:wa-mode";

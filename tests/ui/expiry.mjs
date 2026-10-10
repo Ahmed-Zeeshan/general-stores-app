@@ -1,5 +1,5 @@
 import { chromium } from "playwright";
-import { B } from "../lib/harness.mjs";
+import { B, norm } from "../lib/harness.mjs";
 const out = process.argv[2];
 const ok = (c, m) => { if (!c) { console.log("  ✗", m); process.exitCode = 1; } else console.log("  ✓", m); };
 const day = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
@@ -48,7 +48,7 @@ ok(true, "purchase with expiry date saved");
 
 await page.goto(B + "/expiry");
 await page.waitForSelector("text=Yogurt 500g");
-let t = await page.locator("tbody").innerText();
+let t = await page.locator("tbody").innerText().then(norm);
 ok(t.includes("Expired yesterday") && t.includes("Batch Y-10") && t.includes("In 10 days") || t.includes("In 9 days"), "expiry report shows expired lot and the new batch");
 await page.screenshot({ path: `${out}/expiry-report.png` });
 await page.click("tr:has-text('Expired') button:has-text('Write off')");
@@ -56,7 +56,7 @@ await page.waitForSelector("[role=alertdialog]");
 await page.click("[role=alertdialog] button:has-text('Write off')");
 await page.waitForSelector("text=written off");
 await page.waitForTimeout(600);
-t = await page.locator("body").innerText();
+t = await page.locator("body").innerText().then(norm);
 ok(!t.includes("Expired yesterday"), "expired lot gone after write-off");
 const st = await page.evaluate(async (id) => (await (await fetch(`/api/products/${id}`)).json()).product.stock, prod._id);
 ok(st === 24, `stock now 24 (${st})`);

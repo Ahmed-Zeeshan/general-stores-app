@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useEffect } from "react";
+import { forwardRef, useEffect, useLayoutEffect, useRef } from "react";
 import { Loader2, X } from "lucide-react";
 
 export function cn(...classes: (string | false | null | undefined)[]) {
@@ -106,7 +106,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttrib
 );
 
 export function Card({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <div className={cn("rounded-2xl border border-slate-200/80 bg-white shadow-soft", className)}>{children}</div>;
+  return <div className={cn("min-w-0 rounded-2xl border border-slate-200/80 bg-white shadow-soft", className)}>{children}</div>;
 }
 
 export function PageHeader({
@@ -259,10 +259,53 @@ export function StatCard({
   );
 }
 
-export function Table({ children }: { children: React.ReactNode }) {
+/**
+ * Data table. When the columns don't fit the space, long text first wraps inside the cells; if
+ * it still doesn't fit (phones, tablets, a laptop with the menu open) each row becomes a small card: the first cell is the title and every other cell shows its
+ * column heading next to the value, so no column ever hides behind a sideways scroll.
+ * `stack={false}` keeps the normal table with a sideways scroll instead.
+ */
+export function Table({ children, stack = true }: { children: React.ReactNode; stack?: boolean }) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLTableElement>(null);
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current;
+    const table = ref.current;
+    if (!wrap || !table || !stack) return;
+    const update = () => {
+      // Copy each column heading onto its cells (shown as the label in card view).
+      const heads = [...table.querySelectorAll("thead th")].map((th) => (th.textContent ?? "").trim());
+      for (const tr of table.querySelectorAll("tbody > tr, tfoot > tr")) {
+        let col = 0;
+        for (const cell of tr.children as HTMLCollectionOf<HTMLTableCellElement>) {
+          const text = cell.colSpan > 1 ? "" : (heads[col] ?? "");
+          if (cell.getAttribute("data-label") !== text) cell.setAttribute("data-label", text);
+          // Only long text (names, notes, details) may wrap; dates, amounts and codes stay on one line.
+          cell.toggleAttribute("data-long", (cell.textContent ?? "").trim().length > 24);
+          col += cell.colSpan || 1;
+        }
+      }
+      // Too wide? First let long text wrap inside the cells; if it still doesn't fit, use cards.
+      const tooWide = () => table.offsetWidth > wrap.clientWidth + 1;
+      table.classList.remove("wrapped", "stacked");
+      if (tooWide()) {
+        table.classList.add("wrapped");
+        if (tooWide()) table.classList.replace("wrapped", "stacked");
+      }
+    };
+    update();
+    const rows = new MutationObserver(update);
+    rows.observe(table, { childList: true, subtree: true, characterData: true });
+    const size = new ResizeObserver(update);
+    size.observe(wrap);
+    return () => {
+      rows.disconnect();
+      size.disconnect();
+    };
+  }, [stack]);
   return (
-    <div className="scrollbar-thin overflow-x-auto">
-      <table className="w-full text-left text-sm">{children}</table>
+    <div ref={wrapRef} className="scrollbar-thin overflow-x-auto">
+      <table ref={ref} className="w-full text-left text-sm">{children}</table>
     </div>
   );
 }
@@ -293,14 +336,14 @@ export function Segmented<T extends string>({
   options: { value: T; label: string }[];
 }) {
   return (
-    <div className="inline-flex rounded-xl bg-slate-100 p-1">
+    <div className="scrollbar-thin inline-flex max-w-full overflow-x-auto rounded-xl bg-slate-100 p-1">
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           onClick={() => onChange(o.value)}
           className={cn(
-            "rounded-lg px-3.5 py-1.5 text-sm font-semibold transition",
+            "shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm font-semibold transition sm:px-3.5",
             value === o.value ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-700",
           )}
         >

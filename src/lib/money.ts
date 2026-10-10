@@ -11,7 +11,8 @@ export function formatPKR(n: number | undefined | null, opts: { symbol?: boolean
     minimumFractionDigits: fraction,
     maximumFractionDigits: fraction,
   }).format(value);
-  return opts.symbol === false ? formatted : `Rs ${formatted}`;
+  // A non-breaking space keeps "Rs" and the amount together on narrow screens and in table cells.
+  return opts.symbol === false ? formatted : `Rs\u00a0${formatted}`;
 }
 
 export function formatQty(n: number): string {

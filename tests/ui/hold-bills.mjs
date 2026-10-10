@@ -1,5 +1,5 @@
 import { chromium } from "playwright";
-import { B } from "../lib/harness.mjs";
+import { B, norm } from "../lib/harness.mjs";
 const out = process.argv[2];
 const ok = (c, m) => { if (!c) { console.log("  ✗", m); process.exitCode = 1; } else console.log("  ✓", m); };
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -43,13 +43,13 @@ await page.keyboard.press("Escape");
 // open the held one with F6
 await page.keyboard.press("F6");
 await page.waitForSelector("text=Bills on hold");
-const lt = await page.locator("[role=dialog]").innerText();
+const lt = await page.locator("[role=dialog]").innerText().then(norm);
 ok(lt.includes("Rs 1,000") && lt.includes("2 items") && lt.includes("Ghee 1kg, Lux Soap"), "held list shows items and total");
 await page.screenshot({ path: `${out}/held-list.png` });
 await page.click("[role=dialog] button:has-text('Open')");
 await page.waitForTimeout(300);
 ok((await page.locator("aside:has-text('Bill items') li").count()) === 2, "held bill back in the cart");
-ok((await page.locator("aside:has-text('Bill items')").innerText()).includes("Rs 1,000"), "total restored");
+ok((await page.locator("aside:has-text('Bill items')").innerText().then(norm)).includes("Rs 1,000"), "total restored");
 ok(!(await page.locator("button:has-text('Held bills')").count()), "held list empty after opening");
 // F4 holds, and opening another while a bill is on screen asks first
 await page.keyboard.press("F4");
@@ -58,11 +58,11 @@ await page.click("button:has-text('Tea 950g')");
 await page.click("button:has-text('Held bills')");
 await page.click("[role=dialog] button:has-text('Open')");
 await page.waitForSelector("[role=alertdialog]");
-ok((await page.locator("[role=alertdialog]").innerText()).includes("Put the current bill on hold?"), "asks before replacing the bill on screen");
+ok((await page.locator("[role=alertdialog]").innerText().then(norm)).includes("Put the current bill on hold?"), "asks before replacing the bill on screen");
 await page.click("[role=alertdialog] button:has-text('Hold & open')");
 await page.waitForTimeout(400);
 ok((await page.locator("aside:has-text('Bill items') li").count()) === 2, "opened held bill (2 items)");
-ok((await page.locator("button:has-text('Held bills')").innerText()).includes("1"), "the Tea bill is now on hold");
+ok((await page.locator("button:has-text('Held bills')").innerText().then(norm)).includes("1"), "the Tea bill is now on hold");
 // survives reload and logout
 await page.reload();
 await page.waitForSelector("button:has-text('Held bills')");
@@ -79,7 +79,7 @@ await page.click("[role=dialog] button[aria-label^='Delete held bill']");
 await page.waitForSelector("[role=alertdialog]");
 await page.click("[role=alertdialog] button:has-text('Delete')");
 await page.waitForTimeout(400);
-ok((await page.locator("[role=dialog]").innerText()).includes("No bills on hold"), "held bill deleted");
+ok((await page.locator("[role=dialog]").innerText().then(norm)).includes("No bills on hold"), "held bill deleted");
 await page.keyboard.press("Escape");
 // stock untouched by holding
 const prods = await page.evaluate(async () => (await (await fetch("/api/products")).json()).map((p) => [p.name, p.stock]));

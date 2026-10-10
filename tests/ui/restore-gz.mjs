@@ -1,7 +1,7 @@
 import { chromium } from "playwright";
 import { gzipSync } from "zlib";
 import { writeFileSync } from "fs";
-import { B } from "../lib/harness.mjs";
+import { B, norm } from "../lib/harness.mjs";
 const out = process.argv[2];
 const ok = (c, m) => { if (!c) { console.log("  ✗", m); process.exitCode = 1; } else console.log("  ✓", m); };
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -26,7 +26,7 @@ await page.goto(B + "/settings");
 await page.waitForSelector("text=Restore from backup");
 await page.setInputFiles("input[type=file][accept*='gz']", file);
 await page.waitForSelector("[role=dialog] >> text=GZ Mart");
-ok((await page.locator("[role=dialog]").innerText()).includes("Products"), "compressed automatic backup opens in the restore screen");
+ok((await page.locator("[role=dialog]").innerText().then(norm)).includes("Products"), "compressed automatic backup opens in the restore screen");
 await page.screenshot({ path: `${out}/gz-restore.png` });
 ok(errors.length === 0, "no page errors " + JSON.stringify(errors));
 await browser.close();

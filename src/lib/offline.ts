@@ -184,7 +184,7 @@ export function clearOfflineCache(tenantId?: string | null) {
 export function printOfflineReceipt(opts: { shopName: string; branchName?: string; bill: OutboxBill; footer?: string }) {
   const { bill } = opts;
   const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
-  const money = (n: number) => `Rs ${new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n)}`;
+  const money = (n: number) => `Rs\u00a0${new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n)}`;
   const rows = bill.lines
     .map((l) => `<div>${esc(l.name)}</div><div class="row"><span>&nbsp;${l.qty} ${esc(l.unit)} × ${l.price}</span><span>${money(l.total)}</span></div>`)
     .join("");

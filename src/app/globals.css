@@ -92,3 +92,84 @@ input[type="number"] {
     background: white;
   }
 }
+
+/* A data table a bit too wide for its space: long text wraps inside the cells. */
+table.wrapped > tbody > tr > td[data-long] {
+  white-space: normal;
+  /* wide enough that codes like INV-000123 never break at the dash */
+  min-width: 8rem;
+}
+
+/* Data tables that still don't fit become one small card per row (see <Table> in components/ui.tsx). */
+@media all {
+  table.stacked thead {
+    display: none;
+  }
+  table.stacked,
+  table.stacked > tbody,
+  table.stacked > tfoot,
+  table.stacked > tbody > tr,
+  table.stacked > tfoot > tr {
+    display: block;
+    width: 100%;
+  }
+  table.stacked > tbody > tr,
+  table.stacked > tfoot > tr {
+    border-bottom: 1px solid var(--color-slate-100);
+    padding: 0.625rem 1rem;
+  }
+  /* Each cell: heading on the left, value (one or more lines) on the right. */
+  table.stacked > tbody > tr > td,
+  table.stacked > tfoot > tr > td {
+    display: block;
+    border: 0;
+    padding: 0.125rem 0;
+    text-align: right;
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+  table.stacked > tbody > tr > td::before,
+  table.stacked > tfoot > tr > td::before {
+    content: attr(data-label);
+    float: left;
+    margin-right: 0.75rem;
+    max-width: 45%;
+    text-align: left;
+    font-size: 0.75rem;
+    line-height: 1.5rem;
+    font-weight: 500;
+    color: var(--color-slate-500);
+  }
+  table.stacked > tbody > tr > td::after,
+  table.stacked > tfoot > tr > td::after {
+    content: "";
+    display: table;
+    clear: both;
+  }
+  /* First cell is the row's title (no heading); so is a cell whose column has no heading. */
+  table.stacked > tbody > tr > td:first-child,
+  table.stacked > tfoot > tr > td:first-child {
+    padding-bottom: 0.25rem;
+    text-align: left;
+  }
+  table.stacked > tbody > tr > td:first-child::before,
+  table.stacked > tfoot > tr > td:first-child::before,
+  table.stacked > tbody > tr > td[data-label=""]::before,
+  table.stacked > tfoot > tr > td[data-label=""]::before {
+    content: none;
+  }
+  table.stacked > tbody > tr > td:empty,
+  table.stacked > tfoot > tr > td:empty {
+    display: none;
+  }
+  /* Button cells (no heading): buttons in a row on the right. */
+  table.stacked > tbody > tr > td[data-label=""]:not(:first-child) {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.25rem;
+  }
+  table.stacked > tbody > tr > td[data-label=""]:not(:first-child)::after {
+    content: none;
+  }
+}
