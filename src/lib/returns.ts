@@ -96,7 +96,8 @@ export async function createReturn(opts: {
     const inc: Record<string, number> = { returnSeq: 1, returnedTotal: priced.total, creditReturned: priced.creditReduced };
     for (const it of priced.items) inc[`items.${it.index}.returnedQty`] = it.qty;
     const claimed = await Sale.updateOne(
-      { _id: sale._id, tenant: tid, returnSeq: sale.returnSeq ?? 0 },
+      // Bills saved before returns were tracked have no counter yet: treat missing as 0.
+      { _id: sale._id, tenant: tid, returnSeq: sale.returnSeq ? sale.returnSeq : { $in: [0, null] } },
       {
         $inc: inc,
         $set: { status: priced.willReturnAll ? "returned" : "partially_returned", returnedAt: opts.at ?? new Date() },

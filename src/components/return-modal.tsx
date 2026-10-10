@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Minus, Plus, Printer, RotateCcw } from "lucide-react";
-import { Button, Field, Input, Modal, Select, cn } from "./ui";
+import { Button, Field, Input, Modal, Select, Spinner, cn } from "./ui";
 import { useToast } from "./toast";
 import { api, formatDate, PAYMENT_LABELS, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty, round2 } from "@/lib/money";
@@ -30,8 +30,12 @@ const REASONS = ["Damaged / broken", "Expired", "Wrong item given", "Customer ch
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
 /** Return some or all items of a bill, with udhaar handled first and the refund method chosen. */
-export function ReturnModal({ sale, onClose, onDone }: { sale: ReturnableSale | null; onClose: () => void; onDone: () => void }) {
+export function ReturnModal({ sale: given, onClose, onDone }: { sale: ReturnableSale | null; onClose: () => void; onDone: () => void }) {
   const toast = useToast();
+  // Always work on the latest copy of the bill (the list on screen may not have refreshed yet).
+  const [sale, setSale] = useState<ReturnableSale | null>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   const [qty, setQty] = useState<Record<number, string>>({});
   const [method, setMethod] = useState("cash");
   const [reason, setReason] = useState("");
@@ -40,14 +44,28 @@ export function ReturnModal({ sale, onClose, onDone }: { sale: ReturnableSale | 
   const [done, setDone] = useState<{ _id: string; returnNo: string; total: number; refund: number; creditReduced: number; refundMethod: string } | null>(null);
 
   useEffect(() => {
-    if (!sale) return;
+    setSale(null);
+    if (!given) return;
     setQty({});
     setReason("");
     setNote("");
     setDone(null);
-    const split = new Set((sale.payments ?? []).map((p) => p.method)).size > 1;
-    setMethod(!split && ["card", "jazzcash", "easypaisa", "bank"].includes(sale.paymentMethod) ? sale.paymentMethod : "cash");
-  }, [sale]);
+    let alive = true;
+    api<ReturnableSale>(`/api/sales/${given._id}`)
+      .then((fresh) => {
+        if (!alive) return;
+        const split = new Set((fresh.payments ?? []).map((p) => p.method)).size > 1;
+        setMethod(!split && ["card", "jazzcash", "easypaisa", "bank"].includes(fresh.paymentMethod) ? fresh.paymentMethod : "cash");
+        setSale(fresh);
+      })
+      .catch((e) => {
+        toast.error(e.message);
+        closeRef.current();
+      });
+    return () => {
+      alive = false;
+    };
+  }, [given, toast]);
 
   const lines = useMemo(() => {
     if (!sale) return [];
@@ -58,7 +76,22 @@ export function ReturnModal({ sale, onClose, onDone }: { sale: ReturnableSale | 
     });
   }, [sale, qty]);
 
-  if (!sale) return null;
+  if (!given) return null;
+  if (!sale) {
+    return (
+      <Modal open onClose={onClose} title={`Return items — ${given.invoiceNo}`} size="lg">
+        <Spinner />
+      </Modal>
+    );
+  }
+  if (sale.status === "returned" && !done) {
+    return (
+      <Modal open onClose={onClose} title={`Return items — ${sale.invoiceNo}`} size="sm">
+        <p className="py-6 text-center text-sm text-slate-500">This bill has already been fully returned.</p>
+        <Button className="w-full" onClick={onClose}>Close</Button>
+      </Modal>
+    );
+  }
   const chosen = lines.filter((l) => l.q > 0);
   const ratio = sale.subtotal > 0 ? sale.total / sale.subtotal : 0;
   const remainingValue = round2(sale.total - (sale.returnedTotal ?? 0));

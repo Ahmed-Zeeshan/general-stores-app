@@ -51,7 +51,7 @@ export async function moveStock(opts: {
   branch: Types.ObjectId;
   productId: Id;
   qty: number;
-  type: "sale" | "purchase" | "return" | "adjustment" | "wastage" | "opening" | "production" | "import" | "transfer";
+  type: "sale" | "purchase" | "return" | "adjustment" | "wastage" | "opening" | "production" | "import" | "transfer" | "purchase_return" | "void";
   refNo?: string;
   note?: string;
   userId?: Id;

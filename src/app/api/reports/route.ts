@@ -2,7 +2,7 @@ import { dateRange, handle, TIMEZONE } from "@/lib/api";
 import { reportBranchFilter, requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
 import { khataPaymentsPipeline, PAYMENTS_EXPR } from "@/lib/report-agg";
-import { Expense, LedgerEntry, Purchase, Sale, SaleReturn } from "@/models";
+import { Expense, LedgerEntry, Purchase, PurchaseReturn, Sale, SaleReturn } from "@/models";
 
 /**
  * Profit & loss for a period. Bills count on their own date; returns are subtracted on the date
@@ -18,7 +18,7 @@ export const GET = handle(async (req) => {
   const match = { tenant: tid, ...b, createdAt: { $gte: from, $lte: to } };
   const day = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: TIMEZONE } };
 
-  const [summary, byMethod, refundsByMethod, byDay, returnsByDay, topItems, expenses, purchases, returns, byBranch, returnsByBranch, collected, paidOut] = await Promise.all([
+  const [summary, byMethod, refundsByMethod, byDay, returnsByDay, topItems, expenses, purchases, returns, byBranch, returnsByBranch, collected, paidOut, purchaseReturns] = await Promise.all([
     Sale.aggregate([
       { $match: match },
       {
@@ -122,6 +122,7 @@ export const GET = handle(async (req) => {
     ]),
     LedgerEntry.aggregate(khataPaymentsPipeline(match, "customer")),
     LedgerEntry.aggregate(khataPaymentsPipeline(match, "supplier")),
+    PurchaseReturn.aggregate([{ $match: match }, { $group: { _id: null, total: { $sum: "$total" }, count: { $sum: 1 } } }]),
   ]);
 
   const s = summary[0] ?? { bills: 0, subtotal: 0, discount: 0, tax: 0, total: 0, cost: 0, credit: 0 };
@@ -168,7 +169,8 @@ export const GET = handle(async (req) => {
       netProfit: round2(grossProfit - expenseTotal),
       credit: round2(s.credit - r.credit),
       avgBill: s.bills ? round2(s.total / s.bills) : 0,
-      purchases: round2(purchases[0]?.total ?? 0),
+      purchases: round2((purchases[0]?.total ?? 0) - (purchaseReturns[0]?.total ?? 0)),
+      purchaseReturns: round2(purchaseReturns[0]?.total ?? 0),
       udhaarCollected: round2(collected.reduce((a, x) => a + x.total, 0)),
       paidToSuppliers: round2(paidOut.reduce((a, x) => a + x.total, 0)),
     },

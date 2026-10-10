@@ -274,7 +274,7 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
     sale: "Bill (udhaar)",
     purchase: "Purchase",
     payment: type === "customer" ? "Payment received" : "Payment made",
-    return: "Bill returned",
+    return: type === "customer" ? "Bill returned" : "Goods returned to supplier",
     opening: "Old balance",
     adjustment: type === "customer" ? "Udhaar added" : "Bill added",
     reversal: "Payment cancelled",

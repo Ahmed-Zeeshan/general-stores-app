@@ -9,6 +9,8 @@ const PurchaseItemSchema = new Schema(
     qty: { type: Number, required: true },
     cost: { type: Number, required: true },
     total: { type: Number, required: true },
+    /** How much of this line has been sent back to the supplier. */
+    returnedQty: { type: Number, default: 0 },
   },
   { _id: false },
 );
@@ -26,6 +28,15 @@ const PurchaseSchema = new Schema(
     amountPaid: { type: Number, default: 0 },
     note: { type: String },
     user: { type: Schema.Types.ObjectId, ref: "User" },
+    /** received → partially_returned → returned; void = cancelled as if it never happened. */
+    status: { type: String, enum: ["received", "partially_returned", "returned", "void"], default: "received" },
+    returnedTotal: { type: Number, default: 0 },
+    /** Increases with every return or cancel; protects against two at the same moment. */
+    returnSeq: { type: Number, default: 0 },
+    voidedAt: { type: Date },
+    voidedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    voidedByName: { type: String },
+    voidReason: { type: String, trim: true },
   },
   { timestamps: true },
 );

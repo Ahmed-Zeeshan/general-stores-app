@@ -26,6 +26,7 @@ type Report = {
     credit: number;
     avgBill: number;
     purchases: number;
+    purchaseReturns: number;
     returns: number;
     returnCount: number;
     udhaarCollected: number;
@@ -103,7 +104,8 @@ export default function ReportsPage() {
               </dl>
               <div className="mt-5 space-y-1.5 rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
                 <div className="flex justify-between"><span>Discounts given</span><b>{formatPKR(s.discount)}</b></div>
-                <div className="flex justify-between"><span>Stock purchased</span><b>{formatPKR(s.purchases)}</b></div>
+                <div className="flex justify-between"><span>Stock purchased{s.purchaseReturns ? " (after returns)" : ""}</span><b>{formatPKR(s.purchases)}</b></div>
+                {s.purchaseReturns > 0 && <div className="flex justify-between"><span>Returned to suppliers</span><b>{formatPKR(s.purchaseReturns)}</b></div>}
                 <div className="flex justify-between"><span>Given on udhaar</span><b>{formatPKR(s.credit)}</b></div>
                 <div className="flex justify-between"><span>Money refunded on returns</span><b>{formatPKR(s.refunds)}</b></div>
                 <div className="flex justify-between"><span>Udhaar collected</span><b className="text-emerald-700">{formatPKR(s.udhaarCollected)}</b></div>
