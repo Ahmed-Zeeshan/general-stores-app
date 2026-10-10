@@ -132,12 +132,45 @@ export async function syncOutbox(tenantId: string): Promise<{ sent: number; rema
   return { sent, remaining: getOutbox(tenantId).length, offline };
 }
 
-/** Clears cached data on logout (bills waiting to sync are kept for this shop). */
+// ---------- Held (parked) bills: kept on this device, per shop and branch ----------
+
+export type HeldBill<Item = unknown, Customer = unknown> = {
+  id: string;
+  at: string;
+  label: string;
+  items: Item[];
+  customer: Customer | null;
+  discount: string;
+  total: number;
+  userName?: string;
+};
+const HELD_EVENT = "dukaan-held";
+const heldKey = (tenantId: string, branchId: string) => `${tenantId}:${branchId}:held`;
+export const MAX_HELD = 30;
+
+export function getHeld<I, C>(tenantId: string, branchId: string): HeldBill<I, C>[] {
+  return read<HeldBill<I, C>[]>(heldKey(tenantId, branchId), []);
+}
+export function saveHeld(tenantId: string, branchId: string, list: HeldBill[]) {
+  write(heldKey(tenantId, branchId), list);
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(HELD_EVENT));
+}
+export function onHeldChange(fn: () => void) {
+  const onStorage = (e: StorageEvent) => e.key?.endsWith(":held") && fn();
+  window.addEventListener(HELD_EVENT, fn);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(HELD_EVENT, fn);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+/** Clears cached data on logout (bills waiting to sync and held bills are kept). */
 export function clearOfflineCache(tenantId?: string | null) {
   try {
     const keep = tenantId ? PREFIX + outboxKey(tenantId) : null;
     for (const key of Object.keys(localStorage)) {
-      if (key.startsWith(PREFIX) && !key.endsWith(":outbox") && key !== keep) localStorage.removeItem(key);
+      if (key.startsWith(PREFIX) && !key.endsWith(":outbox") && !key.endsWith(":held") && key !== keep) localStorage.removeItem(key);
     }
   } catch {
     /* ignore */

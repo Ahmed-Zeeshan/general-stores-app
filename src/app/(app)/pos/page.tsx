@@ -12,7 +12,9 @@ import {
   HandCoins,
   Landmark,
   Minus,
+  PauseCircle,
   Plus,
+  PlayCircle,
   Printer,
   ScanBarcode,
   Search,
@@ -33,13 +35,18 @@ import { api, LOOSE_UNITS, NetworkError, UNIT_LABELS } from "@/lib/client";
 import {
   addToOutbox,
   cache,
+  getHeld,
   getOutbox,
+  MAX_HELD,
   newClientId,
+  onHeldChange,
   onOutboxChange,
   printOfflineReceipt,
   removeFromOutbox,
   retryOutbox,
+  saveHeld,
   syncOutbox,
+  type HeldBill,
   type OutboxBill,
 } from "@/lib/offline";
 import { formatPKR, formatQty, round2 } from "@/lib/money";
@@ -57,6 +64,7 @@ type Product = {
 };
 type Category = { _id: string; name: string };
 type CartItem = { product: Product; qty: number; price: number; discount: number };
+type Held = HeldBill<CartItem, PartyLite>;
 
 const METHODS = [
   { value: "cash", label: "Cash", icon: Banknote },
@@ -98,6 +106,18 @@ export default function PosPage() {
   const [done, setDone] = useState<{ _id: string; invoiceNo: string; total: number; change: number } | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(false);
+  const [heldOpen, setHeldOpen] = useState(false);
+  const ask = useConfirm();
+  // Latest "hold" action for the keyboard shortcut.
+  const holdRef = useRef<() => void>(() => {});
+  const [held, setHeld] = useState<Held[]>([]);
+  const branchId = branch?._id ?? "";
+  useEffect(() => {
+    if (!tenantId) return;
+    const refresh = () => setHeld(getHeld<CartItem, PartyLite>(tenantId, branchId));
+    refresh();
+    return onHeldChange(refresh);
+  }, [tenantId, branchId]);
 
   const loadProducts = useCallback(() => {
     api<Product[]>("/api/products?limit=5000")
@@ -131,6 +151,14 @@ export default function PosPage() {
       if (e.key === "F2") {
         e.preventDefault();
         searchRef.current?.focus();
+      }
+      if (e.key === "F4") {
+        e.preventDefault();
+        holdRef.current();
+      }
+      if (e.key === "F6") {
+        e.preventDefault();
+        setHeldOpen(true);
       }
       if (e.key === "F8") {
         e.preventDefault();
@@ -181,7 +209,7 @@ export default function PosPage() {
     }
   }
   // Scanner works anywhere on this screen, except while a pop-up window is open.
-  useBarcodeScanner(addByCode, !payOpen && !looseFor && !pickCustomer && !done && !offlineDone && !cameraOpen && !receiveOpen);
+  useBarcodeScanner(addByCode, !payOpen && !looseFor && !pickCustomer && !done && !offlineDone && !cameraOpen && !receiveOpen && !heldOpen);
 
   function onSearchEnter(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key !== "Enter") return;
@@ -219,6 +247,66 @@ export default function PosPage() {
     searchRef.current?.focus();
   }
 
+  /** Puts the current bill aside (on this device) so the next customer can be served. */
+  function holdBill(silent = false) {
+    if (!cart.length) return false;
+    const list = getHeld<CartItem, PartyLite>(tenantId, branchId);
+    if (list.length >= MAX_HELD) {
+      toast.error(`You already have ${MAX_HELD} bills on hold. Finish or delete some first.`);
+      return false;
+    }
+    const entry: Held = {
+      id: newClientId(),
+      at: new Date().toISOString(),
+      label: customer?.name ?? `Walk-in · ${new Date().toLocaleTimeString("en-PK", { hour: "numeric", minute: "2-digit" })}`,
+      items: cart,
+      customer,
+      discount: billDiscount,
+      total,
+      userName: user.name,
+    };
+    saveHeld(tenantId, branchId, [...list, entry]);
+    resetBill();
+    if (!silent) toast.success(`Bill on hold (${formatPKR(total)}). Open it again from "Held bills".`);
+    return true;
+  }
+
+  holdRef.current = () => holdBill();
+
+  async function resumeHeld(h: Held) {
+    if (cart.length) {
+      const ok = await ask({
+        title: "Put the current bill on hold?",
+        message: `The bill on screen (${formatPKR(total)}) will be held so you can open ${h.label}'s bill.`,
+        confirmLabel: "Hold & open",
+        tone: "info",
+      });
+      if (!ok || !holdBill(true)) return;
+    }
+    // Keep the prices the customer was told; refresh stock and names from the latest product list.
+    const latest = new Map((products ?? []).map((p) => [p._id, p]));
+    setCart(h.items.map((i) => ({ ...i, product: latest.get(i.product._id) ?? i.product })));
+    setCustomer(h.customer);
+    setBillDiscount(h.discount);
+    saveHeld(tenantId, branchId, getHeld<CartItem, PartyLite>(tenantId, branchId).filter((x) => x.id !== h.id));
+    setHeldOpen(false);
+    searchRef.current?.focus();
+  }
+
+  async function deleteHeld(h: Held) {
+    const ok = await ask({
+      title: `Delete ${h.label}'s held bill?`,
+      details: [
+        { label: "Items", value: h.items.length },
+        { label: "Total", value: formatPKR(h.total), strong: true },
+      ],
+      tone: "danger",
+      confirmLabel: "Delete",
+      cancelLabel: "Keep",
+    });
+    if (ok) saveHeld(tenantId, branchId, getHeld<CartItem, PartyLite>(tenantId, branchId).filter((x) => x.id !== h.id));
+  }
+
   return (
     <div className="flex flex-col lg:h-[calc(100vh-var(--banner-h,0px))] lg:flex-row">
       {/* Products */}
@@ -226,7 +314,7 @@ export default function PosPage() {
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">New Bill <span className="urdu ml-2 text-base text-slate-400">نیا بل</span></h1>
-            <p className="hidden text-xs text-slate-500 sm:block">Tip: scan a barcode or type and press Enter · F2 = search · F9 = pay · F8 = receive udhaar</p>
+            <p className="hidden text-xs text-slate-500 sm:block">Tip: scan a barcode or type and press Enter · F2 search · F9 pay · F4 hold · F6 held bills · F8 receive udhaar</p>
           </div>
           <div className="flex items-center gap-2">
             {usingSaved && (
@@ -237,6 +325,11 @@ export default function PosPage() {
             {outbox.length > 0 && (
               <Button size="sm" variant="outline" icon={<RefreshCw className="h-4 w-4" />} onClick={() => setOutboxOpen(true)}>
                 {outbox.length} waiting
+              </Button>
+            )}
+            {held.length > 0 && (
+              <Button size="sm" variant="outline" icon={<PlayCircle className="h-4 w-4 text-amber-600" />} onClick={() => setHeldOpen(true)} title="Bills on hold (F6)">
+                Held bills <Badge color="amber">{held.length}</Badge>
               </Button>
             )}
             <Button size="sm" variant="outline" icon={<HandCoins className="h-4 w-4 text-brand-600" />} onClick={() => setReceiveOpen(true)} title="Customer pays old udhaar (F8)">
@@ -459,9 +552,14 @@ export default function PosPage() {
             <span className="text-base font-semibold text-slate-600">Total</span>
             <span className="text-3xl font-extrabold tracking-tight text-slate-900">{formatPKR(total)}</span>
           </div>
-          <Button size="xl" className="mt-4 w-full" disabled={!cart.length || cart.some((i) => i.qty <= 0)} onClick={() => setPayOpen(true)}>
-            Take Payment
-          </Button>
+          <div className="mt-4 flex gap-2">
+            <Button size="xl" variant="outline" className="shrink-0 px-4" disabled={!cart.length} onClick={() => holdBill()} icon={<PauseCircle className="h-5 w-5" />} title="Put this bill aside and serve the next customer (F4)">
+              Hold
+            </Button>
+            <Button size="xl" className="flex-1" disabled={!cart.length || cart.some((i) => i.qty <= 0)} onClick={() => setPayOpen(true)}>
+              Take Payment
+            </Button>
+          </div>
         </div>
       </aside>
 
@@ -553,6 +651,33 @@ export default function PosPage() {
       </Modal>
 
       <ReceivePaymentModal open={receiveOpen} onClose={() => setReceiveOpen(false)} />
+
+      <Modal open={heldOpen} onClose={() => setHeldOpen(false)} title="Bills on hold" size="md">
+        {held.length === 0 ? (
+          <p className="py-8 text-center text-sm text-slate-500">No bills on hold. Use “Hold” (F4) to put a bill aside while you serve someone else.</p>
+        ) : (
+          <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200">
+            {[...held].reverse().map((h) => (
+              <li key={h.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-semibold text-slate-800">{h.label}</div>
+                  <div className="text-xs text-slate-500">
+                    {h.items.length} items · {heldAgo(h.at)}
+                    {h.userName && ` · ${h.userName}`}
+                  </div>
+                  <div className="truncate text-xs text-slate-400">{h.items.map((i) => i.product.name).join(", ")}</div>
+                </div>
+                <div className="text-right font-bold text-slate-900">{formatPKR(h.total)}</div>
+                <Button size="sm" icon={<PlayCircle className="h-4 w-4" />} onClick={() => resumeHeld(h)}>
+                  Open
+                </Button>
+                <Button size="sm" variant="ghost" className="hover:text-rose-600" aria-label={`Delete held bill ${h.label}`} icon={<Trash2 className="h-4 w-4" />} onClick={() => deleteHeld(h)} />
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-3 text-xs text-slate-500">Held bills are kept on this computer only. Stock is taken out when the bill is paid.</p>
+      </Modal>
 
       <CameraScanner open={cameraOpen} onClose={() => setCameraOpen(false)} onScan={addByCode} continuous title="Scan items" />
 
@@ -956,4 +1081,12 @@ function OutboxModal({ open, onClose, tenantId, bills, onSynced }: { open: boole
       )}
     </Modal>
   );
+}
+
+function heldAgo(at: string) {
+  const min = Math.floor((Date.now() - new Date(at).getTime()) / 60000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min} min ago`;
+  const h = Math.floor(min / 60);
+  return h < 24 ? `${h} h ago` : new Date(at).toLocaleDateString("en-PK", { day: "2-digit", month: "short" });
 }
