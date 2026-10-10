@@ -17,6 +17,10 @@ const SaleItemSchema = new Schema(
     total: { type: Number, required: true },
     /** How many of this line have been returned so far. */
     returnedQty: { type: Number, default: 0 },
+    /** Sold as packs (e.g. 2 Carton of 24): qty above is in units, price per unit. */
+    pack: { type: new Schema({ name: String, size: Number, count: Number, price: Number }, { _id: false }), default: undefined },
+    /** Price level used (wholesale customers). */
+    wholesale: { type: Boolean, default: undefined },
   },
   { _id: false },
 );

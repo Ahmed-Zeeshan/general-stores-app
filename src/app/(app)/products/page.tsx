@@ -23,6 +23,8 @@ type Product = {
   unit: string;
   costPrice: number;
   salePrice: number;
+  wholesalePrice?: number;
+  packs?: { name: string; size: number; price?: number; wholesalePrice?: number; barcode?: string }[];
   stock: number;
   lowStockAlert: number;
   expiryDate?: string;
@@ -39,6 +41,7 @@ const EMPTY = {
   unit: "pcs",
   costPrice: "",
   salePrice: "",
+  wholesalePrice: "",
   lowStockAlert: "5",
   expiryDate: "",
   openingStock: "",
@@ -326,6 +329,7 @@ function ProductForm({
   const toast = useToast();
   const { settings } = useSession();
   const [form, setForm] = useState(EMPTY);
+  const [packs, setPacks] = useState<PackRow[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -341,12 +345,22 @@ function ProductForm({
             unit: product.unit,
             costPrice: String(product.costPrice),
             salePrice: String(product.salePrice),
+            wholesalePrice: product.wholesalePrice ? String(product.wholesalePrice) : "",
             lowStockAlert: String(product.lowStockAlert),
             expiryDate: product.expiryDate ? product.expiryDate.slice(0, 10) : "",
             openingStock: "",
             pctCode: product.pctCode ?? "",
           }
         : EMPTY,
+    );
+    setPacks(
+      (product?.packs ?? []).map((k) => ({
+        name: k.name,
+        size: String(k.size),
+        price: k.price ? String(k.price) : "",
+        wholesalePrice: k.wholesalePrice ? String(k.wholesalePrice) : "",
+        barcode: k.barcode ?? "",
+      })),
     );
   }, [open, product]);
 
@@ -382,7 +396,13 @@ function ProductForm({
     e.preventDefault();
     setSaving(true);
     try {
-      const body = { ...form, expiryDate: form.expiryDate || null };
+      const body = {
+        ...form,
+        expiryDate: form.expiryDate || null,
+        packs: packs
+          .filter((k) => k.name.trim() || k.size)
+          .map((k) => ({ name: k.name.trim(), size: Number(k.size), price: k.price, wholesalePrice: k.wholesalePrice, barcode: k.barcode.trim() })),
+      };
       if (product) await api(`/api/products/${product._id}`, { method: "PUT", body });
       else await api("/api/products", { body });
       toast.success(product ? "Product updated" : "Product added");
@@ -466,6 +486,10 @@ function ProductForm({
         <Field label="Sale price (you sell at) *" hint={form.salePrice && form.costPrice ? `Profit per ${UNIT_LABELS[form.unit]}: ${formatPKR(margin)}` : undefined} error={margin < 0 ? "Sale price is less than cost price" : undefined}>
           <Input required type="number" inputMode="decimal" step="any" min="0" value={form.salePrice} onChange={set("salePrice")} placeholder="0" />
         </Field>
+        <Field label="Wholesale price (optional)" hint={`For customers marked "wholesale". Empty = same as sale price.`}>
+          <Input type="number" inputMode="decimal" step="any" min="0" value={form.wholesalePrice} onChange={set("wholesalePrice")} placeholder={form.salePrice || "0"} aria-label="Wholesale price" />
+        </Field>
+        <PacksEditor unit={UNIT_LABELS[form.unit] ?? form.unit} unitPrice={Number(form.salePrice) || 0} packs={packs} onChange={setPacks} />
         {!product && (
           <Field label="Stock you have now" hint="How many are in the shop today">
             <Input type="number" inputMode="decimal" step="any" min="0" value={form.openingStock} onChange={set("openingStock")} placeholder="0" />
@@ -484,6 +508,49 @@ function ProductForm({
         )}
       </form>
     </Modal>
+  );
+}
+
+type PackRow = { name: string; size: string; price: string; wholesalePrice: string; barcode: string };
+
+/** Bigger units the product is also sold in: carton, dozen, box … each with its own price and barcode. */
+function PacksEditor({ unit, unitPrice, packs, onChange }: { unit: string; unitPrice: number; packs: PackRow[]; onChange: (p: PackRow[]) => void }) {
+  const update = (i: number, patch: Partial<PackRow>) => onChange(packs.map((k, j) => (j === i ? { ...k, ...patch } : k)));
+  return (
+    <div className="rounded-2xl border border-slate-200 p-4 sm:col-span-2">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold text-slate-800">Packs / cartons (optional)</div>
+          <div className="text-xs text-slate-500">Also sell this item as a carton, dozen or box. Stock is always counted in {unit}.</div>
+        </div>
+        {packs.length < 5 && (
+          <Button type="button" size="sm" variant="outline" icon={<Plus className="h-4 w-4" />} onClick={() => onChange([...packs, { name: packs.length ? "" : "Carton", size: "", price: "", wholesalePrice: "", barcode: "" }])}>
+            Add pack
+          </Button>
+        )}
+      </div>
+      {packs.map((k, i) => (
+        <div key={i} className="mt-2 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-2 sm:grid-cols-[1fr_0.8fr_1fr_1fr_1.3fr_auto]">
+          <Input value={k.name} onChange={(e) => update(i, { name: e.target.value })} placeholder="Carton" aria-label="Pack name" className="h-10" />
+          <Input type="number" inputMode="decimal" min="0" step="any" value={k.size} onChange={(e) => update(i, { size: e.target.value })} placeholder={`${unit} in it`} aria-label="Units in pack" className="h-10" />
+          <Input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="any"
+            value={k.price}
+            onChange={(e) => update(i, { price: e.target.value })}
+            placeholder={unitPrice && Number(k.size) ? String(Math.round(unitPrice * Number(k.size))) : "Price"}
+            aria-label="Pack price"
+            className="h-10"
+          />
+          <Input type="number" inputMode="decimal" min="0" step="any" value={k.wholesalePrice} onChange={(e) => update(i, { wholesalePrice: e.target.value })} placeholder="Wholesale" aria-label="Pack wholesale price" className="h-10" />
+          <Input value={k.barcode} onChange={(e) => update(i, { barcode: e.target.value })} placeholder="Carton barcode" aria-label="Pack barcode" className="h-10" />
+          <Button type="button" size="sm" variant="ghost" className="hover:text-rose-600" aria-label="Remove pack" icon={<Trash2 className="h-4 w-4" />} onClick={() => onChange(packs.filter((_, j) => j !== i))} />
+        </div>
+      ))}
+      {packs.length > 0 && <p className="mt-2 text-xs text-slate-500">Empty price = units × sale price. Scanning the carton barcode at the counter adds one carton.</p>}
+    </div>
   );
 }
 

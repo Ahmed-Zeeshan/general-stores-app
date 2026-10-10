@@ -1,6 +1,7 @@
 import { ApiError, handle, requireTenant } from "@/lib/api";
 import { branchStock, requireBranch } from "@/lib/branches";
 import { withCategories } from "@/lib/categories";
+import { assertBarcodesFree } from "@/lib/barcode-server";
 import { ProductInput } from "@/lib/schemas";
 import { Product, StockLevel, StockMovement } from "@/models";
 
@@ -28,12 +29,10 @@ export const PUT = handle<Ctx>(async (req, { params }) => {
   const { tid } = await requireTenant(["owner", "manager"]);
   const { id } = await params;
   const body = ProductInput.parse(await req.json());
-  if (body.barcode && (await Product.exists({ tenant: tid, barcode: body.barcode, _id: { $ne: id } }))) {
-    throw new ApiError(409, `Barcode ${body.barcode} is already used by another product.`);
-  }
+  await assertBarcodesFree(tid, body, id);
   const update: Record<string, unknown> = { ...body };
   const unset: Record<string, 1> = {};
-  for (const key of ["barcode", "category", "pctCode"] as const) {
+  for (const key of ["barcode", "category", "pctCode", "wholesalePrice"] as const) {
     if (!body[key]) {
       delete update[key];
       unset[key] = 1;

@@ -11,6 +11,8 @@ const PurchaseItemSchema = new Schema(
     total: { type: Number, required: true },
     /** How much of this line has been sent back to the supplier. */
     returnedQty: { type: Number, default: 0 },
+    /** Bought as packs (e.g. 5 Carton of 24): qty above is in units, cost per unit. */
+    pack: { type: new Schema({ name: String, size: Number, count: Number, cost: Number }, { _id: false }), default: undefined },
   },
   { _id: false },
 );

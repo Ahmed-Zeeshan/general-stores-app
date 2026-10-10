@@ -11,8 +11,10 @@ import { CameraButton, CameraScanner, beep, useBarcodeScanner } from "@/componen
 import { api, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, round2 } from "@/lib/money";
 
-type Product = { _id: string; name: string; barcode?: string; unit: string; costPrice: number; salePrice: number; stock: number };
-type Line = { product: Product; qty: string; cost: string; salePrice: string };
+type Pack = { name: string; size: number; barcode?: string };
+type Product = { _id: string; name: string; barcode?: string; unit: string; costPrice: number; salePrice: number; stock: number; packs?: Pack[] };
+/** `pack` = "" for loose units; then qty and cost are per pack. */
+type Line = { product: Product; qty: string; cost: string; salePrice: string; pack: string };
 
 export default function NewPurchasePage() {
   const router = useRouter();
@@ -36,19 +38,28 @@ export default function NewPurchasePage() {
     return products.filter((p) => p.name.toLowerCase().includes(t) || p.barcode === t).slice(0, 8);
   }, [q, products]);
 
-  function add(p: Product) {
+  const packCost = (p: Product, pack?: Pack) => (pack ? round2(p.costPrice * pack.size) : p.costPrice);
+  function add(p: Product, pack?: Pack) {
     if (!lines.find((l) => l.product._id === p._id)) {
-      setLines([...lines, { product: p, qty: "", cost: String(p.costPrice || ""), salePrice: String(p.salePrice || "") }]);
+      setLines([...lines, { product: p, qty: "", cost: String(packCost(p, pack) || ""), salePrice: String(p.salePrice || ""), pack: pack?.name ?? "" }]);
     }
     setQ("");
+  }
+  function changePack(l: Line, name: string) {
+    const pack = l.product.packs?.find((k) => k.name === name);
+    update(l.product._id, { pack: name, cost: String(packCost(l.product, pack) || "") });
   }
   /** USB scanner or camera: add the product with this barcode. */
   function addByCode(raw: string) {
     const code = raw.trim();
     const p = products.find((x) => x.barcode === code);
+    const byPack = p ? null : products.find((x) => x.packs?.some((k) => k.barcode === code));
     if (p) {
       beep();
       add(p);
+    } else if (byPack) {
+      beep();
+      add(byPack, byPack.packs!.find((k) => k.barcode === code));
     } else toast.error(`No product has barcode ${code}.`);
   }
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -66,7 +77,7 @@ export default function NewPurchasePage() {
           supplierId: supplier?._id,
           supplierInvoice: invoice,
           amountPaid: paid === "" ? undefined : Number(paid),
-          items: lines.map((l) => ({ productId: l.product._id, qty: Number(l.qty), cost: Number(l.cost) || 0, salePrice: Number(l.salePrice) || undefined })),
+          items: lines.map((l) => ({ productId: l.product._id, qty: Number(l.qty), cost: Number(l.cost) || 0, salePrice: Number(l.salePrice) || undefined, ...(l.pack ? { pack: l.pack } : {}) })),
         },
       });
       toast.success("Purchase saved and stock updated");
@@ -93,7 +104,7 @@ export default function NewPurchasePage() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && q.trim()) {
                   e.preventDefault();
-                  if (products.some((x) => x.barcode === q.trim())) addByCode(q);
+                  if (products.some((x) => x.barcode === q.trim() || x.packs?.some((k) => k.barcode === q.trim()))) addByCode(q);
                   else if (matches.length === 1) add(matches[0]);
                 }
               }}
@@ -123,8 +134,8 @@ export default function NewPurchasePage() {
                   <tr>
                     <Th>Item</Th>
                     <Th>Qty</Th>
-                    <Th>Cost / unit</Th>
-                    <Th>New sale price</Th>
+                    <Th>Cost (each)</Th>
+                    <Th>Sale price / unit</Th>
                     <Th className="text-right">Total</Th>
                     <Th />
                   </tr>
@@ -134,7 +145,28 @@ export default function NewPurchasePage() {
                     <tr key={l.product._id}>
                       <Td>
                         <div className="font-semibold">{l.product.name}</div>
-                        <div className="text-xs text-slate-400">per {UNIT_LABELS[l.product.unit]}</div>
+                        {(l.product.packs?.length ?? 0) > 0 ? (
+                          <select
+                            value={l.pack}
+                            onChange={(e) => changePack(l, e.target.value)}
+                            aria-label={`Bought as (${l.product.name})`}
+                            className="mt-1 h-7 rounded-lg border border-slate-200 bg-white px-1.5 text-xs font-semibold text-slate-700"
+                          >
+                            <option value="">{UNIT_LABELS[l.product.unit]}</option>
+                            {l.product.packs!.map((k) => (
+                              <option key={k.name} value={k.name}>
+                                {k.name} ({k.size} {UNIT_LABELS[l.product.unit]})
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="text-xs text-slate-400">per {UNIT_LABELS[l.product.unit]}</div>
+                        )}
+                        {l.pack && Number(l.qty) > 0 && (
+                          <div className="text-xs text-slate-400">
+                            = {round2(Number(l.qty) * (l.product.packs?.find((k) => k.name === l.pack)?.size ?? 1))} {UNIT_LABELS[l.product.unit]} in stock
+                          </div>
+                        )}
                       </Td>
                       <Td><Input type="number" inputMode="decimal" min="0" step="any" value={l.qty} onChange={(e) => update(l.product._id, { qty: e.target.value })} className="h-9 w-20" /></Td>
                       <Td><Input type="number" inputMode="decimal" min="0" step="any" value={l.cost} onChange={(e) => update(l.product._id, { cost: e.target.value })} className="h-9 w-24" /></Td>

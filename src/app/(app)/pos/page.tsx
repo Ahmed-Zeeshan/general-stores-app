@@ -50,6 +50,7 @@ import {
   type OutboxBill,
 } from "@/lib/offline";
 import { formatPKR, formatQty, round2 } from "@/lib/money";
+import { sellPrice, type PackLike } from "@/lib/pricing";
 
 type Product = {
   _id: string;
@@ -59,11 +60,15 @@ type Product = {
   sku?: string;
   unit: string;
   salePrice: number;
+  wholesalePrice?: number;
+  packs?: PackLike[];
   stock: number;
   category?: { _id: string; name: string } | null;
 };
 type Category = { _id: string; name: string };
-type CartItem = { product: Product; qty: number; price: number; discount: number };
+/** One bill line. `qty` counts packs when `pack` is set; `custom` = price changed by hand. */
+type CartItem = { key: string; product: Product; qty: number; price: number; discount: number; pack?: PackLike | null; custom?: boolean };
+const lineKey = (p: Product, pack?: PackLike | null) => (pack ? `${p._id}:${pack.name}` : p._id);
 type Held = HeldBill<CartItem, PartyLite>;
 
 const METHODS = [
@@ -185,16 +190,44 @@ export default function PosPage() {
     return products.filter((p) => {
       if (cat && p.category?._id !== cat) return false;
       if (!term) return true;
-      return p.name.toLowerCase().includes(term) || p.nameUrdu?.includes(term) || p.barcode === term || p.sku?.toLowerCase() === term;
+      return p.name.toLowerCase().includes(term) || p.nameUrdu?.includes(term) || p.barcode === term || p.sku?.toLowerCase() === term || !!p.packs?.some((k) => k.barcode === term);
     });
   }, [products, q, cat]);
 
-  function addToCart(p: Product, qty = 1) {
+  const wholesale = customer?.priceLevel === "wholesale";
+  function addToCart(p: Product, qty = 1, pack: PackLike | null = null) {
+    const key = lineKey(p, pack);
     setCart((c) => {
-      const existing = c.find((i) => i.product._id === p._id);
-      if (existing) return c.map((i) => (i.product._id === p._id ? { ...i, qty: round2(i.qty + qty) } : i));
-      return [...c, { product: p, qty, price: p.salePrice, discount: 0 }];
+      const existing = c.find((i) => i.key === key);
+      if (existing) return c.map((i) => (i.key === key ? { ...i, qty: round2(i.qty + qty) } : i));
+      return [...c, { key, product: p, qty, price: sellPrice(p, pack, wholesale), discount: 0, pack }];
     });
+  }
+  // A wholesale customer gets wholesale prices (lines whose price was typed by hand stay as they are).
+  useEffect(() => {
+    setCart((c) => c.map((i) => (i.custom ? i : { ...i, price: sellPrice(i.product, i.pack, wholesale) })));
+  }, [wholesale]);
+
+  /** Switch a line between the loose unit and a pack size (merging with an existing line). */
+  function changeUnit(item: CartItem, packName: string) {
+    const pack = item.product.packs?.find((k) => k.name === packName) ?? null;
+    const key = lineKey(item.product, pack);
+    if (key === item.key) return;
+    setCart((c) => {
+      const other = c.find((i) => i.key === key);
+      if (other) return c.filter((i) => i.key !== item.key).map((i) => (i.key === key ? { ...i, qty: round2(i.qty + item.qty) } : i));
+      return c.map((i) => (i.key === item.key ? { ...i, key, pack, custom: false, price: sellPrice(i.product, pack, wholesale) } : i));
+    });
+  }
+
+  /** Product or pack with this barcode / SKU. */
+  function findByCode(code: string): { p: Product; pack: PackLike | null } | null {
+    for (const p of products ?? []) {
+      if (p.barcode === code || (p.sku && p.sku.toLowerCase() === code.toLowerCase())) return { p, pack: null };
+      const pack = p.packs?.find((k) => k.barcode === code);
+      if (pack) return { p, pack };
+    }
+    return null;
   }
 
   function onPick(p: Product) {
@@ -206,9 +239,10 @@ export default function PosPage() {
   function addByCode(raw: string) {
     const code = raw.trim();
     if (!products || !code) return;
-    const p = products.find((x) => x.barcode === code || (x.sku && x.sku.toLowerCase() === code.toLowerCase()));
-    if (p) {
-      onPick(p);
+    const hit = findByCode(code);
+    if (hit) {
+      if (hit.pack) addToCart(hit.p, 1, hit.pack);
+      else onPick(hit.p);
       setQ("");
     } else {
       toast.error(`No product has barcode ${code}. Add it in Products first.`);
@@ -221,8 +255,14 @@ export default function PosPage() {
     if (e.key !== "Enter") return;
     const term = q.trim();
     if (!term || !products) return;
-    const exact = products.find((p) => p.barcode === term || p.sku?.toLowerCase() === term.toLowerCase());
-    const pick = exact ?? (filtered.length === 1 ? filtered[0] : null);
+    const exact = findByCode(term);
+    if (exact?.pack) {
+      beep();
+      addToCart(exact.p, 1, exact.pack);
+      setQ("");
+      return;
+    }
+    const pick = exact?.p ?? (filtered.length === 1 ? filtered[0] : null);
     if (pick) {
       if (exact) beep();
       onPick(pick);
@@ -232,9 +272,8 @@ export default function PosPage() {
     }
   }
 
-  const updateItem = (id: string, patch: Partial<CartItem>) =>
-    setCart((c) => c.map((i) => (i.product._id === id ? { ...i, ...patch } : i)));
-  const removeItem = (id: string) => setCart((c) => c.filter((i) => i.product._id !== id));
+  const updateItem = (key: string, patch: Partial<CartItem>) => setCart((c) => c.map((i) => (i.key === key ? { ...i, ...patch } : i)));
+  const removeItem = (key: string) => setCart((c) => c.filter((i) => i.key !== key));
 
   const subtotal = round2(cart.reduce((s, i) => s + round2(i.qty * i.price) - i.discount, 0));
   const discount = Math.min(Number(billDiscount) || 0, subtotal);
@@ -291,7 +330,7 @@ export default function PosPage() {
     }
     // Keep the prices the customer was told; refresh stock and names from the latest product list.
     const latest = new Map((products ?? []).map((p) => [p._id, p]));
-    setCart(h.items.map((i) => ({ ...i, product: latest.get(i.product._id) ?? i.product })));
+    setCart(h.items.map((i) => ({ ...i, key: i.key ?? lineKey(i.product, i.pack), product: latest.get(i.product._id) ?? i.product })));
     setCustomer(h.customer);
     setBillDiscount(h.discount);
     saveHeld(tenantId, branchId, getHeld<CartItem, PartyLite>(tenantId, branchId).filter((x) => x.id !== h.id));
@@ -334,16 +373,16 @@ export default function PosPage() {
               </Button>
             )}
             {drawerOpen === false && !usingSaved && (
-              <Link href="/drawer" className="hidden items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200 md:inline-flex" title="Open the cash drawer to track cash for the day close">
+              <Link href="/drawer" className="hidden items-center gap-1.5 whitespace-nowrap rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200 md:inline-flex" title="Open the cash drawer to track cash for the day close">
                 <Banknote className="h-4 w-4" /> Drawer not open
               </Link>
             )}
             {held.length > 0 && (
-              <Button size="sm" variant="outline" icon={<PlayCircle className="h-4 w-4 text-amber-600" />} onClick={() => setHeldOpen(true)} title="Bills on hold (F6)">
+              <Button size="sm" variant="outline" className="whitespace-nowrap" icon={<PlayCircle className="h-4 w-4 text-amber-600" />} onClick={() => setHeldOpen(true)} title="Bills on hold (F6)">
                 Held bills <Badge color="amber">{held.length}</Badge>
               </Button>
             )}
-            <Button size="sm" variant="outline" icon={<HandCoins className="h-4 w-4 text-brand-600" />} onClick={() => setReceiveOpen(true)} title="Customer pays old udhaar (F8)">
+            <Button size="sm" variant="outline" className="whitespace-nowrap" icon={<HandCoins className="h-4 w-4 text-brand-600" />} onClick={() => setReceiveOpen(true)} title="Customer pays old udhaar (F8)">
               <span className="hidden sm:inline">Receive udhaar</span>
               <span className="sm:hidden">Udhaar</span>
             </Button>
@@ -453,7 +492,10 @@ export default function PosPage() {
             <UserRound className="h-5 w-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold text-slate-800">{customer ? customer.name : "Walk-in customer"}</div>
+            <div className="flex items-center gap-1.5">
+              <span className="truncate text-sm font-semibold text-slate-800">{customer ? customer.name : "Walk-in customer"}</span>
+              {wholesale && <Badge color="violet">Wholesale prices</Badge>}
+            </div>
             <div className="text-xs text-slate-500">
               {customer ? (customer.balance > 0 ? `Old udhaar: ${formatPKR(customer.balance)}` : "No old udhaar") : "Tap to choose a customer (needed for udhaar)"}
             </div>
@@ -481,18 +523,36 @@ export default function PosPage() {
           ) : (
             <ul className="space-y-2">
               {cart.map((item) => {
-                const loose = LOOSE_UNITS.has(item.product.unit);
+                const loose = !item.pack && LOOSE_UNITS.has(item.product.unit);
                 const line = round2(item.qty * item.price - item.discount);
                 return (
-                  <li key={item.product._id} className="rounded-xl bg-slate-50 p-3">
+                  <li key={item.key} className="rounded-xl bg-slate-50 p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="truncate font-semibold text-slate-800">{item.product.name}</div>
-                        <div className="text-xs text-slate-500">
-                          {formatPKR(item.price)} / {UNIT_LABELS[item.product.unit]}
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                          <span>
+                            {formatPKR(item.price)} / {item.pack ? `${item.pack.name} (${formatQty(item.pack.size)} ${UNIT_LABELS[item.product.unit] ?? item.product.unit})` : UNIT_LABELS[item.product.unit]}
+                          </span>
+                          {wholesale && !item.custom && <Badge color="violet">Wholesale</Badge>}
                         </div>
+                        {(item.product.packs?.length ?? 0) > 0 && (
+                          <select
+                            value={item.pack?.name ?? ""}
+                            onChange={(e) => changeUnit(item, e.target.value)}
+                            aria-label={`Sell ${item.product.name} as`}
+                            className="mt-1 h-7 rounded-lg border border-slate-200 bg-white px-1.5 text-xs font-semibold text-slate-700 focus:border-brand-500 focus:outline-hidden"
+                          >
+                            <option value="">{UNIT_LABELS[item.product.unit] ?? item.product.unit}</option>
+                            {item.product.packs!.map((k) => (
+                              <option key={k.name} value={k.name}>
+                                {k.name} ({formatQty(k.size)})
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </div>
-                      <button onClick={() => removeItem(item.product._id)} className="rounded-lg p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label="Remove">
+                      <button onClick={() => removeItem(item.key)} className="rounded-lg p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label="Remove">
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
@@ -500,7 +560,7 @@ export default function PosPage() {
                       <div className="flex items-center rounded-xl border border-slate-200 bg-white">
                         <button
                           className="flex h-9 w-9 items-center justify-center text-slate-600 hover:text-brand-700"
-                          onClick={() => (item.qty <= (loose ? 0.25 : 1) ? removeItem(item.product._id) : updateItem(item.product._id, { qty: round2(item.qty - (loose ? 0.25 : 1)) }))}
+                          onClick={() => (item.qty <= (loose ? 0.25 : 1) ? removeItem(item.key) : updateItem(item.key, { qty: round2(item.qty - (loose ? 0.25 : 1)) }))}
                           aria-label="Decrease"
                         >
                           <Minus className="h-4 w-4" />
@@ -511,12 +571,12 @@ export default function PosPage() {
                           step="any"
                           min="0"
                           value={item.qty}
-                          onChange={(e) => updateItem(item.product._id, { qty: Math.max(0, Number(e.target.value)) })}
+                          onChange={(e) => updateItem(item.key, { qty: Math.max(0, Number(e.target.value)) })}
                           className="h-9 w-16 border-x border-slate-200 text-center font-semibold focus:outline-hidden"
                         />
                         <button
                           className="flex h-9 w-9 items-center justify-center text-slate-600 hover:text-brand-700"
-                          onClick={() => updateItem(item.product._id, { qty: round2(item.qty + (loose ? 0.25 : 1)) })}
+                          onClick={() => updateItem(item.key, { qty: round2(item.qty + (loose ? 0.25 : 1)) })}
                           aria-label="Increase"
                         >
                           <Plus className="h-4 w-4" />
@@ -528,7 +588,7 @@ export default function PosPage() {
                           inputMode="decimal"
                           min="0"
                           value={item.price}
-                          onChange={(e) => updateItem(item.product._id, { price: Math.max(0, Number(e.target.value)) })}
+                          onChange={(e) => updateItem(item.key, { price: Math.max(0, Number(e.target.value)), custom: true })}
                           title="Price (owner/manager can change)"
                           className="h-9 w-20 rounded-xl border border-slate-200 px-2 text-right text-sm focus:border-brand-500 focus:outline-hidden"
                         />
@@ -591,7 +651,7 @@ export default function PosPage() {
         customer={customer}
         onChooseCustomer={() => setPickCustomer(true)}
         payload={{
-          items: cart.map((i) => ({ productId: i.product._id, qty: i.qty, price: i.price, discount: i.discount })),
+          items: cart.map((i) => ({ productId: i.product._id, qty: i.qty, ...(i.custom ? { price: i.price } : {}), discount: i.discount, ...(i.pack ? { pack: i.pack.name } : {}) })),
           discount,
           customerId: customer?._id,
         }}
@@ -607,7 +667,7 @@ export default function PosPage() {
             branchId: branch?._id,
             branchName: branch?.name,
             customerName: customer?.name,
-            lines: cart.map((i) => ({ name: i.product.name, qty: i.qty, unit: UNIT_LABELS[i.product.unit], price: i.price, total: round2(i.qty * i.price - i.discount) })),
+            lines: cart.map((i) => ({ name: i.product.name, qty: i.qty, unit: i.pack ? i.pack.name : UNIT_LABELS[i.product.unit], price: i.price, total: round2(i.qty * i.price - i.discount) })),
           };
           addToOutbox(tenantId, full);
           // Show the reduced stock on this device until the bill reaches the server.

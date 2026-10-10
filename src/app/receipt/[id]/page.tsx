@@ -10,7 +10,7 @@ import { formatPKR, formatQty } from "@/lib/money";
 type Sale = {
   invoiceNo: string;
   createdAt: string;
-  items: { name: string; qty: number; unit: string; price: number; discount: number; total: number }[];
+  items: { name: string; qty: number; unit: string; price: number; discount: number; total: number; pack?: { name: string; size: number; count: number; price: number } }[];
   subtotal: number;
   discount: number;
   tax: number;
@@ -129,7 +129,9 @@ function Receipt({ id }: { id: string }) {
             <div>{i.name}</div>
             <div className="flex">
               <span className="flex-1 pl-2">
-                {formatQty(i.qty)} {UNIT_LABELS[i.unit] ?? i.unit} × {formatPKR(i.price, { symbol: false })}
+                {i.pack
+                  ? `${formatQty(i.pack.count)} ${i.pack.name} (${formatQty(i.pack.size)}) × ${formatPKR(i.pack.price, { symbol: false })}`
+                  : `${formatQty(i.qty)} ${UNIT_LABELS[i.unit] ?? i.unit} × ${formatPKR(i.price, { symbol: false })}`}
                 {i.discount > 0 && ` -${formatPKR(i.discount, { symbol: false })}`}
               </span>
               <span className="w-20 text-right">{formatPKR(i.total, { symbol: false })}</span>

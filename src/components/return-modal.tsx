@@ -15,7 +15,7 @@ export type ReturnableSale = {
   customerName?: string;
   paymentMethod: string;
   payments?: { method: string; amount: number }[];
-  items: { name: string; unit: string; qty: number; price: number; total: number; returnedQty?: number }[];
+  items: { name: string; unit: string; qty: number; price: number; total: number; returnedQty?: number; pack?: { name: string; size: number; count: number } }[];
   subtotal: number;
   discount: number;
   tax: number;
@@ -182,7 +182,8 @@ export function ReturnModal({ sale: given, onClose, onDone }: { sale: Returnable
             <div className="min-w-0 flex-1">
               <div className="truncate font-semibold text-slate-800">{l.name}</div>
               <div className="text-xs text-slate-500">
-                Sold {formatQty(l.qty)} {UNIT_LABELS[l.unit] ?? l.unit} × {formatPKR(l.price)}
+                Sold {formatQty(l.qty)} {UNIT_LABELS[l.unit] ?? l.unit}
+                {l.pack ? ` (${formatQty(l.pack.count)} ${l.pack.name} of ${formatQty(l.pack.size)})` : ` × ${formatPKR(l.price)}`}
                 {(l.returnedQty ?? 0) > 0 && <span className="text-rose-600"> · {formatQty(l.returnedQty!)} already returned</span>}
               </div>
             </div>

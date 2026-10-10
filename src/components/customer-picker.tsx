@@ -9,7 +9,7 @@ import { cache } from "@/lib/offline";
 import { useSession } from "./session";
 import { formatPKR } from "@/lib/money";
 
-export type PartyLite = { _id: string; name: string; phone?: string; balance: number; creditLimit: number };
+export type PartyLite = { _id: string; name: string; phone?: string; balance: number; creditLimit: number; priceLevel?: "retail" | "wholesale" };
 
 export function CustomerPicker({
   open,

@@ -5,6 +5,19 @@ import { UNITS } from "@/lib/constants";
 
 export { UNITS };
 
+/** A bigger unit the product is also sold or bought in, e.g. Carton = 24 pieces. */
+const PackSchema = new Schema(
+  {
+    name: { type: String, required: true, trim: true },
+    size: { type: Number, required: true, min: 0.001 },
+    /** Selling price of the whole pack; empty = size × unit price. */
+    price: { type: Number, min: 0 },
+    wholesalePrice: { type: Number, min: 0 },
+    barcode: { type: String, trim: true },
+  },
+  { _id: false },
+);
+
 const ProductSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
@@ -15,6 +28,9 @@ const ProductSchema = new Schema(
     unit: { type: String, enum: UNITS, default: "pcs" },
     costPrice: { type: Number, default: 0, min: 0 },
     salePrice: { type: Number, required: true, min: 0 },
+    /** Price per unit for wholesale customers; empty = same as sale price. */
+    wholesalePrice: { type: Number, min: 0 },
+    packs: { type: [PackSchema], default: undefined },
     stock: { type: Number, default: 0 },
     lowStockAlert: { type: Number, default: 5, min: 0 },
     expiryDate: { type: Date },
@@ -29,6 +45,7 @@ ProductSchema.plugin(tenantScoped);
 
 ProductSchema.index({ tenant: 1, barcode: 1 }, { unique: true, partialFilterExpression: { barcode: { $type: "string", $gt: "" } } });
 ProductSchema.index({ tenant: 1, active: 1, name: 1 });
+ProductSchema.index({ tenant: 1, "packs.barcode": 1 }, { sparse: true });
 
 export type ProductDoc = InferSchemaType<typeof ProductSchema>;
 export const Product: Model<ProductDoc> = models.Product || model<ProductDoc>("Product", ProductSchema);

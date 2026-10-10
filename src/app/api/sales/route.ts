@@ -3,6 +3,7 @@ import { ApiError, dateRange, escapeRegex, handle } from "@/lib/api";
 import { reportBranchFilter, requireBranch } from "@/lib/branches";
 import { syncSaleToFbr } from "@/lib/fbr";
 import { round2 } from "@/lib/money";
+import { findPack, sellPrice } from "@/lib/pricing";
 import { optionalId } from "@/lib/schemas";
 import { moveStock, postLedger } from "@/lib/services";
 import { nextNumber, PAYMENT_METHODS, Party, Product, Sale, TENDER_METHODS, Tenant } from "@/models";
@@ -35,8 +36,11 @@ const Body = z.object({
       z.object({
         productId: z.string().regex(/^[a-f0-9]{24}$/i),
         qty: z.coerce.number().positive("Quantity must be more than zero"),
+        /** Price per item sold (per pack when `pack` is given). Owner/manager only. */
         price: z.coerce.number().min(0).optional(),
         discount: z.coerce.number().min(0).default(0),
+        /** Sell in a pack size of the product, e.g. "Carton"; qty is then the number of packs. */
+        pack: z.string().trim().max(30).optional(),
       }),
     )
     .min(1, "Add at least one item"),
@@ -88,22 +92,34 @@ export const POST = handle(async (req) => {
   const products = await Product.find({ tenant: tid, _id: { $in: body.items.map((i) => i.productId) } }).lean();
   const byId = new Map(products.map((p) => [String(p._id), p]));
 
+  let customer = null;
+  if (body.customerId) {
+    customer = await Party.findOne({ _id: body.customerId, tenant: tid, type: "customer" }).lean();
+    if (!customer) throw new ApiError(400, "Customer not found.");
+  }
+  const wholesale = customer?.priceLevel === "wholesale";
+
   const items = body.items.map((i) => {
     const p = byId.get(i.productId);
     if (!p) throw new ApiError(400, "One of the products no longer exists. Please refresh.");
+    const pack = findPack(p, i.pack);
+    if (i.pack && !pack) throw new ApiError(400, `${p.name} is not sold in "${i.pack}" any more. Please refresh.`);
     // Cashiers always sell at the saved price; owner/manager may change the price at the counter.
-    const price = user.role === "cashier" || i.price === undefined ? p.salePrice : i.price;
+    const price = user.role === "cashier" || i.price === undefined ? sellPrice(p, pack, wholesale) : i.price;
     const gross = round2(i.qty * price);
     const discount = Math.min(round2(i.discount), gross);
+    const qty = pack ? Math.round(i.qty * pack.size * 1000) / 1000 : i.qty;
     return {
       product: p._id,
       name: p.name,
       unit: p.unit,
-      qty: i.qty,
-      price,
+      qty,
+      price: pack ? Math.round((price / pack.size) * 10000) / 10000 : price,
       cost: p.costPrice ?? 0,
       discount,
       total: round2(gross - discount),
+      ...(pack ? { pack: { name: pack.name, size: pack.size, count: i.qty, price } } : {}),
+      ...(wholesale ? { wholesale: true } : {}),
     };
   });
 
@@ -127,11 +143,6 @@ export const POST = handle(async (req) => {
   const amountPaid = round2(payments.reduce((a, p) => a + p.amount, 0));
   const creditAmount = round2(Math.max(0, total - amountPaid));
 
-  let customer = null;
-  if (body.customerId) {
-    customer = await Party.findOne({ _id: body.customerId, tenant: tid, type: "customer" }).lean();
-    if (!customer) throw new ApiError(400, "Customer not found.");
-  }
   if (creditAmount > 0) {
     if (!customer) throw new ApiError(400, "Amount received is less than the bill. Select a customer to add the rest to their khata (udhaar).");
     // An offline bill has already been handed over, so it is recorded even above the limit.

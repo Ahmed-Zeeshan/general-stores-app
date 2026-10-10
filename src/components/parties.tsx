@@ -14,7 +14,7 @@ import { formatPKR } from "@/lib/money";
 import { openWhatsApp, reminderMessage, waNumber } from "@/lib/whatsapp";
 
 type PartyType = "customer" | "supplier";
-type Party = { _id: string; type: PartyType; name: string; phone?: string; address?: string; creditLimit: number; balance: number; notes?: string; updatedAt: string };
+type Party = { _id: string; type: PartyType; name: string; phone?: string; address?: string; creditLimit: number; balance: number; notes?: string; updatedAt: string; priceLevel?: "retail" | "wholesale" };
 type Entry = {
   _id: string;
   kind: string;
@@ -127,7 +127,10 @@ export function PartiesList({ type }: { type: PartyType }) {
                     {p.name.slice(0, 1).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-semibold text-slate-800">{p.name}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate font-semibold text-slate-800">{p.name}</span>
+                      {p.priceLevel === "wholesale" && <Badge color="violet">Wholesale</Badge>}
+                    </div>
                     <div className="text-xs text-slate-500">{p.phone || "No phone"}</div>
                   </div>
                   <div className="text-right">
@@ -150,7 +153,7 @@ export function PartiesList({ type }: { type: PartyType }) {
 
 function PartyForm({ type, open, party, onClose, onSaved }: { type: PartyType; open: boolean; party?: Party; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
-  const [form, setForm] = useState({ name: "", phone: "", address: "", creditLimit: "", notes: "", openingBalance: "" });
+  const [form, setForm] = useState({ name: "", phone: "", address: "", creditLimit: "", notes: "", openingBalance: "", priceLevel: "retail" });
   const [saving, setSaving] = useState(false);
   useEffect(() => {
     if (open)
@@ -161,16 +164,19 @@ function PartyForm({ type, open, party, onClose, onSaved }: { type: PartyType; o
         creditLimit: party?.creditLimit ? String(party.creditLimit) : "",
         notes: party?.notes ?? "",
         openingBalance: "",
+        priceLevel: party?.priceLevel ?? "retail",
       });
   }, [open, party]);
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm({ ...form, [k]: e.target.value });
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setForm({ ...form, [k]: e.target.value });
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     try {
-      if (party) await api(`/api/parties/${party._id}`, { method: "PUT", body: { ...form, creditLimit: Number(form.creditLimit) || 0 } });
-      else await api("/api/parties", { body: { type, ...form, creditLimit: Number(form.creditLimit) || 0, openingBalance: Number(form.openingBalance) || 0 } });
+      const { priceLevel, ...rest } = form;
+      const level = type === "customer" ? { priceLevel } : {};
+      if (party) await api(`/api/parties/${party._id}`, { method: "PUT", body: { ...rest, ...level, creditLimit: Number(form.creditLimit) || 0 } });
+      else await api("/api/parties", { body: { type, ...rest, ...level, creditLimit: Number(form.creditLimit) || 0, openingBalance: Number(form.openingBalance) || 0 } });
       toast.success("Saved");
       onSaved();
     } catch (err) {
@@ -202,6 +208,14 @@ function PartyForm({ type, open, party, onClose, onSaved }: { type: PartyType; o
         {type === "customer" && (
           <Field label="Udhaar limit" hint="0 = no limit">
             <Input type="number" inputMode="decimal" min="0" value={form.creditLimit} onChange={set("creditLimit")} placeholder="0" />
+          </Field>
+        )}
+        {type === "customer" && (
+          <Field label="Prices" hint="Wholesale customers automatically get wholesale prices at the counter">
+            <Select value={form.priceLevel} onChange={set("priceLevel")} aria-label="Price level">
+              <option value="retail">Retail (normal prices)</option>
+              <option value="wholesale">Wholesale</option>
+            </Select>
           </Field>
         )}
         <Field label="Address" className="sm:col-span-2">
@@ -294,7 +308,10 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
                 <UserRound className="h-7 w-7" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">{party.name}</h1>
+                <h1 className="flex flex-wrap items-center gap-2 text-2xl font-bold">
+                  {party.name}
+                  {party.priceLevel === "wholesale" && <span className="rounded-full bg-violet-500/30 px-2.5 py-0.5 text-xs font-semibold text-violet-100">Wholesale</span>}
+                </h1>
                 <div className="mt-0.5 flex flex-wrap gap-3 text-sm text-slate-300">
                   {party.phone && (
                     <a href={`tel:${party.phone}`} className="inline-flex items-center gap-1 hover:text-white">

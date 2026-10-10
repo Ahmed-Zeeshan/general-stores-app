@@ -11,6 +11,8 @@ const PartySchema = new Schema(
     name: { type: String, required: true, trim: true },
     phone: { type: String, trim: true },
     address: { type: String, trim: true },
+    /** Wholesale customers get the wholesale prices automatically. */
+    priceLevel: { type: String, enum: ["retail", "wholesale"], default: "retail" },
     creditLimit: { type: Number, default: 0, min: 0 },
     balance: { type: Number, default: 0 },
     notes: { type: String, trim: true },

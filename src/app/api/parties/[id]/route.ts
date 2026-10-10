@@ -21,6 +21,7 @@ const Body = z.object({
   phone: z.string().trim().optional(),
   address: z.string().trim().optional(),
   creditLimit: z.coerce.number().min(0).optional(),
+  priceLevel: z.enum(["retail", "wholesale"]).optional(),
   notes: z.string().trim().optional(),
   active: z.boolean().optional(),
 });

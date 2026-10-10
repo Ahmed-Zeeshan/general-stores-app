@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { ApiError, escapeRegex, handle } from "@/lib/api";
+import { escapeRegex, handle } from "@/lib/api";
 import { branchStock, requireBranch } from "@/lib/branches";
 import { withCategories } from "@/lib/categories";
+import { assertBarcodesFree } from "@/lib/barcode-server";
 import { ProductInput } from "@/lib/schemas";
 import { moveStock } from "@/lib/services";
 import { Product } from "@/models";
@@ -23,7 +24,7 @@ export const GET = handle(async (req) => {
   const query: Record<string, unknown> = { tenant: tid, active: filter === "inactive" ? false : true };
   if (q) {
     const rx = new RegExp(escapeRegex(q), "i");
-    query.$or = [{ name: rx }, { nameUrdu: rx }, { barcode: q }, { sku: rx }];
+    query.$or = [{ name: rx }, { nameUrdu: rx }, { barcode: q }, { "packs.barcode": q }, { sku: rx }];
   }
   if (category) query.category = category;
   if (filter === "expiring") {
@@ -43,10 +44,8 @@ export const POST = handle(async (req) => {
   const raw = await req.json();
   const body = ProductInput.parse(raw);
   const openingStock = z.coerce.number().min(0).optional().parse(raw.openingStock) ?? 0;
-  if (body.barcode && (await Product.exists({ tenant: tid, barcode: body.barcode }))) {
-    throw new ApiError(409, `Barcode ${body.barcode} is already used by another product.`);
-  }
-  const product = await Product.create({ ...body, tenant: tid, barcode: body.barcode || undefined, stock: 0 });
+  await assertBarcodesFree(tid, body);
+  const product = await Product.create({ ...body, tenant: tid, barcode: body.barcode || undefined, wholesalePrice: body.wholesalePrice ?? undefined, stock: 0 });
   if (openingStock > 0) {
     await moveStock({ tid, branch: branchId, productId: product._id, qty: openingStock, type: "opening", note: "Opening stock", userId: user.id });
   }

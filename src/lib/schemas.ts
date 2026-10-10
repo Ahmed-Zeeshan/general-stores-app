@@ -17,6 +17,30 @@ export const ProductInput = z.object({
   unit: z.enum(UNITS),
   costPrice: z.coerce.number().min(0, "Cost price cannot be negative"),
   salePrice: z.coerce.number().min(0, "Sale price cannot be negative"),
+  wholesalePrice: z
+    .union([z.coerce.number().min(0, "Wholesale price cannot be negative"), z.literal(""), z.null()])
+    .optional()
+    .transform((v) => (typeof v === "number" && v > 0 ? v : null)),
+  packs: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1, "Give the pack a name, e.g. Carton").max(30),
+        size: z.coerce.number().positive("Units in the pack must be more than zero"),
+        price: z.union([z.coerce.number().min(0), z.literal(""), z.null()]).optional().transform((v) => (typeof v === "number" && v > 0 ? v : undefined)),
+        wholesalePrice: z.union([z.coerce.number().min(0), z.literal(""), z.null()]).optional().transform((v) => (typeof v === "number" && v > 0 ? v : undefined)),
+        barcode: z.string().trim().max(64).optional().transform((v) => v || undefined),
+      }),
+    )
+    .max(5, "At most 5 pack sizes")
+    .optional()
+    .superRefine((packs, ctx) => {
+      const names = new Set<string>();
+      for (const p of packs ?? []) {
+        const k = p.name.toLowerCase();
+        if (names.has(k)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Pack name "${p.name}" is used twice.` });
+        names.add(k);
+      }
+    }),
   lowStockAlert: z.coerce.number().min(0),
   expiryDate: z
     .string()
