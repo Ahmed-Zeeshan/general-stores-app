@@ -21,6 +21,7 @@ const Body = z.object({
   category: z.string().trim().min(1, "Choose a category"),
   amount: z.coerce.number().positive("Amount must be more than zero"),
   note: z.string().trim().optional(),
+  method: z.enum(["cash", "bank", "jazzcash", "easypaisa", "card"]).default("cash"),
   date: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)

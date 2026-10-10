@@ -2,16 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Plus, Trash2, Wallet } from "lucide-react";
-import { Button, Card, EmptyState, Field, Input, Modal, PageHeader, Spinner, StatCard, Table, Td, Th } from "@/components/ui";
+import { Button, Card, EmptyState, Field, Input, Modal, PageHeader, Select, Spinner, StatCard, Table, Td, Th } from "@/components/ui";
 import { DateRange } from "@/components/date-range";
 import { useCan } from "@/components/session";
 import { useToast } from "@/components/toast";
 import { useConfirm } from "@/components/confirm";
-import { api, formatDate, todayISO } from "@/lib/client";
+import { api, formatDate, PAYMENT_LABELS, todayISO } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
 import { EXPENSE_CATEGORIES } from "@/lib/constants";
 
-type Expense = { _id: string; category: string; amount: number; note?: string; date: string; user?: { name: string } };
+type Expense = { _id: string; category: string; amount: number; method?: string; note?: string; date: string; user?: { name: string } };
 
 export default function ExpensesPage() {
   const toast = useToast();
@@ -20,7 +20,7 @@ export default function ExpensesPage() {
   const [range, setRange] = useState({ from: todayISO(-29), to: todayISO() });
   const [list, setList] = useState<Expense[] | null>(null);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ category: "Electricity", amount: "", note: "", date: todayISO() });
+  const [form, setForm] = useState({ category: "Electricity", amount: "", note: "", date: todayISO(), method: "cash" });
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(() => {
@@ -35,7 +35,7 @@ export default function ExpensesPage() {
       await api("/api/expenses", { body: { ...form, amount: Number(form.amount) } });
       toast.success("Expense added");
       setOpen(false);
-      setForm({ category: form.category, amount: "", note: "", date: todayISO() });
+      setForm({ category: form.category, amount: "", note: "", date: todayISO(), method: form.method });
       load();
     } catch (err) {
       toast.error((err as Error).message);
@@ -118,7 +118,10 @@ export default function ExpensesPage() {
                 <tr key={x._id}>
                   <Td className="text-slate-500">{formatDate(x.date)}</Td>
                   <Td className="font-medium">{x.category}</Td>
-                  <Td className="text-slate-500">{x.note}</Td>
+                  <Td className="text-slate-500">
+                    {x.note}
+                    {x.method && x.method !== "cash" && <span className="ml-1 text-xs text-slate-400">({PAYMENT_LABELS[x.method] ?? x.method})</span>}
+                  </Td>
                   <Td className="text-right font-bold">{formatPKR(x.amount)}</Td>
                   {can.owner && (
                     <Td className="text-right">
@@ -152,6 +155,15 @@ export default function ExpensesPage() {
           </Field>
           <Field label="Amount (Rs)">
             <Input required autoFocus type="number" inputMode="decimal" min="1" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="h-12 text-xl font-bold" />
+          </Field>
+          <Field label="Paid from" hint="Cash from the drawer is taken off the day's expected cash">
+            <Select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })} aria-label="Paid from">
+              <option value="cash">Cash drawer</option>
+              <option value="bank">Bank transfer</option>
+              <option value="jazzcash">JazzCash</option>
+              <option value="easypaisa">Easypaisa</option>
+              <option value="card">Card</option>
+            </Select>
           </Field>
           <Field label="Date">
             <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />

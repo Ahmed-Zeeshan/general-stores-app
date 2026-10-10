@@ -15,6 +15,7 @@ import {
   Sale,
   SaleReturn,
   Reminder,
+  Shift,
   StockLevel,
   StockMovement,
   Tenant,
@@ -43,6 +44,7 @@ const SHOP_DATA: [string, Model<any>][] = [
   ["production", Production],
   ["transfers", Transfer],
   ["reminders", Reminder],
+  ["shifts", Shift],
 ];
 
 /** Shop settings restored from a backup. Admin limits, status and secrets are never taken from a file. */
@@ -167,6 +169,7 @@ export async function restoreTenant(tid: Types.ObjectId, file: unknown) {
     ["production", maxNo(find(Production as Model<unknown>), "productionNo")],
     ["transfer", maxNo(find(Transfer as Model<unknown>), "transferNo")],
     ["return", maxNo(find(SaleReturn as Model<unknown>), "returnNo")],
+    ["shift", maxNo(find(Shift as Model<unknown>), "shiftNo")],
     ["receipt", maxNo(find(LedgerEntry as Model<unknown>).filter((e) => /^RCP-/.test(String(e.refNo ?? ""))), "refNo")],
     ["payout", maxNo(find(LedgerEntry as Model<unknown>).filter((e) => /^PAY-/.test(String(e.refNo ?? ""))), "refNo")],
   ];

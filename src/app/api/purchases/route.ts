@@ -77,9 +77,9 @@ export const POST = handle(async (req) => {
     }
   }
   if (supplier) {
-    await postLedger({ tid, partyId: supplier._id, kind: "purchase", amount: total, refType: "purchase", refId: purchase._id, refNo: purchaseNo, note: `Purchase ${purchaseNo}`, userId: user.id });
+    await postLedger({ tid, partyId: supplier._id, kind: "purchase", amount: total, refType: "purchase", refId: purchase._id, refNo: purchaseNo, note: `Purchase ${purchaseNo}`, userId: user.id, branch: branchId });
     if (amountPaid > 0) {
-      await postLedger({ tid, partyId: supplier._id, kind: "payment", amount: -amountPaid, method: "cash", refType: "purchase", refId: purchase._id, refNo: purchaseNo, note: `Paid for ${purchaseNo}`, userId: user.id });
+      await postLedger({ tid, partyId: supplier._id, kind: "payment", amount: -amountPaid, method: "cash", refType: "purchase", refId: purchase._id, refNo: purchaseNo, note: `Paid for ${purchaseNo}`, userId: user.id, branch: branchId });
     }
   }
   return purchase.toObject();

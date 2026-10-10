@@ -8,6 +8,8 @@ const ExpenseSchema = new Schema(
     category: { type: String, required: true },
     branch: { type: Schema.Types.ObjectId, ref: "Branch" },
     amount: { type: Number, required: true, min: 0 },
+    /** "cash" = paid from the cash drawer (counts in the day close); otherwise bank / wallet. */
+    method: { type: String, enum: ["cash", "bank", "jazzcash", "easypaisa", "card"], default: "cash" },
     note: { type: String, trim: true },
     date: { type: Date, default: Date.now },
     user: { type: Schema.Types.ObjectId, ref: "User" },

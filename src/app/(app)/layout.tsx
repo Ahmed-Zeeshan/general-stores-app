@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowLeftRight,
+  Banknote,
   Barcode,
   BarChart3,
   BellRing,
@@ -42,6 +43,7 @@ const NAV: { href: string; label: string; urdu: string; icon: typeof Package; ro
   { href: "/sales", label: "Sales History", urdu: "فروخت", icon: Receipt, roles: SHOP },
   { href: "/products", label: "Products & Stock", urdu: "اشیاء", icon: Package, roles: SHOP },
   { href: "/customers", label: "Customers Khata", urdu: "کھاتہ", icon: BookOpen, roles: SHOP },
+  { href: "/drawer", label: "Cash Drawer", urdu: "کیش دراز", icon: Banknote, roles: SHOP },
   { href: "/udhaar", label: "Udhaar Report", urdu: "ادھار رپورٹ", icon: BellRing, roles: ["owner", "manager"] },
   { href: "/labels", label: "Barcode Labels", urdu: "لیبل", icon: Barcode, roles: ["owner", "manager"] },
   { href: "/production", label: "Production", urdu: "تیاری", icon: ChefHat, roles: ["owner", "manager"] },

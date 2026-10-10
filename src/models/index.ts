@@ -16,3 +16,4 @@ export * from "./StockLevel";
 export * from "./Transfer";
 export * from "./Reminder";
 export * from "./SaleReturn";
+export * from "./Shift";

@@ -107,6 +107,12 @@ export default function PosPage() {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [heldOpen, setHeldOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState<boolean | null>(null);
+  useEffect(() => {
+    api<{ shift: unknown }>("/api/shifts/current")
+      .then((r) => setDrawerOpen(!!r.shift))
+      .catch(() => setDrawerOpen(null));
+  }, [branch?._id]);
   const ask = useConfirm();
   // Latest "hold" action for the keyboard shortcut.
   const holdRef = useRef<() => void>(() => {});
@@ -326,6 +332,11 @@ export default function PosPage() {
               <Button size="sm" variant="outline" icon={<RefreshCw className="h-4 w-4" />} onClick={() => setOutboxOpen(true)}>
                 {outbox.length} waiting
               </Button>
+            )}
+            {drawerOpen === false && !usingSaved && (
+              <Link href="/drawer" className="hidden items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200 md:inline-flex" title="Open the cash drawer to track cash for the day close">
+                <Banknote className="h-4 w-4" /> Drawer not open
+              </Link>
             )}
             {held.length > 0 && (
               <Button size="sm" variant="outline" icon={<PlayCircle className="h-4 w-4 text-amber-600" />} onClick={() => setHeldOpen(true)} title="Bills on hold (F6)">
