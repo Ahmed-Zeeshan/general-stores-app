@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, LogIn } from "lucide-react";
 import { Button, Field, Input } from "@/components/ui";
+import { LangSwitch, useT } from "@/lib/i18n";
 import { Logo } from "@/components/logo";
 import { useToast } from "@/components/toast";
 import { api } from "@/lib/client";
@@ -11,6 +12,7 @@ import { api } from "@/lib/client";
 export default function LoginPage() {
   const router = useRouter();
   const toast = useToast();
+  const t = useT();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
@@ -40,20 +42,23 @@ export default function LoginPage() {
       <div className="mb-10 lg:hidden">
         <Logo />
       </div>
-      <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Welcome back</h1>
-      <p className="mt-2 text-slate-500">Log in to open your shop. <span className="urdu">خوش آمدید</span></p>
+      <div className="mb-6 flex justify-end">
+        <LangSwitch />
+      </div>
+      <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">{t("Welcome back")}</h1>
+      <p className="mt-2 text-slate-500">{t("Log in to open your shop.")} <span className="urdu">خوش آمدید</span></p>
       <form onSubmit={submit} className="mt-8 space-y-5">
-        <Field label="Username">
+        <Field label={t("Username")}>
           <Input autoFocus autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="e.g. ahmed" required />
         </Field>
-        <Field label="Password">
+        <Field label={t("Password")}>
           <div className="relative">
             <Input
               type={show ? "text" : "password"}
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Your password"
+              placeholder={t("Your password")}
               required
               className="pr-12"
             />
@@ -68,10 +73,10 @@ export default function LoginPage() {
           </div>
         </Field>
         <Button type="submit" size="lg" className="w-full" loading={loading} icon={<LogIn className="h-5 w-5" />}>
-          Log in
+          {t("Log in")}
         </Button>
       </form>
-      <p className="mt-8 text-center text-sm text-slate-500">Forgot your password? Staff: ask your shop owner. Shop owners: ask the administrator.</p>
+      <p className="mt-8 text-center text-sm text-slate-500">{t("Forgot your password? Staff: ask your shop owner. Shop owners: ask the administrator.")}</p>
     </div>
   );
 }

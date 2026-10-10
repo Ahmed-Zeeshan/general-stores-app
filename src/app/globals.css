@@ -58,6 +58,14 @@ body {
   line-height: 2;
 }
 
+/* Urdu interface: Urdu words use Nastaliq, numbers and English stay in Inter. */
+html.lang-ur body {
+  font-family: Inter, "Noto Nastaliq Urdu", system-ui, sans-serif;
+}
+.ur-text {
+  unicode-bidi: plaintext;
+}
+
 /* Hide number input spinners — easier to type on touch screens */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {

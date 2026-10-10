@@ -8,6 +8,7 @@ import { useToast } from "./toast";
 import { api, PAYMENT_LABELS } from "@/lib/client";
 import { formatPKR, round2 } from "@/lib/money";
 import { openWhatsApp, paymentMessage, waNumber } from "@/lib/whatsapp";
+import { useT } from "@/lib/i18n";
 
 export type PayParty = { _id: string; type: "customer" | "supplier"; name: string; phone?: string; balance: number };
 type Saved = { _id: string; refNo?: string; amount: number; balanceAfter: number; method?: string; createdAt: string };
@@ -47,6 +48,7 @@ export function sendPaymentWhatsApp(
  */
 export function ReceivePaymentModal({ open, party: given, onClose, onSaved }: { open: boolean; party?: PayParty | null; onClose: () => void; onSaved?: () => void }) {
   const toast = useToast();
+  const t = useT();
   const { settings } = useSession();
   const [party, setParty] = useState<PayParty | null>(null);
   const [amount, setAmount] = useState("");
@@ -69,7 +71,7 @@ export function ReceivePaymentModal({ open, party: given, onClose, onSaved }: { 
 
   if (!open) return null;
   const isCustomer = (party?.type ?? "customer") === "customer";
-  const title = isCustomer ? "Receive payment" : "Pay supplier";
+  const title = isCustomer ? t("Receive payment") : "Pay supplier";
 
   if (!party) return <PickCustomer onClose={onClose} onPick={setParty} />;
 
@@ -96,7 +98,7 @@ export function ReceivePaymentModal({ open, party: given, onClose, onSaved }: { 
     const left = done.balanceAfter;
     const canWa = isCustomer && !!waNumber(party.phone);
     return (
-      <Modal open onClose={onClose} title={isCustomer ? "Payment received" : "Payment saved"} size="sm">
+      <Modal open onClose={onClose} title={isCustomer ? t("Payment received") : "Payment saved"} size="sm">
         <div className="text-center">
           <CheckCircle2 className="mx-auto h-14 w-14 text-brand-500" />
           <p className="mt-2 text-sm text-slate-500">
@@ -106,16 +108,18 @@ export function ReceivePaymentModal({ open, party: given, onClose, onSaved }: { 
           <p className="text-sm text-slate-500">{PAYMENT_LABELS[done.method ?? "cash"]}</p>
           <div className={cn("mt-4 rounded-2xl p-3 text-sm font-semibold", left > 0 ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-800")}>
             {left > 0
-              ? `${isCustomer ? "Still to collect" : "Still to pay"}: ${formatPKR(left)}`
+              ? isCustomer
+                ? t("Still to collect: {amount}", { amount: formatPKR(left) })
+                : `Still to pay: ${formatPKR(left)}`
               : left < 0
                 ? `Advance: ${formatPKR(-left)}`
                 : isCustomer
-                  ? "Khata clear — fully paid ✓"
+                  ? t("Khata clear — fully paid ✓")
                   : "Supplier fully paid ✓"}
           </div>
           <div className={cn("mt-6 grid gap-3", canWa ? "grid-cols-3" : "grid-cols-2")}>
             <Button variant="outline" icon={<Printer className="h-4 w-4" />} onClick={() => printPaymentReceipt(done._id)}>
-              {isCustomer ? "Receipt" : "Voucher"}
+              {isCustomer ? t("Receipt") : "Voucher"}
             </Button>
             {canWa && (
               <Button
@@ -129,7 +133,7 @@ export function ReceivePaymentModal({ open, party: given, onClose, onSaved }: { 
                 WhatsApp
               </Button>
             )}
-            <Button onClick={onClose}>Done</Button>
+            <Button onClick={onClose}>{t("Done")}</Button>
           </div>
         </div>
       </Modal>
@@ -153,21 +157,21 @@ export function ReceivePaymentModal({ open, party: given, onClose, onSaved }: { 
 
         {due > 0 && (
           <div className="grid grid-cols-2 gap-2">
-            <QuickAmount label="Full payment" value={due} active={paid === due} onPick={setAmount} />
-            {due >= 200 && <QuickAmount label="Half" value={roundNice(due / 2)} active={paid === roundNice(due / 2)} onPick={setAmount} />}
+            <QuickAmount label={t("Full payment")} value={due} active={paid === due} onPick={setAmount} />
+            {due >= 200 && <QuickAmount label={t("Half")} value={roundNice(due / 2)} active={paid === roundNice(due / 2)} onPick={setAmount} />}
           </div>
         )}
-        <Field label="Amount (Rs)">
+        <Field label={t("Amount (Rs)")}>
           <Input autoFocus required type="number" inputMode="decimal" min="1" step="any" value={amount} onChange={(e) => setAmount(e.target.value)} className="h-14 text-2xl font-bold" aria-label="Amount" />
         </Field>
-        <Field label={isCustomer ? "Paid by" : "Paid with"}>
+        <Field label={isCustomer ? t("Paid by") : "Paid with"}>
           <Select value={method} onChange={(e) => setMethod(e.target.value)}>
             {["cash", "jazzcash", "easypaisa", "bank", "card"].map((m) => (
-              <option key={m} value={m}>{PAYMENT_LABELS[m]}</option>
+              <option key={m} value={m}>{t(PAYMENT_LABELS[m])}</option>
             ))}
           </Select>
         </Field>
-        <Field label="Note (optional)">
+        <Field label={t("Note (optional)")}>
           <Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} />
         </Field>
 
@@ -186,7 +190,7 @@ export function ReceivePaymentModal({ open, party: given, onClose, onSaved }: { 
         )}
 
         <Button type="submit" size="lg" className="w-full" loading={saving} disabled={!(paid > 0)}>
-          {isCustomer ? `Receive ${paid > 0 ? formatPKR(paid) : ""}` : `Pay ${paid > 0 ? formatPKR(paid) : ""}`}
+          {isCustomer ? t("Receive {amount}", { amount: paid > 0 ? formatPKR(paid) : "" }).trim() : `Pay ${paid > 0 ? formatPKR(paid) : ""}`}
         </Button>
       </form>
     </Modal>
@@ -216,6 +220,7 @@ function QuickAmount({ label, value, active, onPick }: { label: string; value: n
 /** Customer search for receiving a payment from the POS. */
 function PickCustomer({ onClose, onPick }: { onClose: () => void; onPick: (p: PayParty) => void }) {
   const toast = useToast();
+  const t = useT();
   const [q, setQ] = useState("");
   const [list, setList] = useState<PayParty[] | null>(null);
   useEffect(() => {
@@ -228,10 +233,10 @@ function PickCustomer({ onClose, onPick }: { onClose: () => void; onPick: (p: Pa
   }, [q, toast]);
 
   return (
-    <Modal open onClose={onClose} title="Receive udhaar — choose customer" size="sm">
+    <Modal open onClose={onClose} title={t("Receive udhaar — choose customer")} size="sm">
       <div className="relative">
         <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-        <Input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name or phone" className="pl-10" aria-label="Search customer" />
+        <Input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Name or phone")} className="pl-10" aria-label="Search customer" />
       </div>
       <p className="mt-2 text-xs text-slate-500">{q ? "Matching customers" : "Customers with udhaar"}</p>
       <div className="mt-2 max-h-[50vh] overflow-y-auto">

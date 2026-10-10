@@ -37,6 +37,7 @@ import { Button, Field, Input, Modal, Spinner, cn } from "@/components/ui";
 import { api, NetworkError } from "@/lib/client";
 import { cache, clearOfflineCache, getOutbox, onOutboxChange, syncOutbox } from "@/lib/offline";
 import type { Role } from "@/lib/session";
+import { LangSwitch, useLang, useT } from "@/lib/i18n";
 
 const SHOP: Role[] = ["owner", "manager", "cashier"];
 const NAV: { href: string; label: string; urdu: string; icon: typeof Package; roles: Role[]; multiBranch?: boolean }[] = [
@@ -72,6 +73,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const [offline, setOffline] = useState(false);
   const confirm = useConfirm();
+  const { lang } = useLang();
+  const t = useT();
   const load = useCallback(() => {
     api<SessionData>("/api/auth/me")
       .then((d) => {
@@ -141,23 +144,35 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             )}
           >
             <item.icon className={cn("h-5 w-5 shrink-0", isActive(item.href) ? "text-white" : "text-slate-400 group-hover:text-slate-600")} />
-            <span className="flex-1">{item.label}</span>
-            <span className={cn("urdu text-xs", isActive(item.href) ? "text-brand-100" : "text-slate-400")}>{item.urdu}</span>
+            {lang === "ur" ? (
+              <>
+                <span className="urdu flex-1 text-left text-[15px] leading-loose">{item.urdu}</span>
+                <span className={cn("text-[11px] font-medium", isActive(item.href) ? "text-brand-100" : "text-slate-400")}>{item.label}</span>
+              </>
+            ) : (
+              <>
+                <span className="flex-1">{item.label}</span>
+                <span className={cn("urdu text-xs", isActive(item.href) ? "text-brand-100" : "text-slate-400")}>{item.urdu}</span>
+              </>
+            )}
           </Link>
         ))}
       </nav>
       <div className="space-y-1 border-t border-slate-100 p-3">
+        <div className="flex justify-center pb-1">
+          <LangSwitch />
+        </div>
         <button
           onClick={() => setPwOpen(true)}
           className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
         >
-          <KeyRound className="h-5 w-5" /> Change password
+          <KeyRound className="h-5 w-5" /> {t("Change password")}
         </button>
         <button
           onClick={logout}
           className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-rose-50 hover:text-rose-700"
         >
-          <LogOut className="h-5 w-5" /> Log out
+          <LogOut className="h-5 w-5" /> {t("Log out")}
         </button>
       </div>
     </div>

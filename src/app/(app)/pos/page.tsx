@@ -30,6 +30,7 @@ import { CameraButton, CameraScanner, beep, useBarcodeScanner } from "@/componen
 import { useCan, useSession } from "@/components/session";
 import { useToast } from "@/components/toast";
 import { useConfirm } from "@/components/confirm";
+import { useLang, useT } from "@/lib/i18n";
 import { ReceivePaymentModal } from "@/components/receive-payment";
 import { api, LOOSE_UNITS, NetworkError, UNIT_LABELS } from "@/lib/client";
 import {
@@ -84,6 +85,8 @@ const METHODS = [
 
 export default function PosPage() {
   const toast = useToast();
+  const t = useT();
+  const { lang } = useLang();
   const { settings, user, branch } = useSession();
   const can = useCan();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -357,7 +360,7 @@ export default function PosPage() {
     };
     saveHeld(tenantId, branchId, [...list, entry]);
     resetBill();
-    if (!silent) toast.success(`Bill on hold (${formatPKR(total)}). Open it again from "Held bills".`);
+    if (!silent) toast.success(t('Bill on hold ({amount}). Open it again from "Held bills".', { amount: formatPKR(total) }));
     return true;
   }
 
@@ -403,33 +406,33 @@ export default function PosPage() {
       <section className="flex min-w-0 flex-1 flex-col p-4 sm:p-6 lg:overflow-hidden">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">New Bill <span className="urdu ml-2 text-base text-slate-400">نیا بل</span></h1>
-            <p className="hidden text-xs text-slate-500 sm:block">Tip: scan a barcode or type and press Enter · F2 search · F9 pay · F4 hold · F6 held bills · F8 receive udhaar</p>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t("New Bill")} {lang !== "ur" && <span className="urdu ml-2 text-base text-slate-400">نیا بل</span>}</h1>
+            <p className="hidden text-xs text-slate-500 sm:block">{t("Tip: scan a barcode or type and press Enter · F2 search · F9 pay · F4 hold · F6 held bills · F8 receive udhaar")}</p>
           </div>
           <div className="flex items-center gap-2">
             {usingSaved && (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800">
-                <CloudOff className="h-4 w-4" /> Offline mode
+                <CloudOff className="h-4 w-4" /> {t("Offline mode")}
               </span>
             )}
             {outbox.length > 0 && (
               <Button size="sm" variant="outline" icon={<RefreshCw className="h-4 w-4" />} onClick={() => setOutboxOpen(true)}>
-                {outbox.length} waiting
+                {t("{n} waiting", { n: outbox.length })}
               </Button>
             )}
             {drawerOpen === false && !usingSaved && (
               <Link href="/drawer" className="hidden items-center gap-1.5 whitespace-nowrap rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200 md:inline-flex" title="Open the cash drawer to track cash for the day close">
-                <Banknote className="h-4 w-4" /> Drawer not open
+                <Banknote className="h-4 w-4" /> {t("Drawer not open")}
               </Link>
             )}
             {held.length > 0 && (
               <Button size="sm" variant="outline" className="whitespace-nowrap" icon={<PlayCircle className="h-4 w-4 text-amber-600" />} onClick={() => setHeldOpen(true)} title="Bills on hold (F6)">
-                Held bills <Badge color="amber">{held.length}</Badge>
+                {t("Held bills")} <Badge color="amber">{held.length}</Badge>
               </Button>
             )}
             <Button size="sm" variant="outline" className="whitespace-nowrap" icon={<HandCoins className="h-4 w-4 text-brand-600" />} onClick={() => setReceiveOpen(true)} title="Customer pays old udhaar (F8)">
-              <span className="hidden sm:inline">Receive udhaar</span>
-              <span className="sm:hidden">Udhaar</span>
+              <span className="hidden sm:inline">{t("Receive udhaar")}</span>
+              <span className="sm:hidden">{t("Udhaar")}</span>
             </Button>
           </div>
         </div>
@@ -442,7 +445,7 @@ export default function PosPage() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={onSearchEnter}
-            placeholder="Scan barcode or search product…"
+            placeholder={t("Scan barcode or search product…")}
             className="h-14 pl-12 text-lg"
           />
           {q && (
@@ -457,7 +460,7 @@ export default function PosPage() {
         </div>
 
         <div className="scrollbar-thin -mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
-          <CatChip active={!cat} onClick={() => setCat("")}>All</CatChip>
+          <CatChip active={!cat} onClick={() => setCat("")}>{t("All")}</CatChip>
           {categories.map((c) => (
             <CatChip key={c._id} active={cat === c._id} onClick={() => setCat(c._id)}>
               {c.name}
@@ -505,7 +508,7 @@ export default function PosPage() {
                       <span className="text-xs font-medium text-slate-400">/{UNIT_LABELS[p.unit]}</span>
                     </span>
                     <span className={cn("text-xs font-medium", p.stock <= 0 ? "text-rose-600" : "text-slate-500")}>
-                      Stock: {formatQty(p.stock)}
+                      {t("Stock: {n}", { n: formatQty(p.stock) })}
                     </span>
                   </button>
                 );
@@ -519,12 +522,12 @@ export default function PosPage() {
       <aside className="flex w-full flex-col border-t border-slate-200 bg-white lg:h-full lg:w-[420px] lg:border-l lg:border-t-0">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <h2 className="flex items-center gap-2 font-bold text-slate-900">
-            <ShoppingCart className="h-5 w-5 text-brand-600" /> Bill items
+            <ShoppingCart className="h-5 w-5 text-brand-600" /> {t("Bill items")}
             {itemCount > 0 && <Badge color="green">{itemCount}</Badge>}
           </h2>
           {cart.length > 0 && (
             <button onClick={resetBill} className="text-sm font-semibold text-rose-600 hover:text-rose-700">
-              Clear all
+              {t("Clear all")}
             </button>
           )}
         </div>
@@ -538,12 +541,12 @@ export default function PosPage() {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
-              <span className="truncate text-sm font-semibold text-slate-800">{customer ? customer.name : "Walk-in customer"}</span>
-              {wholesale && <Badge color="violet">Wholesale prices</Badge>}
+              <span className="truncate text-sm font-semibold text-slate-800">{customer ? customer.name : t("Walk-in customer")}</span>
+              {wholesale && <Badge color="violet">{t("Wholesale prices")}</Badge>}
             </div>
             <div className="text-xs text-slate-500">
-              {customer ? (customer.balance > 0 ? `Old udhaar: ${formatPKR(customer.balance)}` : "No old udhaar") : "Tap to choose a customer (needed for udhaar)"}
-              {customer && loyalty && ` · ${customer.points ?? 0} points`}
+              {customer ? (customer.balance > 0 ? t("Old udhaar: {amount}", { amount: formatPKR(customer.balance) }) : t("No old udhaar")) : t("Tap to choose a customer (needed for udhaar)")}
+              {customer && loyalty && ` · ${t("{n} points", { n: customer.points ?? 0 })}`}
             </div>
           </div>
           {customer && (
@@ -564,7 +567,7 @@ export default function PosPage() {
           {cart.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center py-12 text-center text-slate-400">
               <Search className="mb-3 h-10 w-10" />
-              <p className="text-sm">Tap a product or scan a barcode to add it to the bill.</p>
+              <p className="text-sm">{t("Tap a product or scan a barcode to add it to the bill.")}</p>
             </div>
           ) : (
             <ul className="space-y-2">
@@ -581,7 +584,7 @@ export default function PosPage() {
                           <span>
                             {formatPKR(item.price)} / {item.pack ? `${item.pack.name} (${formatQty(item.pack.size)} ${UNIT_LABELS[item.product.unit] ?? item.product.unit})` : UNIT_LABELS[item.product.unit]}
                           </span>
-                          {wholesale && !item.custom && <Badge color="violet">Wholesale</Badge>}
+                          {wholesale && !item.custom && <Badge color="violet">{t("Wholesale")}</Badge>}
                           {offer && <Badge color="green">{offer.name} −{formatPKR(offer.discount)}</Badge>}
                         </div>
                         {(item.product.packs?.length ?? 0) > 0 && (
@@ -652,10 +655,10 @@ export default function PosPage() {
 
         <div className="border-t border-slate-100 bg-white px-5 py-4">
           <div className="space-y-1.5 text-sm">
-            <Row label="Subtotal" value={formatPKR(subtotal)} />
+            <Row label={t("Subtotal")} value={formatPKR(subtotal)} />
             {offers.bill && billOffer > 0 && (
               <div className="flex justify-between text-emerald-700">
-                <span>Offer: {offers.bill.name}</span>
+                <span>{t("Offer: {name}", { name: offers.bill.name })}</span>
                 <span className="font-semibold">−{formatPKR(billOffer)}</span>
               </div>
             )}
@@ -663,13 +666,13 @@ export default function PosPage() {
               <label className="flex cursor-pointer items-center justify-between gap-2 rounded-lg bg-violet-50 px-2 py-1.5 text-violet-800">
                 <span className="flex items-center gap-2">
                   <input type="checkbox" checked={usePoints} onChange={(e) => setUsePoints(e.target.checked)} className="h-4 w-4 accent-violet-600" aria-label="Use points" />
-                  Use {customer!.points} points
+                  {t("Use {n} points", { n: customer!.points ?? 0 })}
                 </span>
-                <span className="font-semibold">{usePoints ? `−${formatPKR(pointsValue)}` : `worth ${formatPKR(round2((customer!.points ?? 0) * loyalty!.per))}`}</span>
+                <span className="font-semibold">{usePoints ? `−${formatPKR(pointsValue)}` : t("worth {amount}", { amount: formatPKR(round2((customer!.points ?? 0) * loyalty!.per)) })}</span>
               </label>
             )}
             <div className="flex items-center justify-between">
-              <span className="text-slate-500">Discount</span>
+              <span className="text-slate-500">{t("Discount")}</span>
               <input
                 type="number"
                 inputMode="decimal"
@@ -680,18 +683,18 @@ export default function PosPage() {
                 className="h-8 w-24 rounded-lg border border-slate-200 px-2 text-right focus:border-brand-500 focus:outline-hidden"
               />
             </div>
-            {taxRate > 0 && <Row label={`Sales tax ${taxRate}%${inclusive ? " (included)" : ""}`} value={formatPKR(tax)} />}
+            {taxRate > 0 && <Row label={`${t("Sales tax {rate}%", { rate: taxRate })}${inclusive ? ` ${t("(included)")}` : ""}`} value={formatPKR(tax)} />}
           </div>
           <div className="mt-3 flex items-end justify-between border-t border-dashed border-slate-200 pt-3">
-            <span className="text-base font-semibold text-slate-600">Total</span>
+            <span className="text-base font-semibold text-slate-600">{t("Total")}</span>
             <span className="text-3xl font-extrabold tracking-tight text-slate-900">{formatPKR(total)}</span>
           </div>
           <div className="mt-4 flex gap-2">
             <Button size="xl" variant="outline" className="shrink-0 px-4" disabled={!cart.length} onClick={() => holdBill()} icon={<PauseCircle className="h-5 w-5" />} title="Put this bill aside and serve the next customer (F4)">
-              Hold
+              {t("Hold")}
             </Button>
             <Button size="xl" className="flex-1" disabled={!cart.length || cart.some((i) => i.qty <= 0)} onClick={() => setPayOpen(true)}>
-              Take Payment
+              {t("Take Payment")}
             </Button>
           </div>
         </div>
@@ -767,7 +770,7 @@ export default function PosPage() {
             <p className="mt-2 text-3xl font-extrabold text-slate-900">{formatPKR(offlineDone.total)}</p>
             {offlineDone.change > 0 && (
               <div className="mt-4 rounded-2xl bg-amber-50 p-4">
-                <p className="text-sm font-medium text-amber-800">Give change back</p>
+                <p className="text-sm font-medium text-amber-800">{t("Give change back")}</p>
                 <p className="text-3xl font-extrabold text-amber-900">{formatPKR(offlineDone.change)}</p>
               </div>
             )}
@@ -778,10 +781,10 @@ export default function PosPage() {
                 icon={<Printer className="h-5 w-5" />}
                 onClick={() => printOfflineReceipt({ shopName: settings?.shopName ?? "", branchName: offlineDone.branchName, bill: offlineDone, footer: settings?.receiptFooter })}
               >
-                Print
+                {t("Print")}
               </Button>
               <Button size="lg" onClick={() => setOfflineDone(null)}>
-                Next bill
+                {t("Next bill")}
               </Button>
             </div>
           </div>
@@ -790,7 +793,7 @@ export default function PosPage() {
 
       <ReceivePaymentModal open={receiveOpen} onClose={() => setReceiveOpen(false)} />
 
-      <Modal open={heldOpen} onClose={() => setHeldOpen(false)} title="Bills on hold" size="md">
+      <Modal open={heldOpen} onClose={() => setHeldOpen(false)} title={t("Bills on hold")} size="md">
         {held.length === 0 ? (
           <p className="py-8 text-center text-sm text-slate-500">No bills on hold. Use “Hold” (F4) to put a bill aside while you serve someone else.</p>
         ) : (
@@ -807,7 +810,7 @@ export default function PosPage() {
                 </div>
                 <div className="text-right font-bold text-slate-900">{formatPKR(h.total)}</div>
                 <Button size="sm" icon={<PlayCircle className="h-4 w-4" />} onClick={() => resumeHeld(h)}>
-                  Open
+                  {t("Open")}
                 </Button>
                 <Button size="sm" variant="ghost" className="hover:text-rose-600" aria-label={`Delete held bill ${h.label}`} icon={<Trash2 className="h-4 w-4" />} onClick={() => deleteHeld(h)} />
               </li>
@@ -821,7 +824,7 @@ export default function PosPage() {
 
       <OutboxModal open={outboxOpen} onClose={() => setOutboxOpen(false)} tenantId={tenantId} bills={outbox} onSynced={loadProducts} />
 
-      <Modal open={!!done} onClose={() => setDone(null)} title="Bill saved" size="sm">
+      <Modal open={!!done} onClose={() => setDone(null)} title={t("Bill saved")} size="sm">
         {done && (
           <div className="text-center">
             <CheckCircle2 className="mx-auto h-16 w-16 text-brand-500" />
@@ -829,19 +832,19 @@ export default function PosPage() {
             <p className="text-3xl font-extrabold text-slate-900">{formatPKR(done.total)}</p>
             {done.change > 0 && (
               <div className="mt-4 rounded-2xl bg-amber-50 p-4">
-                <p className="text-sm font-medium text-amber-800">Give change back</p>
+                <p className="text-sm font-medium text-amber-800">{t("Give change back")}</p>
                 <p className="text-3xl font-extrabold text-amber-900">{formatPKR(done.change)}</p>
               </div>
             )}
             <div className="mt-6 grid grid-cols-2 gap-3">
               <Button variant="outline" size="lg" icon={<Printer className="h-5 w-5" />} onClick={() => window.open(receiptUrl(done._id, { print: true, creditAmount: done.creditAmount }), "_blank")}>
-                Print
+                {t("Print")}
               </Button>
               <Button size="lg" onClick={() => setDone(null)}>
-                Next bill
+                {t("Next bill")}
               </Button>
             </div>
-            {done.printed && <p className="mt-3 text-xs text-slate-500">Receipt sent to the printer.</p>}
+            {done.printed && <p className="mt-3 text-xs text-slate-500">{t("Receipt sent to the printer.")}</p>}
             <label className="mt-4 flex cursor-pointer items-center justify-center gap-2 text-xs text-slate-500">
               <input
                 type="checkbox"
@@ -853,7 +856,7 @@ export default function PosPage() {
                 className="h-4 w-4 accent-brand-600"
                 aria-label="Print automatically"
               />
-              Print the receipt automatically after every bill (this computer)
+              {t("Print the receipt automatically after every bill (this computer)")}
             </label>
           </div>
         )}
@@ -965,6 +968,7 @@ function PaymentModal({
   onOffline: (bill: Omit<OutboxBill, "lines">) => void;
 }) {
   const toast = useToast();
+  const t = useT();
   const [mode, setMode] = useState<"single" | "split">("single");
   const [method, setMethod] = useState<string>("cash");
   const [received, setReceived] = useState("");
@@ -1026,9 +1030,9 @@ function PaymentModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Take payment" size="md">
+    <Modal open={open} onClose={onClose} title={t("Take payment")} size="md">
       <div className="mb-4 rounded-2xl bg-slate-900 p-5 text-center text-white">
-        <div className="text-sm text-slate-300">Total to pay</div>
+        <div className="text-sm text-slate-300">{t("Total to pay")}</div>
         <div className="text-4xl font-extrabold tracking-tight">{formatPKR(total)}</div>
       </div>
 
@@ -1036,8 +1040,8 @@ function PaymentModal({
         value={mode}
         onChange={setMode}
         options={[
-          { value: "single", label: "One method" },
-          { value: "split", label: "Split payment" },
+          { value: "single", label: t("One method") },
+          { value: "split", label: t("Split payment") },
         ]}
       />
 
@@ -1057,13 +1061,13 @@ function PaymentModal({
                 )}
               >
                 <m.icon className="h-5 w-5" />
-                {m.label}
+                {t(m.label)}
               </button>
             ))}
           </div>
 
           <div className="mt-5">
-            <Field label={method === "credit" ? "Paid now (optional)" : "Amount received"} hint={method === "cash" ? "Leave empty if customer gives exact amount" : undefined}>
+            <Field label={method === "credit" ? t("Paid now (optional)") : t("Amount received")} hint={method === "cash" ? t("Leave empty if customer gives exact amount") : undefined}>
               <Input
                 type="number"
                 inputMode="decimal"
@@ -1084,7 +1088,7 @@ function PaymentModal({
               </div>
             )}
             {method !== "cash" && method !== "credit" && (
-              <Field label="Transaction ID (optional)" className="mt-3" hint="From the customer's JazzCash / Easypaisa / bank message or card slip">
+              <Field label={t("Transaction ID (optional)")} className="mt-3" hint="From the customer's JazzCash / Easypaisa / bank message or card slip">
                 <Input value={ref} onChange={(e) => setRef(e.target.value)} maxLength={40} aria-label="Transaction ID" />
               </Field>
             )}
@@ -1095,7 +1099,7 @@ function PaymentModal({
           {TENDERS.map((m) => (
             <div key={m.value} className={cn("flex items-center gap-2 rounded-xl border px-3 py-2", amt(m.value) > 0 ? "border-brand-300 bg-brand-50/50" : "border-slate-200")}>
               <m.icon className="h-5 w-5 shrink-0 text-slate-500" />
-              <span className="w-24 shrink-0 text-sm font-semibold text-slate-700">{m.label}</span>
+              <span className="w-24 shrink-0 text-sm font-semibold text-slate-700">{t(m.label)}</span>
               <Input
                 type="number"
                 inputMode="decimal"
@@ -1107,12 +1111,12 @@ function PaymentModal({
                 className="h-11 min-w-0 flex-1 text-lg font-bold"
               />
               <button type="button" onClick={() => fillRest(m.value)} className="shrink-0 rounded-lg bg-slate-100 px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200">
-                Rest
+                {t("Rest")}
               </button>
             </div>
           ))}
           <div className="flex justify-between px-1 pt-1 text-sm">
-            <span className="text-slate-500">Paid</span>
+            <span className="text-slate-500">{t("Paid")}</span>
             <b className="text-slate-900">{formatPKR(nonCash + cashGiven)}</b>
           </div>
           {splitTooMuch && (
@@ -1125,21 +1129,21 @@ function PaymentModal({
 
       {change > 0 && !splitTooMuch && (
         <div className="mt-4 flex items-center justify-between rounded-xl bg-amber-50 px-4 py-3">
-          <span className="font-semibold text-amber-800">Change to return</span>
+          <span className="font-semibold text-amber-800">{t("Change to return")}</span>
           <span className="text-2xl font-extrabold text-amber-900">{formatPKR(change)}</span>
         </div>
       )}
       {remaining > 0 && !splitTooMuch && (
         <div className="mt-4 rounded-xl bg-sky-50 px-4 py-3">
           <div className="flex items-center justify-between">
-            <span className="font-semibold text-sky-800">Goes to udhaar</span>
+            <span className="font-semibold text-sky-800">{t("Goes to udhaar")}</span>
             <span className="text-2xl font-extrabold text-sky-900">{formatPKR(remaining)}</span>
           </div>
           {customer ? (
-            <p className="mt-1 text-xs text-sky-700">Will be added to {customer.name}&apos;s khata.</p>
+            <p className="mt-1 text-xs text-sky-700">{t("Will be added to {name}'s khata.", { name: customer.name })}</p>
           ) : (
             <button onClick={onChooseCustomer} className="mt-2 text-sm font-semibold text-sky-700 underline">
-              Choose a customer for udhaar
+              {t("Choose a customer for udhaar")}
             </button>
           )}
         </div>
@@ -1153,7 +1157,7 @@ function PaymentModal({
         onClick={confirm}
         icon={<CheckCircle2 className="h-6 w-6" />}
       >
-        Confirm & Save Bill
+        {t("Confirm & Save Bill")}
       </Button>
     </Modal>
   );
