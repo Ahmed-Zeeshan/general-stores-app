@@ -46,6 +46,6 @@ export const POST = handle(async (req) => {
     tenantId: user.tenant ? String(user.tenant) : null,
   });
   const res = NextResponse.json({ ok: true, role: user.role });
-  res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions);
+  res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(req));
   return res;
 });

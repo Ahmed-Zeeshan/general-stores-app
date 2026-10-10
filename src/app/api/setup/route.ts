@@ -29,6 +29,6 @@ export const POST = handle(async (req) => {
   });
   const token = await signSession({ id: String(user._id), name: user.name, username: user.username, role: "superadmin", tenantId: null });
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions);
+  res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(req));
   return res;
 });

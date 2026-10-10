@@ -81,14 +81,39 @@ npm run dev                      # http://localhost:3000
 2. In **Shops → New shop**, create a shop, choose its **maximum users**, and set the owner's username and password.
 3. Log out, log in as the shop owner. The owner adds products, staff (up to the limit) and starts billing.
 
-### Production
+### Production (the shop computer)
 
 ```bash
 npm run build
-npm start
+npm start            # http://<this-computer-ip>:3000
+npm run start:https  # also https://<this-computer-ip>:3443 (needed for the phone camera scanner)
 ```
 
-Run it on one shop computer (or a server) and open `http://<that-computer-ip>:3000` from other PCs and phones on the same Wi-Fi. For access over the internet, put it behind HTTPS (e.g. a reverse proxy such as Caddy or Nginx).
+Run it on one shop computer (or a server) and open the address from the other counters and phones on the same Wi-Fi. Allow the port in Windows Firewall (*Windows Defender Firewall → Advanced → Inbound Rules → New Rule → Port → TCP 3000, 3443*).
+
+**HTTPS on the shop network.** Phones and tablets only allow the camera barcode scanner on `https://` addresses. `npm run start:https` creates a certificate for this computer's name and network address in `certs/` (again automatically if the address changes) and serves both `https://…:3443` and `http://…:3000`. The first time on each device the browser says *Not private* → *Advanced → Proceed* (it is the shop's own certificate). To use a real certificate set `HTTPS_KEY` and `HTTPS_CERT` to its files. Give the shop computer a fixed IP in the router so the address does not change. For access over the internet use a proper domain behind Caddy or Nginx.
+
+**Start automatically with Windows (PM2).**
+
+```bash
+npm install -g pm2 pm2-windows-startup
+pm2 start npm --name dukaan -- run start:https     # or: -- start
+pm2 save
+pm2-startup install
+```
+
+`pm2 logs dukaan` shows the log, `pm2 restart dukaan` restarts after an update (`git pull`, `npm install`, `npm run build`). On Linux use `pm2 startup` instead of `pm2-startup install`. MongoDB Community installs as a Windows service and starts on its own.
+
+**Automatic backups.** While the server runs it saves every shop to `backups/` every night (22:30, and within a few minutes of starting if the last copy is over a day old) and keeps the newest 30 per shop. The super admin sees the status, can *Back up now* and download copies on the **Shops** page. Copy the `backups` folder to a USB drive or cloud storage every week. A `.json.gz` copy can be restored from the shop's page (owner: *Settings → Data, import & backup*) as it is.
+
+| Setting (`.env.local`) | Default | Meaning |
+| --- | --- | --- |
+| `AUTO_BACKUP` | on | `off` stops nightly backups |
+| `AUTO_BACKUP_TIME` | `22:30` | time of the nightly backup |
+| `AUTO_BACKUP_KEEP` | `30` | copies kept per shop |
+| `BACKUP_DIR` | `./backups` | where copies are saved |
+| `PORT` / `HTTPS_PORT` | `3000` / `3443` | ports for `npm run start:https` |
+| `COOKIE_SECURE` | automatic | `always` / `never` to force the login cookie's Secure flag (it follows http/https by itself) |
 
 ### Barcode scanner & camera
 

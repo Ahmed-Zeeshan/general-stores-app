@@ -16,6 +16,10 @@ const LABELS: Record<string, string> = {
   expenses: "Expenses",
   branches: "Branches",
   recipes: "Recipes",
+  saleReturns: "Returns",
+  shifts: "Day closes",
+  promotions: "Offers",
+  stockBatches: "Expiry lots",
 };
 
 /**
@@ -36,7 +40,9 @@ export function RestoreButton({ shopName, restoreUrl, backupUrl, onDone }: { sho
     e.target.value = "";
     if (!f) return;
     try {
-      const file = JSON.parse(await f.text());
+      // Automatic backups are gzip-compressed (.json.gz); manual ones are plain .json.
+      const text = f.name.endsWith(".gz") ? await new Response(f.stream().pipeThrough(new DecompressionStream("gzip"))).text() : await f.text();
+      const file = JSON.parse(text);
       if (file?.format !== "dukaan-manager-backup" || !file.data) throw new Error();
       setSummary({
         createdAt: file.createdAt,
@@ -74,7 +80,7 @@ export function RestoreButton({ shopName, restoreUrl, backupUrl, onDone }: { sho
 
   return (
     <>
-      <input ref={fileRef} type="file" accept=".json,application/json" className="hidden" onChange={onFile} />
+      <input ref={fileRef} type="file" accept=".json,.gz,application/json,application/gzip" className="hidden" onChange={onFile} />
       <Button type="button" size="sm" variant="outline" icon={<RotateCcw className="h-4 w-4" />} onClick={() => fileRef.current?.click()}>
         Restore from backup
       </Button>

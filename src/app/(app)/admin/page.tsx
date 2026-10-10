@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Building2, ChevronRight, Plus, Search, Store, TrendingUp, Users } from "lucide-react";
+import { Building2, ChevronRight, DatabaseBackup, Download, Plus, Search, Store, TrendingUp, Users } from "lucide-react";
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Select, Spinner, StatCard, Table, Td, Th } from "@/components/ui";
 import { useToast } from "@/components/toast";
 import { api, formatDate } from "@/lib/client";
@@ -125,6 +125,8 @@ export default function AdminShopsPage() {
         )}
       </Card>
 
+      <AutoBackupsCard />
+
       <CreateShopModal
         open={creating}
         onClose={() => setCreating(false)}
@@ -230,5 +232,79 @@ function CreateShopModal({ open, onClose, onCreated }: { open: boolean; onClose:
         </section>
       </form>
     </Modal>
+  );
+}
+
+type BackupInfo = {
+  dir: string;
+  enabled: boolean;
+  time: string;
+  keep: number;
+  status: { lastRunAt?: string; lastOk?: boolean; lastError?: string; shops?: number };
+  shops: { folder: string; tenantId: string; shopName: string; files: { name: string; size: number; at: string }[] }[];
+};
+
+/** Nightly copies of every shop saved on this computer. */
+function AutoBackupsCard() {
+  const toast = useToast();
+  const [info, setInfo] = useState<BackupInfo | null>(null);
+  const [running, setRunning] = useState(false);
+  const load = useCallback(() => {
+    api<BackupInfo>("/api/admin/backups").then(setInfo).catch((e) => toast.error(e.message));
+  }, [toast]);
+  useEffect(load, [load]);
+  async function runNow() {
+    setRunning(true);
+    try {
+      const r = await api<{ lastOk: boolean; shops: number; lastError?: string }>("/api/admin/backups", { method: "POST" });
+      if (r.lastOk) toast.success(`Backed up ${r.shops} shop(s)`);
+      else toast.error(r.lastError ?? "Backup failed");
+      load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setRunning(false);
+    }
+  }
+  const st = info?.status;
+  return (
+    <Card className="mt-6">
+      <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="flex items-center gap-2 font-bold text-slate-900"><DatabaseBackup className="h-5 w-5 text-brand-600" /> Automatic backups</h2>
+          {info && (
+            <p className="text-xs text-slate-500">
+              {info.enabled ? `Every night at ${info.time}, newest ${info.keep} kept per shop` : "Switched off (AUTO_BACKUP=off)"} · folder: <code className="break-all">{info.dir}</code>
+            </p>
+          )}
+        </div>
+        <Button variant="outline" loading={running} icon={<DatabaseBackup className="h-4 w-4" />} onClick={runNow}>Back up now</Button>
+      </div>
+      {!info ? (
+        <Spinner />
+      ) : (
+        <div className="p-4">
+          <p className={`mb-3 text-sm ${st?.lastRunAt ? (st.lastOk ? "text-emerald-700" : "text-rose-600") : "text-amber-700"}`}>
+            {st?.lastRunAt ? `Last backup ${formatDate(st.lastRunAt, true)} — ${st.lastOk ? `${st.shops} shop(s) saved` : `failed: ${st.lastError}`}` : "No automatic backup yet. It runs within a few minutes of starting the server, then every night."}
+          </p>
+          {info.shops.length > 0 && (
+            <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+              {info.shops.map((s) => (
+                <li key={s.folder} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
+                  <span className="font-semibold text-slate-800">{s.shopName}</span>
+                  <span className="text-slate-400">· {s.files.length} copies</span>
+                  {s.files[0] && (
+                    <a className="ml-auto" href={`/api/admin/backups/file?folder=${encodeURIComponent(s.folder)}&name=${encodeURIComponent(s.files[0].name)}`}>
+                      <Button size="sm" variant="ghost" icon={<Download className="h-4 w-4" />}>Latest ({s.files[0].at.replace("_", " ")})</Button>
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-3 text-xs text-slate-500">Copy this folder to a USB drive or cloud storage every week — a backup on the same disk does not survive a broken disk. A downloaded .json.gz can be restored from the shop&apos;s page as it is.</p>
+        </div>
+      )}
+    </Card>
   );
 }

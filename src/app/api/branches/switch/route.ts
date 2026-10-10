@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
+import { isSecureRequest } from "@/lib/session";
 import { ApiError, handle } from "@/lib/api";
 import { BRANCH_COOKIE, requireBranch } from "@/lib/branches";
 
@@ -16,7 +17,7 @@ export const POST = handle(async (req) => {
   res.cookies.set(BRANCH_COOKIE, branchId, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: isSecureRequest(req),
     path: "/",
     maxAge: 60 * 60 * 24 * 365,
   });

@@ -44,10 +44,25 @@ export async function verifySession(token: string | undefined): Promise<SessionU
   }
 }
 
-export const sessionCookieOptions = {
-  httpOnly: true,
-  sameSite: "lax" as const,
-  secure: process.env.NODE_ENV === "production",
-  path: "/",
-  maxAge: 60 * 60 * 12,
-};
+/**
+ * "Secure" cookies only travel over HTTPS. Shops often open the app over plain http on their own
+ * network (http://192.168.1.5:3000), so the flag follows the actual connection:
+ * COOKIE_SECURE=always|never overrides it.
+ */
+export function isSecureRequest(req: Request) {
+  const mode = process.env.COOKIE_SECURE;
+  if (mode === "always") return true;
+  if (mode === "never") return false;
+  const proto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  return (proto ?? new URL(req.url).protocol.replace(":", "")) === "https";
+}
+
+export function sessionCookieOptions(req: Request) {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: isSecureRequest(req),
+    path: "/",
+    maxAge: 60 * 60 * 12,
+  };
+}
