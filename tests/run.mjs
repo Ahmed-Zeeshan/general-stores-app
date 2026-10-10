@@ -63,10 +63,14 @@ if (!existsSync(join(root, ".next", "BUILD_ID"))) {
 }
 
 let server = null;
+let serverLog = ""; // last few KB of the app's error output, shown when a suite fails
 async function startServer() {
   server = spawn(process.execPath, [join(root, "node_modules/next/dist/bin/next"), "start", "-p", String(PORT)], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
   server.stdout.on("data", () => {});
-  server.stderr.on("data", (d) => process.env.TEST_VERBOSE && process.stderr.write(d));
+  server.stderr.on("data", (d) => {
+    serverLog = (serverLog + d).slice(-4000);
+    if (process.env.TEST_VERBOSE) process.stderr.write(d);
+  });
   for (let i = 0; i < 120; i++) {
     try {
       const r = await fetch(`${BASE}/api/setup`);
@@ -128,7 +132,9 @@ for (const file of list) {
     await stopServer();
     await startServer();
   }
+  serverLog = "";
   const { code, out } = await runFile(`tests/${file}`);
+  if (code && serverLog.trim()) console.log(`\n--- app error output during ${file} ---\n${serverLog.trim()}\n---`);
   const passed = (out.match(/^\s*✓/gm) ?? []).length;
   const failedChecks = (out.match(/^\s*✗/gm) ?? []).length;
   results.push({ file, ok: code === 0, note: code === 0 ? `${passed} checks` : failedChecks ? `${failedChecks} of ${passed + failedChecks} checks failed` : "failed" });
