@@ -180,9 +180,12 @@ export const POST = handle(async (req) => {
     fbrStatus: settings?.fbrEnabled ? "pending" : "none",
   });
 
-  for (const item of items) {
-    await moveStock({ tid, branch: branch._id, productId: item.product, qty: -item.qty, type: "sale", refNo: invoiceNo, userId: user.id });
+  const batchSet: Record<string, unknown> = {};
+  for (const [i, item] of items.entries()) {
+    const moved = await moveStock({ tid, branch: branch._id, productId: item.product, qty: -item.qty, type: "sale", refNo: invoiceNo, userId: user.id });
+    if (moved?.allocations.length) batchSet[`items.${i}.batches`] = moved.allocations.map((a) => ({ batch: a.batch, qty: a.qty, expiryDate: a.expiryDate }));
   }
+  if (Object.keys(batchSet).length) await Sale.updateOne({ _id: sale._id, tenant: tid }, { $set: batchSet });
   if (customer && creditAmount > 0) {
     await postLedger({
       tid,

@@ -4,6 +4,7 @@ import { branchStock, requireBranch } from "@/lib/branches";
 import { withCategories } from "@/lib/categories";
 import { assertBarcodesFree } from "@/lib/barcode-server";
 import { ProductInput } from "@/lib/schemas";
+import { batchExpiry } from "@/lib/batches";
 import { moveStock } from "@/lib/services";
 import { Product } from "@/models";
 
@@ -47,7 +48,16 @@ export const POST = handle(async (req) => {
   await assertBarcodesFree(tid, body);
   const product = await Product.create({ ...body, tenant: tid, barcode: body.barcode || undefined, wholesalePrice: body.wholesalePrice ?? undefined, stock: 0 });
   if (openingStock > 0) {
-    await moveStock({ tid, branch: branchId, productId: product._id, qty: openingStock, type: "opening", note: "Opening stock", userId: user.id });
+    await moveStock({
+      tid,
+      branch: branchId,
+      productId: product._id,
+      qty: openingStock,
+      type: "opening",
+      note: "Opening stock",
+      userId: user.id,
+      batch: { incoming: [{ expiryDate: batchExpiry(body.expiryDate ?? null, body.shelfLifeDays) }], source: { type: "opening" } },
+    });
   }
   return Product.findOne({ _id: product._id, tenant: tid }).lean();
 });

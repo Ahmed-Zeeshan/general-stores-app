@@ -95,6 +95,23 @@ export async function createReturn(opts: {
     // Claim the bill: only succeeds if nobody returned from it since we read it.
     const inc: Record<string, number> = { returnSeq: 1, returnedTotal: priced.total, creditReturned: priced.creditReduced };
     for (const it of priced.items) inc[`items.${it.index}.returnedQty`] = it.qty;
+    // Put units back into the batches they were sold from (latest expiry first), never more than was taken.
+    const restorePlan = new Map<number, { batch: Types.ObjectId; qty: number }[]>();
+    for (const it of priced.items) {
+      const batches = sale.items[it.index].batches ?? [];
+      let left = it.qty;
+      const plan: { batch: Types.ObjectId; qty: number }[] = [];
+      for (const [m, b] of [...batches.entries()].reverse()) {
+        const room = round3((b.qty ?? 0) - (b.returned ?? 0));
+        const q = round3(Math.min(left, room));
+        if (q > 0 && b.batch) {
+          plan.push({ batch: b.batch, qty: q });
+          inc[`items.${it.index}.batches.${m}.returned`] = q;
+          left = round3(left - q);
+        }
+      }
+      restorePlan.set(it.index, plan);
+    }
     const claimed = await Sale.updateOne(
       // Bills saved before returns were tracked have no counter yet: treat missing as 0.
       { _id: sale._id, tenant: tid, returnSeq: sale.returnSeq ? sale.returnSeq : { $in: [0, null] } },
@@ -134,7 +151,17 @@ export async function createReturn(opts: {
 
     for (const it of priced.items) {
       if (it.product) {
-        await moveStock({ tid, branch, productId: it.product, qty: it.qty, type: "return", refNo: returnNo, note: `Return of ${sale.invoiceNo}`, userId: opts.user.id });
+        await moveStock({
+          tid,
+          branch,
+          productId: it.product,
+          qty: it.qty,
+          type: "return",
+          refNo: returnNo,
+          note: `Return of ${sale.invoiceNo}`,
+          userId: opts.user.id,
+          batch: { restore: restorePlan.get(it.index), source: { type: "return", id: ret._id, refNo: returnNo } },
+        });
       }
     }
     const khataCredit = round2(priced.creditReduced + (refundMethod === "khata" ? priced.refund : 0));

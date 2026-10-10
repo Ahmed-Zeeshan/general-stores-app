@@ -12,9 +12,9 @@ import { api, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, round2 } from "@/lib/money";
 
 type Pack = { name: string; size: number; barcode?: string };
-type Product = { _id: string; name: string; barcode?: string; unit: string; costPrice: number; salePrice: number; stock: number; packs?: Pack[] };
+type Product = { _id: string; name: string; barcode?: string; unit: string; costPrice: number; salePrice: number; stock: number; packs?: Pack[]; trackExpiry?: boolean; shelfLifeDays?: number };
 /** `pack` = "" for loose units; then qty and cost are per pack. */
-type Line = { product: Product; qty: string; cost: string; salePrice: string; pack: string };
+type Line = { product: Product; qty: string; cost: string; salePrice: string; pack: string; expiry?: string; batchNo?: string };
 
 export default function NewPurchasePage() {
   const router = useRouter();
@@ -70,6 +70,8 @@ export default function NewPurchasePage() {
 
   async function save() {
     if (lines.some((l) => !(Number(l.qty) > 0))) return toast.error("Enter quantity for every item.");
+    const noDate = lines.find((l) => l.product.trackExpiry && !l.expiry && !l.product.shelfLifeDays);
+    if (noDate) return toast.error(`Enter the expiry date for ${noDate.product.name}.`);
     setSaving(true);
     try {
       await api("/api/purchases", {
@@ -77,7 +79,14 @@ export default function NewPurchasePage() {
           supplierId: supplier?._id,
           supplierInvoice: invoice,
           amountPaid: paid === "" ? undefined : Number(paid),
-          items: lines.map((l) => ({ productId: l.product._id, qty: Number(l.qty), cost: Number(l.cost) || 0, salePrice: Number(l.salePrice) || undefined, ...(l.pack ? { pack: l.pack } : {}) })),
+          items: lines.map((l) => ({
+            productId: l.product._id,
+            qty: Number(l.qty),
+            cost: Number(l.cost) || 0,
+            salePrice: Number(l.salePrice) || undefined,
+            ...(l.pack ? { pack: l.pack } : {}),
+            ...(l.product.trackExpiry ? { expiryDate: l.expiry || undefined, batchNo: l.batchNo || undefined } : {}),
+          })),
         },
       });
       toast.success("Purchase saved and stock updated");
@@ -161,6 +170,25 @@ export default function NewPurchasePage() {
                           </select>
                         ) : (
                           <div className="text-xs text-slate-400">per {UNIT_LABELS[l.product.unit]}</div>
+                        )}
+                        {l.product.trackExpiry && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            <input
+                              type="date"
+                              value={l.expiry ?? ""}
+                              onChange={(e) => update(l.product._id, { expiry: e.target.value })}
+                              aria-label={`Expiry of ${l.product.name}`}
+                              title="Expiry date of this delivery"
+                              className="h-7 rounded-lg border border-amber-300 bg-amber-50 px-1.5 text-xs"
+                            />
+                            <input
+                              value={l.batchNo ?? ""}
+                              onChange={(e) => update(l.product._id, { batchNo: e.target.value })}
+                              placeholder="Batch no."
+                              aria-label={`Batch number of ${l.product.name}`}
+                              className="h-7 w-20 rounded-lg border border-slate-200 px-1.5 text-xs"
+                            />
+                          </div>
                         )}
                         {l.pack && Number(l.qty) > 0 && (
                           <div className="text-xs text-slate-400">

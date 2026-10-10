@@ -13,6 +13,8 @@ const PurchaseItemSchema = new Schema(
     returnedQty: { type: Number, default: 0 },
     /** Bought as packs (e.g. 5 Carton of 24): qty above is in units, cost per unit. */
     pack: { type: new Schema({ name: String, size: Number, count: Number, cost: Number }, { _id: false }), default: undefined },
+    expiryDate: { type: Date },
+    batchNo: { type: String, trim: true },
   },
   { _id: false },
 );

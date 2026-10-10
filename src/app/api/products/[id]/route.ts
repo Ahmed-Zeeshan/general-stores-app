@@ -3,6 +3,7 @@ import { branchStock, requireBranch } from "@/lib/branches";
 import { withCategories } from "@/lib/categories";
 import { assertBarcodesFree } from "@/lib/barcode-server";
 import { ProductInput } from "@/lib/schemas";
+import { startBatches } from "@/lib/batches";
 import { Product, StockLevel, StockMovement } from "@/models";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -38,8 +39,14 @@ export const PUT = handle<Ctx>(async (req, { params }) => {
       unset[key] = 1;
     }
   }
+  if (!body.shelfLifeDays) {
+    delete update.shelfLifeDays;
+    unset.shelfLifeDays = 1;
+  }
+  const before = await Product.findOne({ _id: id, tenant: tid }).select("trackExpiry").lean();
   const product = await Product.findOneAndUpdate({ _id: id, tenant: tid }, { $set: update, $unset: unset }, { new: true, runValidators: true }).lean();
   if (!product) throw new ApiError(404, "Product not found.");
+  if (product.trackExpiry && !before?.trackExpiry) await startBatches(tid, product);
   return product;
 });
 

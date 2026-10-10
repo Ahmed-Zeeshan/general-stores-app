@@ -89,7 +89,7 @@ export async function createPurchaseReturn(opts: {
       userName: opts.user.name,
     });
     for (const it of items) {
-      await moveStock({ tid, branch: p.branch!, productId: it.product, qty: -it.qty, type: "purchase_return", refNo: returnNo, note: `Returned to supplier (${p.purchaseNo})`, userId: opts.user.id });
+      await moveStock({ tid, branch: p.branch!, productId: it.product, qty: -it.qty, type: "purchase_return", refNo: returnNo, note: `Returned to supplier (${p.purchaseNo})`, userId: opts.user.id, batch: { preferSource: p._id } });
     }
     if (p.supplier && settlement === "khata") {
       await postLedger({
@@ -126,7 +126,7 @@ export async function voidPurchase(opts: { tid: Types.ObjectId; purchaseId: stri
   if (!claimed.modifiedCount) throw new ApiError(409, "This purchase was changed by someone else just now. Please refresh.");
 
   for (const it of p.items) {
-    await moveStock({ tid, branch: p.branch!, productId: it.product, qty: -it.qty, type: "void", refNo: p.purchaseNo, note: `Purchase cancelled${opts.reason ? `: ${opts.reason}` : ""}`, userId: opts.user.id });
+    await moveStock({ tid, branch: p.branch!, productId: it.product, qty: -it.qty, type: "void", refNo: p.purchaseNo, note: `Purchase cancelled${opts.reason ? `: ${opts.reason}` : ""}`, userId: opts.user.id, batch: { preferSource: p._id } });
   }
   if (p.supplier) {
     await postLedger({ tid, partyId: p.supplier, kind: "adjustment", amount: -p.total, refType: "purchase", refId: p._id, refNo: p.purchaseNo, note: `Purchase ${p.purchaseNo} cancelled`, userId: opts.user.id, branch: p.branch ?? undefined });

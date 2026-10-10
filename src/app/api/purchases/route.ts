@@ -3,6 +3,7 @@ import { ApiError, dateRange, handle } from "@/lib/api";
 import { reportBranchFilter, requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
 import { optionalId } from "@/lib/schemas";
+import { batchExpiry } from "@/lib/batches";
 import { findPack } from "@/lib/pricing";
 import { moveStock, postLedger } from "@/lib/services";
 import { nextNumber, Party, Product, Purchase } from "@/models";
@@ -28,6 +29,9 @@ const Body = z.object({
         salePrice: z.coerce.number().min(0).optional(),
         /** Bought in a pack size of the product, e.g. "Carton"; qty is then the number of packs. */
         pack: z.string().trim().max(30).optional(),
+        /** For products with "track expiry": this lot's expiry date (yyyy-mm-dd) and batch number. */
+        expiryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expiry date is not valid").optional().or(z.literal("").transform(() => undefined)),
+        batchNo: z.string().trim().max(40).optional(),
       }),
     )
     .min(1, "Add at least one item"),
@@ -56,9 +60,11 @@ export const POST = handle(async (req) => {
         total: round2(i.qty * i.cost),
         salePrice: i.salePrice,
         pack: { name: pack.name, size: pack.size, count: i.qty, cost: i.cost },
+        expiryDate: i.expiryDate,
+        batchNo: i.batchNo,
       };
     }
-    return { product: p._id, name: p.name, unit: p.unit, qty: i.qty, cost: i.cost, total: round2(i.qty * i.cost), salePrice: i.salePrice };
+    return { product: p._id, name: p.name, unit: p.unit, qty: i.qty, cost: i.cost, total: round2(i.qty * i.cost), salePrice: i.salePrice, expiryDate: i.expiryDate, batchNo: i.batchNo };
   });
   const total = round2(items.reduce((s, i) => s + i.total, 0));
 
@@ -79,7 +85,17 @@ export const POST = handle(async (req) => {
     supplier: supplier?._id,
     supplierName: supplier?.name,
     supplierInvoice: body.supplierInvoice,
-    items: items.map((i) => ({ product: i.product, name: i.name, unit: i.unit, qty: i.qty, cost: i.cost, total: i.total, ...("pack" in i ? { pack: i.pack } : {}) })),
+    items: items.map((i) => ({
+      product: i.product,
+      name: i.name,
+      unit: i.unit,
+      qty: i.qty,
+      cost: i.cost,
+      total: i.total,
+      ...("pack" in i ? { pack: i.pack } : {}),
+      ...(i.expiryDate ? { expiryDate: new Date(`${i.expiryDate}T23:59:59`) } : {}),
+      ...(i.batchNo ? { batchNo: i.batchNo } : {}),
+    })),
     total,
     amountPaid,
     note: body.note,
@@ -87,7 +103,20 @@ export const POST = handle(async (req) => {
   });
 
   for (const item of items) {
-    await moveStock({ tid, branch: branchId, productId: item.product, qty: item.qty, type: "purchase", refNo: purchaseNo, userId: user.id });
+    const p = byId.get(String(item.product));
+    await moveStock({
+      tid,
+      branch: branchId,
+      productId: item.product,
+      qty: item.qty,
+      type: "purchase",
+      refNo: purchaseNo,
+      userId: user.id,
+      batch: {
+        incoming: [{ expiryDate: batchExpiry(item.expiryDate ? new Date(`${item.expiryDate}T23:59:59`) : null, p?.shelfLifeDays), batchNo: item.batchNo, cost: item.cost }],
+        source: { type: "purchase", id: purchase._id, refNo: purchaseNo },
+      },
+    });
     if (body.updatePrices) {
       const set: Record<string, number> = { costPrice: Math.round(item.cost * 100) / 100 };
       if (item.salePrice !== undefined && item.salePrice > 0) set.salePrice = item.salePrice;

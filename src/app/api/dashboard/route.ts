@@ -2,7 +2,7 @@ import { addDays, endOfDay, handle, startOfDay, TIMEZONE } from "@/lib/api";
 import { branchStock, requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
 import { khataPaymentsPipeline, PAYMENTS_EXPR } from "@/lib/report-agg";
-import { Expense, LedgerEntry, Party, Product, Sale, SaleReturn } from "@/models";
+import { Expense, LedgerEntry, Party, Product, Sale, SaleReturn, StockBatch } from "@/models";
 
 export const GET = handle(async () => {
   const { tid, branchId } = await requireBranch();
@@ -86,7 +86,10 @@ export const GET = handle(async () => {
       { $group: { _id: null, total: { $sum: "$balance" }, count: { $sum: 1 } } },
     ]),
     Product.find({ tenant: tid, active: true }).select("name unit lowStockAlert").lean(),
-    Product.countDocuments({ tenant: tid, active: true, expiryDate: { $ne: null, $lte: addDays(now, 7) } }),
+    Promise.all([
+      Product.countDocuments({ tenant: tid, active: true, trackExpiry: { $ne: true }, stock: { $gt: 0 }, expiryDate: { $ne: null, $lte: addDays(now, 7) } }),
+      StockBatch.countDocuments({ tenant: tid, branch: branchId, qty: { $gt: 0.0005 }, expiryDate: { $ne: null, $lte: addDays(now, 7) } }),
+    ]).then(([a, b]) => a + b),
     Sale.find({ tenant: tid, branch: branchId }).sort({ createdAt: -1 }).limit(6).select("invoiceNo total paymentMethod customerName createdAt status fbrStatus").lean(),
     LedgerEntry.aggregate(khataPaymentsPipeline(todayMatch, "customer")),
   ]);

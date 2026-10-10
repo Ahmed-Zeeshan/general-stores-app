@@ -157,8 +157,8 @@ export default function DashboardPage() {
                 <Link href="/products?filter=low" className="text-sm font-semibold text-brand-600 hover:text-brand-700">See all</Link>
               </div>
               {data.expiringCount > 0 && (
-                <Link href="/products?filter=expiring" className="mb-3 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
-                  <CalendarClock className="h-4 w-4" /> {data.expiringCount} items expire within 7 days
+                <Link href={can.manage ? "/expiry?within=7" : "/products?filter=expiring"} className="mb-3 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+                  <CalendarClock className="h-4 w-4" /> {data.expiringCount} {data.expiringCount === 1 ? "lot expires" : "lots expire"} within 7 days (or already expired)
                 </Link>
               )}
               {data.lowStock.length === 0 ? (

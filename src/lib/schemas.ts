@@ -49,6 +49,11 @@ export const ProductInput = z.object({
     .transform((v) => (v ? new Date(v) : null)),
   pctCode: z.string().trim().optional(),
   active: z.boolean().optional(),
+  trackExpiry: z.boolean().optional(),
+  shelfLifeDays: z
+    .union([z.coerce.number().int().min(0).max(3650), z.literal(""), z.null()])
+    .optional()
+    .transform((v) => (typeof v === "number" && v > 0 ? v : null)),
 });
 
 export { optionalId };

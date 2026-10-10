@@ -28,6 +28,8 @@ type Product = {
   stock: number;
   lowStockAlert: number;
   expiryDate?: string;
+  trackExpiry?: boolean;
+  shelfLifeDays?: number;
   pctCode?: string;
   category?: Category | null;
 };
@@ -45,6 +47,7 @@ const EMPTY = {
   lowStockAlert: "5",
   expiryDate: "",
   openingStock: "",
+  shelfLifeDays: "",
   pctCode: "",
 };
 
@@ -330,6 +333,7 @@ function ProductForm({
   const { settings } = useSession();
   const [form, setForm] = useState(EMPTY);
   const [packs, setPacks] = useState<PackRow[]>([]);
+  const [trackExpiry, setTrackExpiry] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -350,9 +354,11 @@ function ProductForm({
             expiryDate: product.expiryDate ? product.expiryDate.slice(0, 10) : "",
             openingStock: "",
             pctCode: product.pctCode ?? "",
+            shelfLifeDays: product.shelfLifeDays ? String(product.shelfLifeDays) : "",
           }
         : EMPTY,
     );
+    setTrackExpiry(!!product?.trackExpiry);
     setPacks(
       (product?.packs ?? []).map((k) => ({
         name: k.name,
@@ -399,6 +405,7 @@ function ProductForm({
       const body = {
         ...form,
         expiryDate: form.expiryDate || null,
+        trackExpiry,
         packs: packs
           .filter((k) => k.name.trim() || k.size)
           .map((k) => ({ name: k.name.trim(), size: Number(k.size), price: k.price, wholesalePrice: k.wholesalePrice, barcode: k.barcode.trim() })),
@@ -498,9 +505,29 @@ function ProductForm({
         <Field label="Alert me when stock is below">
           <Input type="number" inputMode="decimal" step="any" min="0" value={form.lowStockAlert} onChange={set("lowStockAlert")} />
         </Field>
-        <Field label="Expiry date (optional)" hint="Useful for bakery, dairy and medicines">
-          <Input type="date" value={form.expiryDate} onChange={set("expiryDate")} />
-        </Field>
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3 sm:col-span-2">
+          <input type="checkbox" checked={trackExpiry} onChange={(e) => setTrackExpiry(e.target.checked)} className="mt-0.5 h-5 w-5 accent-brand-600" aria-label="Track expiry by batch" />
+          <span>
+            <span className="block font-semibold text-slate-800">Track expiry by batch</span>
+            <span className="text-sm text-slate-500">Each delivery keeps its own expiry date; bills sell the earliest expiry first. For dairy, bakery, medicines, snacks.</span>
+          </span>
+        </label>
+        {trackExpiry ? (
+          <>
+            <Field label="Shelf life (days, optional)" hint="Bakery: fills the expiry date automatically, e.g. bread 3 days">
+              <Input type="number" inputMode="numeric" min="0" value={form.shelfLifeDays} onChange={set("shelfLifeDays")} placeholder="—" aria-label="Shelf life days" />
+            </Field>
+            {!product && (
+              <Field label="Expiry of the stock you have now">
+                <Input type="date" value={form.expiryDate} onChange={set("expiryDate")} aria-label="Opening stock expiry" />
+              </Field>
+            )}
+          </>
+        ) : (
+          <Field label="Expiry date (optional)" hint="Useful for bakery, dairy and medicines">
+            <Input type="date" value={form.expiryDate} onChange={set("expiryDate")} />
+          </Field>
+        )}
         {settings?.fbrEnabled && (
           <Field label="FBR PCT code" hint={`Empty = shop default (${settings.fbrDefaultPct || "11001010"})`}>
             <Input value={form.pctCode} onChange={set("pctCode")} />
@@ -559,6 +586,8 @@ function StockModal({ product, onClose, onSaved }: { product: Product | null; on
   const [mode, setMode] = useState<"add" | "remove" | "wastage" | "set">("add");
   const [qty, setQty] = useState("");
   const [note, setNote] = useState("");
+  const [expiry, setExpiry] = useState("");
+  const [batchNo, setBatchNo] = useState("");
   const [saving, setSaving] = useState(false);
   const { branch } = useSession();
   const [detail, setDetail] = useState<{ product: { stock: number }; byBranch: { branch: string; name: string; qty: number }[] } | null>(null);
@@ -567,6 +596,8 @@ function StockModal({ product, onClose, onSaved }: { product: Product | null; on
     setMode("add");
     setQty("");
     setNote("");
+    setExpiry("");
+    setBatchNo("");
     setDetail(null);
     if (product) api<typeof detail>(`/api/products/${product._id}`).then(setDetail).catch(() => {});
   }, [product]);
@@ -581,7 +612,7 @@ function StockModal({ product, onClose, onSaved }: { product: Product | null; on
     e.preventDefault();
     setSaving(true);
     try {
-      await api(`/api/products/${product!._id}/stock`, { body: { mode, qty: n, note } });
+      await api(`/api/products/${product!._id}/stock`, { body: { mode, qty: n, note, ...(product!.trackExpiry && after > here ? { expiryDate: expiry, batchNo } : {}) } });
       toast.success("Stock updated");
       onSaved();
     } catch (err) {
@@ -631,6 +662,17 @@ function StockModal({ product, onClose, onSaved }: { product: Product | null; on
         <Field label={mode === "set" ? "Actual count in shop" : "Quantity"}>
           <Input autoFocus required type="number" inputMode="decimal" step="any" min="0" value={qty} onChange={(e) => setQty(e.target.value)} className="h-12 text-xl font-bold" />
         </Field>
+        {product.trackExpiry && after > here && (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Expiry of this stock" hint={product.shelfLifeDays ? `Empty = ${product.shelfLifeDays} days from today` : undefined}>
+              <Input type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} aria-label="Batch expiry" />
+            </Field>
+            <Field label="Batch no. (optional)">
+              <Input value={batchNo} onChange={(e) => setBatchNo(e.target.value)} maxLength={40} />
+            </Field>
+          </div>
+        )}
+        {product.trackExpiry && after < here && <p className="text-xs text-slate-500">Taken from the lot that expires first.</p>}
         <Field label="Note (optional)">
           <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Damaged packets, monthly stock count" className="min-h-[60px]" />
         </Field>

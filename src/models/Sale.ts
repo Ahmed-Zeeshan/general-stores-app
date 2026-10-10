@@ -21,6 +21,11 @@ const SaleItemSchema = new Schema(
     pack: { type: new Schema({ name: String, size: Number, count: Number, price: Number }, { _id: false }), default: undefined },
     /** Price level used (wholesale customers). */
     wholesale: { type: Boolean, default: undefined },
+    /** Expiry batches the units came from (products with "track expiry"); `returned` = put back so far. */
+    batches: {
+      type: [{ batch: { type: Schema.Types.ObjectId, ref: "StockBatch" }, qty: Number, expiryDate: Date, returned: { type: Number, default: 0 }, _id: false }],
+      default: undefined,
+    },
   },
   { _id: false },
 );

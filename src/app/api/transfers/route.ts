@@ -55,8 +55,19 @@ export const POST = handle(async (req) => {
     userName: user.name,
   });
   for (const i of items) {
-    await moveStock({ tid, branch: branchId, productId: i.product, qty: -i.qty, type: "transfer", refNo: transferNo, note: `To ${target.name}`, userId: user.id });
-    await moveStock({ tid, branch: target._id, productId: i.product, qty: i.qty, type: "transfer", refNo: transferNo, note: `From ${branch.name}`, userId: user.id });
+    const out = await moveStock({ tid, branch: branchId, productId: i.product, qty: -i.qty, type: "transfer", refNo: transferNo, note: `To ${target.name}`, userId: user.id });
+    // The same lots (with their expiry dates) arrive at the other branch.
+    await moveStock({
+      tid,
+      branch: target._id,
+      productId: i.product,
+      qty: i.qty,
+      type: "transfer",
+      refNo: transferNo,
+      note: `From ${branch.name}`,
+      userId: user.id,
+      batch: { incoming: out?.allocations.map((a) => ({ qty: a.qty, expiryDate: a.expiryDate, batchNo: a.batchNo })), source: { type: "transfer", refNo: transferNo } },
+    });
   }
   return transfer.toObject();
 });

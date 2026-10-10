@@ -2,6 +2,7 @@ import type { Types } from "mongoose";
 import { LedgerEntry, Party, Product, StockLevel, StockMovement } from "@/models";
 import { round2 } from "./money";
 import { ApiError } from "./api";
+import { batchExpiry, consumeBatches, createBatches, restoreBatches, type BatchAllocation, type IncomingBatch } from "./batches";
 
 type Id = string | Types.ObjectId;
 
@@ -55,6 +56,18 @@ export async function moveStock(opts: {
   refNo?: string;
   note?: string;
   userId?: Id;
+  /** Expiry batches (only used for products with "track expiry" on). */
+  batch?: {
+    /** Incoming: the batches that arrive (expiry date, batch no.). Default: one batch, expiry from shelf life. */
+    incoming?: IncomingBatch[];
+    /** Incoming: put back into these batches (customer return). */
+    restore?: { batch: Id; qty: number }[];
+    /** Outgoing: take from this batch first (write-off of one batch). */
+    batchId?: Id;
+    /** Outgoing: take from batches of this purchase first (return to supplier). */
+    preferSource?: Id;
+    source?: { type: string; id?: Id; refNo?: string };
+  };
 }) {
   const qty = Math.round(opts.qty * 1000) / 1000;
   const product = await Product.findOneAndUpdate({ _id: opts.productId, tenant: opts.tid }, { $inc: { stock: qty } }, { new: true });
@@ -79,5 +92,33 @@ export async function moveStock(opts: {
     note: opts.note,
     user: opts.userId,
   });
-  return { product, branchQty: clean(level.qty) };
+  let allocations: BatchAllocation[] = [];
+  if (product.trackExpiry) {
+    if (qty < 0) {
+      allocations = await consumeBatches({ tid: opts.tid, branch: opts.branch, product: product._id, qty: -qty, batchId: opts.batch?.batchId, preferSource: opts.batch?.preferSource });
+    } else if (qty > 0) {
+      const restore = (opts.batch?.restore ?? []).filter((r) => r.qty > 0);
+      const restored = clean(restore.reduce((a, r) => a + r.qty, 0));
+      if (restore.length) await restoreBatches(opts.tid, restore);
+      const rest = clean(qty - restored);
+      if (rest > 0) {
+        // An explicit empty list (e.g. a transfer of stock that had no batch) arrives without a date.
+        const incoming = opts.batch?.incoming
+          ? opts.batch.incoming.length
+            ? opts.batch.incoming
+            : [{ expiryDate: null }]
+          : [{ expiryDate: restore.length ? null : batchExpiry(null, product.shelfLifeDays) }];
+        allocations = await createBatches({
+          tid: opts.tid,
+          branch: opts.branch,
+          product: product._id,
+          qty: rest,
+          batches: incoming,
+          cost: product.costPrice ?? 0,
+          source: opts.batch?.source ?? { type: opts.type, refNo: opts.refNo },
+        });
+      }
+    }
+  }
+  return { product, branchQty: clean(level.qty), allocations };
 }

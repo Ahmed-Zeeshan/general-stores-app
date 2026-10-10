@@ -34,6 +34,10 @@ const ProductSchema = new Schema(
     stock: { type: Number, default: 0 },
     lowStockAlert: { type: Number, default: 5, min: 0 },
     expiryDate: { type: Date },
+    /** Keep stock in batches with their own expiry dates; sell the earliest expiry first. */
+    trackExpiry: { type: Boolean, default: false },
+    /** Days a fresh batch lasts (bakery items); fills the expiry date when none is entered. */
+    shelfLifeDays: { type: Number, min: 0 },
     /** FBR Pakistan Customs Tariff code; falls back to the shop default. */
     pctCode: { type: String, trim: true },
     active: { type: Boolean, default: true },
