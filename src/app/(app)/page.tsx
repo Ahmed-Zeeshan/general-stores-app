@@ -23,7 +23,7 @@ import { api, formatDate, PAYMENT_LABELS, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty } from "@/lib/money";
 
 type Dashboard = {
-  today: { sales: number; bills: number; profit: number; cash: number; credit: number; expenses: number };
+  today: { sales: number; bills: number; profit: number; cash: number; credit: number; expenses: number; returns: number; returnCount: number };
   receivable: { total: number; count: number };
   payable: { total: number; count: number };
   lowStock: { _id: string; name: string; stock: number; unit: string; lowStockAlert: number }[];
@@ -92,7 +92,7 @@ export default function DashboardPage() {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard label="Today's Sales" value={formatPKR(data.today.sales)} icon={<TrendingUp className="h-5 w-5" />} hint={`${data.today.bills} bills today`} />
+            <StatCard label="Today's Sales" value={formatPKR(data.today.sales)} icon={<TrendingUp className="h-5 w-5" />} hint={`${data.today.bills} bills${data.today.returnCount ? ` · ${formatPKR(data.today.returns)} returned` : ""} today`} />
             {can.manage ? (
               <StatCard
                 label="Today's Profit"
@@ -214,6 +214,7 @@ export default function DashboardPage() {
                         <div>
                           <div className="text-sm font-semibold text-slate-800">
                             {s.invoiceNo} {s.status === "returned" && <Badge color="red">Returned</Badge>}
+                            {s.status === "partially_returned" && <Badge color="amber">Part returned</Badge>}
                           </div>
                           <div className="text-xs text-slate-500">
                             {formatDate(s.createdAt, true)} · {s.customerName ?? "Walk-in"} · {PAYMENT_LABELS[s.paymentMethod]}

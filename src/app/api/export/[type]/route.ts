@@ -43,8 +43,8 @@ export const GET = handle<Ctx>(async (req, { params }) => {
     return csvResponse(
       `sales-${day()}.csv`,
       toCsv(
-        ["invoiceNo", "date", "branch", "status", "customer", "cashier", "items", "subtotal", "discount", "tax", "total", "cost", "paymentMethod", "paid", "udhaar", "fbrInvoiceNumber"],
-        sales.map((s) => [s.invoiceNo, s.createdAt, s.branchName, s.status, s.customerName, s.cashierName, s.items.length, s.subtotal, s.discount, s.tax, s.total, s.costTotal, s.paymentMethod, s.amountPaid, s.creditAmount, s.fbrInvoiceNumber]),
+        ["invoiceNo", "date", "branch", "status", "returned", "customer", "cashier", "items", "subtotal", "discount", "tax", "total", "cost", "paymentMethod", "paid", "udhaar", "fbrInvoiceNumber"],
+        sales.map((s) => [s.invoiceNo, s.createdAt, s.branchName, s.status, s.returnedTotal ?? 0, s.customerName, s.cashierName, s.items.length, s.subtotal, s.discount, s.tax, s.total, s.costTotal, s.paymentMethod, s.amountPaid, s.creditAmount, s.fbrInvoiceNumber]),
       ),
     );
   }

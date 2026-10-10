@@ -47,6 +47,10 @@ function Receipt({ id }: { id: string }) {
   const [branchInfo, setBranchInfo] = useState<{ name: string; address?: string; phone?: string }[]>([]);
   const [error, setError] = useState("");
   const [qr, setQr] = useState("");
+  const [returns, setReturns] = useState<{ _id: string; returnNo: string; createdAt: string; total: number; items: { name: string; qty: number }[] }[]>([]);
+  useEffect(() => {
+    api<typeof returns>(`/api/sales/${id}/return`).then(setReturns).catch(() => {});
+  }, [id]);
 
   useEffect(() => {
     Promise.all([
@@ -109,6 +113,7 @@ function Receipt({ id }: { id: string }) {
         </div>
         <Divider />
         {sale.status === "returned" && <div className="mb-1 text-center font-bold">*** RETURNED ***</div>}
+        {sale.status === "partially_returned" && <div className="mb-1 text-center font-bold">*** PART RETURNED ***</div>}
         <div className="flex justify-between"><span>Bill: {sale.invoiceNo}</span></div>
         <div>{formatDate(sale.createdAt, true)}</div>
         {sale.customerName && <div>Customer: {sale.customerName}</div>}
@@ -142,6 +147,21 @@ function Receipt({ id }: { id: string }) {
         <Line label={`Paid (${PAYMENT_LABELS[sale.paymentMethod]})`} value={sale.amountPaid + sale.change} />
         {sale.change > 0 && <Line label="Change" value={sale.change} />}
         {sale.creditAmount > 0 && <Line label="Udhaar" value={sale.creditAmount} />}
+        {returns.length > 0 && (
+          <>
+            <Divider />
+            <div className="font-bold">Returns</div>
+            {returns.map((r) => (
+              <div key={r._id} className="mt-1">
+                <div className="flex justify-between">
+                  <span>{r.returnNo} · {formatDate(r.createdAt)}</span>
+                  <span>-{formatPKR(r.total, { symbol: false })}</span>
+                </div>
+                <div className="pl-2 text-[11px]">{r.items.map((i) => `${i.name} ×${formatQty(i.qty)}`).join(", ")}</div>
+              </div>
+            ))}
+          </>
+        )}
         {sale.fbrInvoiceNumber && (
           <>
             <Divider />

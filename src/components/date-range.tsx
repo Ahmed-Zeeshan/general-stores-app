@@ -12,7 +12,7 @@ const PRESETS = [
 
 export function DateRange({ from, to, onChange }: { from: string; to: string; onChange: (r: { from: string; to: string }) => void }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
       <div className="inline-flex rounded-xl bg-slate-100 p-1">
         {PRESETS.map((p) => {
           const f = todayISO(p.from);
@@ -29,10 +29,10 @@ export function DateRange({ from, to, onChange }: { from: string; to: string; on
           );
         })}
       </div>
-      <div className="flex items-center gap-2">
-        <Input type="date" value={from} max={to} onChange={(e) => onChange({ from: e.target.value, to })} className="h-10 w-auto" />
+      <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
+        <Input type="date" value={from} max={to} onChange={(e) => onChange({ from: e.target.value, to })} className="h-10 w-auto min-w-0 flex-1 sm:flex-none" />
         <span className="text-slate-400">to</span>
-        <Input type="date" value={to} min={from} onChange={(e) => onChange({ from, to: e.target.value })} className="h-10 w-auto" />
+        <Input type="date" value={to} min={from} onChange={(e) => onChange({ from, to: e.target.value })} className="h-10 w-auto min-w-0 flex-1 sm:flex-none" />
       </div>
     </div>
   );

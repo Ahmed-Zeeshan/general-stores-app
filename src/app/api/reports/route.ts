@@ -1,8 +1,13 @@
 import { dateRange, handle, TIMEZONE } from "@/lib/api";
 import { reportBranchFilter, requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
-import { Expense, Purchase, Sale } from "@/models";
+import { PAYMENTS_EXPR } from "@/lib/report-agg";
+import { Expense, Purchase, Sale, SaleReturn } from "@/models";
 
+/**
+ * Profit & loss for a period. Bills count on their own date; returns are subtracted on the date
+ * they were made (standard retail practice), so a past day's report never changes afterwards.
+ */
 export const GET = handle(async (req) => {
   const ctx = await requireBranch(["owner", "manager"]);
   const { tid } = ctx;
@@ -10,9 +15,10 @@ export const GET = handle(async (req) => {
   const { from, to } = dateRange(url, 6);
   const branch = reportBranchFilter(ctx, url.searchParams.get("branch"));
   const b = branch ? { branch } : {};
-  const match = { tenant: tid, ...b, status: "completed", createdAt: { $gte: from, $lte: to } };
+  const match = { tenant: tid, ...b, createdAt: { $gte: from, $lte: to } };
+  const day = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: TIMEZONE } };
 
-  const [summary, byMethod, byDay, topItems, expenses, purchases, returns, byBranch] = await Promise.all([
+  const [summary, byMethod, refundsByMethod, byDay, returnsByDay, topItems, expenses, purchases, returns, byBranch, returnsByBranch] = await Promise.all([
     Sale.aggregate([
       { $match: match },
       {
@@ -30,31 +36,46 @@ export const GET = handle(async (req) => {
     ]),
     Sale.aggregate([
       { $match: match },
-      { $group: { _id: "$paymentMethod", total: { $sum: "$total" }, count: { $sum: 1 } } },
+      { $project: { pay: PAYMENTS_EXPR } },
+      { $unwind: "$pay" },
+      { $group: { _id: "$pay.method", total: { $sum: "$pay.amount" }, count: { $sum: 1 } } },
       { $sort: { total: -1 } },
+    ]),
+    SaleReturn.aggregate([
+      { $match: match },
+      { $group: { _id: "$refundMethod", total: { $sum: "$refund" }, credit: { $sum: "$creditReduced" }, count: { $sum: 1 } } },
     ]),
     Sale.aggregate([
       { $match: match },
-      {
-        $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: TIMEZONE } },
-          total: { $sum: "$total" },
-          profit: { $sum: { $subtract: [{ $subtract: ["$total", "$tax"] }, "$costTotal"] } },
-          bills: { $sum: 1 },
-        },
-      },
-      { $sort: { _id: 1 } },
+      { $group: { _id: day, total: { $sum: "$total" }, profit: { $sum: { $subtract: [{ $subtract: ["$total", "$tax"] }, "$costTotal"] } }, bills: { $sum: 1 } } },
+    ]),
+    SaleReturn.aggregate([
+      { $match: match },
+      { $group: { _id: day, total: { $sum: "$total" }, profit: { $sum: { $subtract: [{ $subtract: ["$total", "$tax"] }, "$costTotal"] } } } },
     ]),
     Sale.aggregate([
       { $match: match },
       { $unwind: "$items" },
       {
+        $project: {
+          name: "$items.name",
+          unit: "$items.unit",
+          kept: { $subtract: ["$items.qty", { $ifNull: ["$items.returnedQty", 0] }] },
+          share: {
+            $cond: [{ $gt: ["$items.qty", 0] }, { $divide: [{ $subtract: ["$items.qty", { $ifNull: ["$items.returnedQty", 0] }] }, "$items.qty"] }, 0],
+          },
+          total: "$items.total",
+          cost: "$items.cost",
+        },
+      },
+      { $match: { kept: { $gt: 0 } } },
+      {
         $group: {
-          _id: "$items.name",
-          unit: { $first: "$items.unit" },
-          qty: { $sum: "$items.qty" },
-          total: { $sum: "$items.total" },
-          profit: { $sum: { $subtract: ["$items.total", { $multiply: ["$items.qty", "$items.cost"] }] } },
+          _id: "$name",
+          unit: { $first: "$unit" },
+          qty: { $sum: "$kept" },
+          total: { $sum: { $multiply: ["$total", "$share"] } },
+          profit: { $sum: { $subtract: [{ $multiply: ["$total", "$share"] }, { $multiply: ["$kept", "$cost"] }] } },
         },
       },
       { $sort: { total: -1 } },
@@ -66,12 +87,22 @@ export const GET = handle(async (req) => {
       { $sort: { total: -1 } },
     ]),
     Purchase.aggregate([
-      { $match: { tenant: tid, ...b, createdAt: { $gte: from, $lte: to } } },
+      { $match: { tenant: tid, ...b, createdAt: { $gte: from, $lte: to }, status: { $ne: "void" } } },
       { $group: { _id: null, total: { $sum: "$total" }, count: { $sum: 1 } } },
     ]),
-    Sale.aggregate([
-      { $match: { tenant: tid, ...b, status: "returned", returnedAt: { $gte: from, $lte: to } } },
-      { $group: { _id: null, total: { $sum: "$total" }, count: { $sum: 1 } } },
+    SaleReturn.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: "$total" },
+          tax: { $sum: "$tax" },
+          cost: { $sum: "$costTotal" },
+          credit: { $sum: "$creditReduced" },
+          refund: { $sum: "$refund" },
+          count: { $sum: 1 },
+        },
+      },
     ]),
     Sale.aggregate([
       { $match: match },
@@ -84,13 +115,38 @@ export const GET = handle(async (req) => {
           bills: { $sum: 1 },
         },
       },
-      { $sort: { total: -1 } },
+    ]),
+    SaleReturn.aggregate([
+      { $match: match },
+      { $group: { _id: "$branch", total: { $sum: "$total" }, profit: { $sum: { $subtract: [{ $subtract: ["$total", "$tax"] }, "$costTotal"] } } } },
     ]),
   ]);
 
   const s = summary[0] ?? { bills: 0, subtotal: 0, discount: 0, tax: 0, total: 0, cost: 0, credit: 0 };
-  const grossProfit = round2(s.total - s.tax - s.cost);
+  const r = returns[0] ?? { total: 0, tax: 0, cost: 0, credit: 0, refund: 0, count: 0 };
+  const netSales = round2(s.total - r.total);
+  const tax = round2(s.tax - r.tax);
+  const cost = round2(s.cost - r.cost);
+  const grossProfit = round2(netSales - tax - cost);
   const expenseTotal = round2(expenses.reduce((a, e) => a + e.total, 0));
+
+  const days = new Map<string, { date: string; total: number; profit: number; bills: number }>();
+  for (const d of byDay) days.set(d._id, { date: d._id, total: d.total, profit: d.profit, bills: d.bills });
+  for (const d of returnsByDay) {
+    const row = days.get(d._id) ?? { date: d._id, total: 0, profit: 0, bills: 0 };
+    row.total -= d.total;
+    row.profit -= d.profit;
+    days.set(d._id, row);
+  }
+  const branches = new Map<string, { _id: unknown; name?: string; total: number; profit: number; bills: number }>();
+  for (const x of byBranch) branches.set(String(x._id), { _id: x._id, name: x.name, total: x.total, profit: x.profit, bills: x.bills });
+  for (const x of returnsByBranch) {
+    const row = branches.get(String(x._id)) ?? { _id: x._id, total: 0, profit: 0, bills: 0 };
+    row.total -= x.total;
+    row.profit -= x.profit;
+    branches.set(String(x._id), row);
+  }
+
   return {
     from,
     to,
@@ -98,23 +154,26 @@ export const GET = handle(async (req) => {
       bills: s.bills,
       grossSales: round2(s.subtotal),
       discount: round2(s.discount),
-      tax: round2(s.tax),
-      netSales: round2(s.total),
-      cost: round2(s.cost),
+      salesBeforeReturns: round2(s.total),
+      returns: round2(r.total),
+      returnCount: r.count,
+      refunds: round2(r.refund),
+      tax,
+      netSales,
+      cost,
       grossProfit,
       expenses: expenseTotal,
       netProfit: round2(grossProfit - expenseTotal),
-      credit: round2(s.credit),
+      credit: round2(s.credit - r.credit),
       avgBill: s.bills ? round2(s.total / s.bills) : 0,
       purchases: round2(purchases[0]?.total ?? 0),
-      returns: round2(returns[0]?.total ?? 0),
-      returnCount: returns[0]?.count ?? 0,
     },
     byMethod,
-    byDay: byDay.map((d) => ({ date: d._id, total: round2(d.total), profit: round2(d.profit), bills: d.bills })),
-    topItems: topItems.map((t) => ({ ...t, total: round2(t.total), profit: round2(t.profit) })),
+    refundsByMethod,
+    byDay: [...days.values()].sort((a, c) => a.date.localeCompare(c.date)).map((d) => ({ ...d, total: round2(d.total), profit: round2(d.profit) })),
+    topItems: topItems.map((t) => ({ ...t, qty: Math.round(t.qty * 1000) / 1000, total: round2(t.total), profit: round2(t.profit) })),
     expenses,
     branch: branch ? String(branch) : "all",
-    byBranch: byBranch.map((x) => ({ ...x, total: round2(x.total), profit: round2(x.profit) })),
+    byBranch: [...branches.values()].sort((a, c) => c.total - a.total).map((x) => ({ ...x, total: round2(x.total), profit: round2(x.profit) })),
   };
 });

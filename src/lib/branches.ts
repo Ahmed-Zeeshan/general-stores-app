@@ -3,6 +3,7 @@ import { Types } from "mongoose";
 import { ApiError, requireTenant, type TenantContext } from "./api";
 import type { ShopRole } from "./session";
 import { Branch, Expense, Product, Production, Purchase, Sale, StockLevel, StockMovement } from "@/models";
+import { migrateLegacyReturns } from "./returns";
 
 export const BRANCH_COOKIE = "dukaan_branch";
 
@@ -45,6 +46,7 @@ export async function ensureMainBranch(tid: Types.ObjectId) {
     Expense.updateMany(untagged, { branch: main._id }),
     StockMovement.updateMany(untagged, { branch: main._id }),
   ]);
+  await migrateLegacyReturns(tid);
   ensured.add(key);
 }
 

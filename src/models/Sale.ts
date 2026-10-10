@@ -15,6 +15,8 @@ const SaleItemSchema = new Schema(
     cost: { type: Number, default: 0 },
     discount: { type: Number, default: 0 },
     total: { type: Number, required: true },
+    /** How many of this line have been returned so far. */
+    returnedQty: { type: Number, default: 0 },
   },
   { _id: false },
 );
@@ -42,8 +44,13 @@ const SaleSchema = new Schema(
     customerName: { type: String },
     cashier: { type: Schema.Types.ObjectId, ref: "User" },
     cashierName: { type: String },
-    status: { type: String, enum: ["completed", "returned"], default: "completed" },
+    status: { type: String, enum: ["completed", "partially_returned", "returned"], default: "completed" },
     returnedAt: { type: Date },
+    /** Value of all returns so far, and how much of it reduced this bill's udhaar. */
+    returnedTotal: { type: Number, default: 0 },
+    creditReturned: { type: Number, default: 0 },
+    /** Increases with every return; protects against two returns at the same moment. */
+    returnSeq: { type: Number, default: 0 },
     note: { type: String },
     // FBR POS integration
     fbrStatus: { type: String, enum: ["none", "synced", "pending", "failed"], default: "none" },

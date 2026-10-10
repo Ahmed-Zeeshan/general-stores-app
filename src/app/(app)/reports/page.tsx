@@ -17,6 +17,8 @@ type Report = {
     discount: number;
     tax: number;
     netSales: number;
+    salesBeforeReturns: number;
+    refunds: number;
     cost: number;
     grossProfit: number;
     expenses: number;
@@ -28,6 +30,7 @@ type Report = {
     returnCount: number;
   };
   byMethod: { _id: string; total: number; count: number }[];
+  refundsByMethod: { _id: string; total: number; count: number }[];
   byDay: { date: string; total: number; profit: number; bills: number }[];
   topItems: { _id: string; unit: string; qty: number; total: number; profit: number }[];
   expenses: { _id: string; total: number }[];
@@ -62,7 +65,7 @@ export default function ReportsPage() {
         <Spinner />
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0">
             <StatCard label="Net sales" value={formatPKR(s.netSales)} icon={<TrendingUp className="h-5 w-5" />} hint={`${s.bills} bills · avg ${formatPKR(s.avgBill)}`} />
             <StatCard label="Gross profit" value={formatPKR(s.grossProfit)} icon={<BadgeDollarSign className="h-5 w-5" />} tone="violet" hint="Sales − cost of goods − tax" />
             <StatCard label="Expenses" value={formatPKR(s.expenses)} icon={<Wallet className="h-5 w-5" />} tone="amber" />
@@ -75,7 +78,7 @@ export default function ReportsPage() {
             />
           </div>
 
-          <div className="mt-6 grid gap-6 lg:grid-cols-3">
+          <div className="mt-6 grid gap-6 lg:grid-cols-3 [&>*]:min-w-0">
             <Card className="p-5 lg:col-span-2">
               <h2 className="mb-4 font-bold text-slate-900">Daily sales & profit</h2>
               {data.byDay.length ? <SalesBarChart data={data.byDay} /> : <p className="py-16 text-center text-sm text-slate-500">No sales in this period.</p>}
@@ -83,7 +86,9 @@ export default function ReportsPage() {
             <Card className="p-5">
               <h2 className="mb-4 font-bold text-slate-900">Profit & Loss</h2>
               <dl className="space-y-2.5 text-sm">
-                <PL label="Sales (as billed)" value={s.netSales} />
+                <PL label="Sales (as billed)" value={s.salesBeforeReturns} />
+                <PL label={`− Returns (${s.returnCount})`} value={-s.returns} />
+                <PL label="= Net sales" value={s.netSales} bold />
                 <PL label="− Sales tax collected" value={-s.tax} />
                 <PL label="= Sales excl. tax" value={s.netSales - s.tax} bold />
                 <PL label="− Cost of goods sold" value={-s.cost} />
@@ -97,7 +102,7 @@ export default function ReportsPage() {
                 <div className="flex justify-between"><span>Discounts given</span><b>{formatPKR(s.discount)}</b></div>
                 <div className="flex justify-between"><span>Stock purchased</span><b>{formatPKR(s.purchases)}</b></div>
                 <div className="flex justify-between"><span>Given on udhaar</span><b>{formatPKR(s.credit)}</b></div>
-                <div className="flex justify-between"><span>Returned bills ({s.returnCount})</span><b>{formatPKR(s.returns)}</b></div>
+                <div className="flex justify-between"><span>Money refunded on returns</span><b>{formatPKR(s.refunds)}</b></div>
               </div>
             </Card>
           </div>
@@ -130,7 +135,7 @@ export default function ReportsPage() {
             </Card>
           )}
 
-          <div className="mt-6 grid gap-6 lg:grid-cols-3">
+          <div className="mt-6 grid gap-6 lg:grid-cols-3 [&>*]:min-w-0">
             <Card className="lg:col-span-2">
               <div className="border-b border-slate-100 px-5 py-4">
                 <h2 className="font-bold text-slate-900">Top selling items</h2>
@@ -164,7 +169,7 @@ export default function ReportsPage() {
             </Card>
             <div className="space-y-6">
               <Card className="p-5">
-                <h2 className="mb-3 flex items-center gap-2 font-bold text-slate-900"><Receipt className="h-4 w-4" /> Payment methods</h2>
+                <h2 className="mb-3 flex items-center gap-2 font-bold text-slate-900"><Receipt className="h-4 w-4" /> Money received</h2>
                 {data.byMethod.length === 0 ? (
                   <p className="text-sm text-slate-500">No sales.</p>
                 ) : (
@@ -176,6 +181,21 @@ export default function ReportsPage() {
                       </li>
                     ))}
                   </ul>
+                )}
+                {data.refundsByMethod.some((r) => r.total > 0) && (
+                  <>
+                    <div className="mb-2 mt-4 border-t border-dashed border-slate-200 pt-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Refunded on returns</div>
+                    <ul className="space-y-2 text-sm">
+                      {data.refundsByMethod
+                        .filter((r) => r.total > 0)
+                        .map((r) => (
+                          <li key={r._id} className="flex justify-between">
+                            <span className="text-slate-600">{r._id === "khata" ? "To khata" : PAYMENT_LABELS[r._id] ?? r._id}</span>
+                            <b className="text-rose-600">−{formatPKR(r.total)}</b>
+                          </li>
+                        ))}
+                    </ul>
+                  </>
                 )}
               </Card>
               <Card className="p-5">

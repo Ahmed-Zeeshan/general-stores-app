@@ -15,3 +15,4 @@ export * from "./Branch";
 export * from "./StockLevel";
 export * from "./Transfer";
 export * from "./Reminder";
+export * from "./SaleReturn";

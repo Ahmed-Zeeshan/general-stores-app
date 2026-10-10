@@ -1,5 +1,5 @@
 import type { Types } from "mongoose";
-import { Product, Sale, Tenant } from "@/models";
+import { Product, Sale, SaleReturn, Tenant } from "@/models";
 import { round2 } from "./money";
 
 /**
@@ -27,7 +27,7 @@ function paymentMode(method: string, creditAmount: number, amountPaid: number) {
 type SaleLike = {
   invoiceNo: string;
   createdAt: Date;
-  items: { product?: Types.ObjectId | null; name: string; qty: number; total: number; discount: number }[];
+  items: { product?: Types.ObjectId | null; name: string; qty: number; total: number; discount?: number | null }[];
   subtotal: number;
   discount: number;
   tax: number;
@@ -48,7 +48,16 @@ function fbrDate(d: Date) {
 
 export function buildFbrInvoice(
   sale: SaleLike,
-  opts: { posId: string; defaultPct: string; inclusive: boolean; pctByProduct: Map<string, string>; type: "sale" | "return" },
+  opts: {
+    posId: string;
+    defaultPct: string;
+    inclusive: boolean;
+    pctByProduct: Map<string, string>;
+    type: "sale" | "return";
+    /** For a return: the original bill's own number and its FBR invoice number. */
+    refInvoiceNo?: string;
+    refFbrNumber?: string | null;
+  },
 ) {
   const rate = sale.taxRate || 0;
   const items = sale.items.map((i) => {
@@ -66,16 +75,16 @@ export function buildFbrInvoice(
       SaleValue: round2(saleValue),
       TotalAmount: round2(saleValue + taxCharged),
       TaxCharged: round2(taxCharged),
-      Discount: round2(i.discount + share),
+      Discount: round2((i.discount ?? 0) + share),
       FurtherTax: 0,
       InvoiceType: opts.type === "sale" ? 1 : 3,
-      RefUSIN: opts.type === "return" ? sale.invoiceNo : null,
+      RefUSIN: opts.type === "return" ? opts.refInvoiceNo ?? sale.invoiceNo : null,
     };
   });
   return {
     InvoiceNumber: "",
     POSID: Number(opts.posId),
-    USIN: opts.type === "sale" ? sale.invoiceNo : `${sale.invoiceNo}-R`,
+    USIN: sale.invoiceNo,
     DateTime: fbrDate(new Date()),
     BuyerName: sale.customerName ?? "",
     BuyerNTN: "",
@@ -88,7 +97,7 @@ export function buildFbrInvoice(
     Discount: round2(sale.discount),
     FurtherTax: 0,
     PaymentMode: paymentMode(sale.paymentMethod, sale.creditAmount, sale.amountPaid),
-    RefUSIN: opts.type === "return" ? sale.fbrInvoiceNumber ?? sale.invoiceNo : null,
+    RefUSIN: opts.type === "return" ? opts.refFbrNumber ?? opts.refInvoiceNo ?? null : null,
     InvoiceType: opts.type === "sale" ? 1 : 3,
     Items: items,
   };
@@ -109,8 +118,20 @@ async function postInvoice(url: string, token: string, payload: unknown): Promis
 }
 
 /** Reports one bill (or its return) to FBR and stores the result on the sale. Never throws. */
-export async function syncSaleToFbr(tid: Types.ObjectId, saleId: Types.ObjectId | string, type: "sale" | "return" = "sale") {
-  const tenant = await Tenant.findById(tid).select("+fbrToken fbrEnabled fbrMode fbrPosId fbrDefaultPct pricesIncludeTax").lean();
+async function fbrSettings(tid: Types.ObjectId) {
+  return Tenant.findById(tid).select("+fbrToken fbrEnabled fbrMode fbrPosId fbrDefaultPct pricesIncludeTax").lean();
+}
+
+async function pctMap(tid: Types.ObjectId, items: { product?: Types.ObjectId | null }[]) {
+  const productIds = items.map((i) => i.product).filter(Boolean);
+  const products = await Product.find({ tenant: tid, _id: { $in: productIds } }).select("pctCode").lean();
+  return new Map(products.filter((p) => p.pctCode).map((p) => [String(p._id), p.pctCode as string]));
+}
+
+/** Reports one bill to FBR and stores the result on the sale. Never throws. */
+export async function syncSaleToFbr(tid: Types.ObjectId, saleId: Types.ObjectId | string) {
+  const type = "sale" as const;
+  const tenant = await fbrSettings(tid);
   if (!tenant?.fbrEnabled) return null;
   const sale = await Sale.findOne({ _id: saleId, tenant: tid }).lean();
   if (!sale) return null;
@@ -120,10 +141,7 @@ export async function syncSaleToFbr(tid: Types.ObjectId, saleId: Types.ObjectId 
     return null;
   }
 
-  const productIds = sale.items.map((i) => i.product).filter(Boolean);
-  const products = await Product.find({ tenant: tid, _id: { $in: productIds } }).select("pctCode").lean();
-  const pctByProduct = new Map(products.filter((p) => p.pctCode).map((p) => [String(p._id), p.pctCode as string]));
-
+  const pctByProduct = await pctMap(tid, sale.items);
   const payload = buildFbrInvoice(sale as unknown as SaleLike, {
     posId: tenant.fbrPosId,
     defaultPct: tenant.fbrDefaultPct || "11001010",
@@ -134,12 +152,66 @@ export async function syncSaleToFbr(tid: Types.ObjectId, saleId: Types.ObjectId 
 
   try {
     const number = await postInvoice(FBR_URLS[tenant.fbrMode === "live" ? "live" : "sandbox"], tenant.fbrToken, payload);
-    const set = type === "sale" ? { fbrInvoiceNumber: number, fbrStatus: "synced" } : { fbrReturnInvoiceNumber: number, fbrStatus: "synced" };
-    await Sale.updateOne({ _id: sale._id, tenant: tid }, { $set: { ...set, fbrError: null }, $inc: { fbrAttempts: 1 } });
+    await Sale.updateOne({ _id: sale._id, tenant: tid }, { $set: { fbrInvoiceNumber: number, fbrStatus: "synced", fbrError: null }, $inc: { fbrAttempts: 1 } });
     return number;
   } catch (err) {
     const message = (err as Error).name === "TimeoutError" ? "FBR did not respond in time" : (err as Error).message;
     await Sale.updateOne({ _id: sale._id, tenant: tid }, { $set: { fbrStatus: "pending", fbrError: message }, $inc: { fbrAttempts: 1 } });
+    return null;
+  }
+}
+
+/**
+ * Reports a return to FBR as a credit note (InvoiceType 3) for just the returned items,
+ * referring to the original bill's FBR invoice. Waits (stays pending) until the bill itself has
+ * an FBR number. Never throws.
+ */
+export async function syncReturnToFbr(tid: Types.ObjectId, returnId: Types.ObjectId | string) {
+  const tenant = await fbrSettings(tid);
+  if (!tenant?.fbrEnabled) return null;
+  const ret = await SaleReturn.findOne({ _id: returnId, tenant: tid }).lean();
+  if (!ret || ret.fbrStatus === "synced") return ret?.fbrInvoiceNumber ?? null;
+  const sale = await Sale.findOne({ _id: ret.sale, tenant: tid }).lean();
+  if (!sale?.fbrInvoiceNumber) {
+    await SaleReturn.updateOne({ _id: ret._id, tenant: tid }, { fbrStatus: "pending", fbrError: "Waiting for the original bill to reach FBR." });
+    return null;
+  }
+  if (!tenant.fbrPosId || !tenant.fbrToken) {
+    await SaleReturn.updateOne({ _id: ret._id, tenant: tid }, { fbrStatus: "pending", fbrError: "FBR POS ID or token is missing in Settings." });
+    return null;
+  }
+  const like: SaleLike = {
+    invoiceNo: ret.returnNo,
+    createdAt: ret.createdAt,
+    items: ret.items.map((i) => ({ product: i.product, name: i.name, qty: i.qty, total: i.total, discount: 0 })),
+    subtotal: ret.subtotal,
+    discount: ret.discount,
+    tax: ret.tax,
+    taxRate: sale.taxRate,
+    total: ret.total,
+    paymentMethod: ret.refundMethod === "khata" || ret.refundMethod === "none" ? "cash" : ret.refundMethod,
+    amountPaid: ret.total,
+    creditAmount: 0,
+    customerName: ret.customerName,
+  };
+  const payload = buildFbrInvoice(like, {
+    posId: tenant.fbrPosId,
+    defaultPct: tenant.fbrDefaultPct || "11001010",
+    inclusive: tenant.pricesIncludeTax ?? true,
+    pctByProduct: await pctMap(tid, ret.items),
+    type: "return",
+    refInvoiceNo: sale.invoiceNo,
+    refFbrNumber: sale.fbrInvoiceNumber,
+  });
+  try {
+    const number = await postInvoice(FBR_URLS[tenant.fbrMode === "live" ? "live" : "sandbox"], tenant.fbrToken, payload);
+    await SaleReturn.updateOne({ _id: ret._id, tenant: tid }, { $set: { fbrInvoiceNumber: number, fbrStatus: "synced", fbrError: null } });
+    // Keep the latest credit note on the bill too (shown on its receipt).
+    await Sale.updateOne({ _id: sale._id, tenant: tid }, { $set: { fbrReturnInvoiceNumber: number } });
+    return number;
+  } catch (err) {
+    const message = (err as Error).name === "TimeoutError" ? "FBR did not respond in time" : (err as Error).message;
+    await SaleReturn.updateOne({ _id: ret._id, tenant: tid }, { $set: { fbrStatus: "pending", fbrError: message } });
     return null;
   }
 }

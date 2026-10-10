@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { handle, requireTenant } from "@/lib/api";
-import { Sale, Tenant } from "@/models";
+import { Sale, SaleReturn, Tenant } from "@/models";
 
 export const GET = handle(async () => {
   const { tid } = await requireTenant();
@@ -9,8 +9,9 @@ export const GET = handle(async () => {
     Tenant.findById(tid).select("+fbrToken").lean(),
     Sale.countDocuments({ tenant: tid, fbrStatus: "pending" }),
   ]);
+  const pendingReturns = await SaleReturn.countDocuments({ tenant: tid, fbrStatus: "pending" });
   // Never send the FBR token back to the browser; just say whether one is saved.
-  return { ...tenant, fbrTokenSet: !!withToken?.fbrToken, fbrPending };
+  return { ...tenant, fbrTokenSet: !!withToken?.fbrToken, fbrPending: fbrPending + pendingReturns };
 });
 
 const Body = z.object({

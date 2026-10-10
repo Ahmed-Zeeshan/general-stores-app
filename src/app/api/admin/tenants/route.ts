@@ -12,11 +12,11 @@ export const GET = handle(async () => {
   const [users, sales, products, branches] = await Promise.all([
     User.aggregate([{ $match: { tenant: { $in: ids } } }, { $group: { _id: "$tenant", total: { $sum: 1 }, active: { $sum: { $cond: ["$active", 1, 0] } } } }]),
     Sale.aggregate([
-      { $match: { tenant: { $in: ids }, status: "completed" } },
+      { $match: { tenant: { $in: ids }, status: { $ne: "returned" } } },
       {
         $group: {
           _id: "$tenant",
-          last30: { $sum: { $cond: [{ $gte: ["$createdAt", since] }, "$total", 0] } },
+          last30: { $sum: { $cond: [{ $gte: ["$createdAt", since] }, { $subtract: ["$total", { $ifNull: ["$returnedTotal", 0] }] }, 0] } },
           bills: { $sum: 1 },
           lastSaleAt: { $max: "$createdAt" },
         },

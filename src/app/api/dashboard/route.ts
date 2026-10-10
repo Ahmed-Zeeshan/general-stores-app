@@ -1,7 +1,8 @@
 import { addDays, endOfDay, handle, startOfDay, TIMEZONE } from "@/lib/api";
 import { branchStock, requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
-import { Expense, Party, Product, Sale } from "@/models";
+import { PAYMENTS_EXPR } from "@/lib/report-agg";
+import { Expense, Party, Product, Sale, SaleReturn } from "@/models";
 
 export const GET = handle(async () => {
   const { tid, branchId } = await requireBranch();
@@ -11,9 +12,11 @@ export const GET = handle(async () => {
   const weekStart = startOfDay(addDays(now, -6));
   const monthStart = startOfDay(addDays(now, -29));
 
-  const [today, todayExpenses, week, topProducts, receivable, payable, lowStock, expiring, recent] = await Promise.all([
+  const todayMatch = { tenant: tid, branch: branchId, createdAt: { $gte: todayStart, $lte: todayEnd } };
+  const day = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: TIMEZONE } };
+  const [today, todayCash, todayReturns, todayExpenses, week, weekReturns, topProducts, receivable, payable, lowStock, expiring, recent] = await Promise.all([
     Sale.aggregate([
-      { $match: { tenant: tid, branch: branchId, status: "completed", createdAt: { $gte: todayStart, $lte: todayEnd } } },
+      { $match: todayMatch },
       {
         $group: {
           _id: null,
@@ -21,8 +24,28 @@ export const GET = handle(async () => {
           tax: { $sum: "$tax" },
           cost: { $sum: "$costTotal" },
           count: { $sum: 1 },
-          cash: { $sum: { $cond: [{ $eq: ["$paymentMethod", "cash"] }, "$amountPaid", 0] } },
           credit: { $sum: "$creditAmount" },
+        },
+      },
+    ]),
+    Sale.aggregate([
+      { $match: todayMatch },
+      { $project: { pay: PAYMENTS_EXPR } },
+      { $unwind: "$pay" },
+      { $match: { "pay.method": "cash" } },
+      { $group: { _id: null, total: { $sum: "$pay.amount" } } },
+    ]),
+    SaleReturn.aggregate([
+      { $match: todayMatch },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: "$total" },
+          tax: { $sum: "$tax" },
+          cost: { $sum: "$costTotal" },
+          credit: { $sum: "$creditReduced" },
+          cashRefund: { $sum: { $cond: [{ $eq: ["$refundMethod", "cash"] }, "$refund", 0] } },
+          count: { $sum: 1 },
         },
       },
     ]),
@@ -31,20 +54,26 @@ export const GET = handle(async () => {
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]),
     Sale.aggregate([
-      { $match: { tenant: tid, branch: branchId, status: "completed", createdAt: { $gte: weekStart, $lte: todayEnd } } },
-      {
-        $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: TIMEZONE } },
-          total: { $sum: "$total" },
-          profit: { $sum: { $subtract: [{ $subtract: ["$total", "$tax"] }, "$costTotal"] } },
-        },
-      },
-      { $sort: { _id: 1 } },
+      { $match: { tenant: tid, branch: branchId, createdAt: { $gte: weekStart, $lte: todayEnd } } },
+      { $group: { _id: day, total: { $sum: "$total" }, profit: { $sum: { $subtract: [{ $subtract: ["$total", "$tax"] }, "$costTotal"] } } } },
+    ]),
+    SaleReturn.aggregate([
+      { $match: { tenant: tid, branch: branchId, createdAt: { $gte: weekStart, $lte: todayEnd } } },
+      { $group: { _id: day, total: { $sum: "$total" }, profit: { $sum: { $subtract: [{ $subtract: ["$total", "$tax"] }, "$costTotal"] } } } },
     ]),
     Sale.aggregate([
-      { $match: { tenant: tid, branch: branchId, status: "completed", createdAt: { $gte: monthStart } } },
+      { $match: { tenant: tid, branch: branchId, createdAt: { $gte: monthStart } } },
       { $unwind: "$items" },
-      { $group: { _id: "$items.name", qty: { $sum: "$items.qty" }, total: { $sum: "$items.total" }, unit: { $first: "$items.unit" } } },
+      {
+        $project: {
+          name: "$items.name",
+          unit: "$items.unit",
+          kept: { $subtract: ["$items.qty", { $ifNull: ["$items.returnedQty", 0] }] },
+          total: { $cond: [{ $gt: ["$items.qty", 0] }, { $multiply: ["$items.total", { $divide: [{ $subtract: ["$items.qty", { $ifNull: ["$items.returnedQty", 0] }] }, "$items.qty"] }] }, 0] },
+        },
+      },
+      { $match: { kept: { $gt: 0 } } },
+      { $group: { _id: "$name", qty: { $sum: "$kept" }, total: { $sum: "$total" }, unit: { $first: "$unit" } } },
       { $sort: { total: -1 } },
       { $limit: 5 },
     ]),
@@ -66,10 +95,23 @@ export const GET = handle(async () => {
   const series = Array.from({ length: 7 }, (_, i) => {
     const key = fmt.format(addDays(weekStart, i));
     const row = week.find((w) => w._id === key);
-    return { date: key, total: round2(row?.total ?? 0), profit: round2(row?.profit ?? 0) };
+    const ret = weekReturns.find((w) => w._id === key);
+    return { date: key, total: round2((row?.total ?? 0) - (ret?.total ?? 0)), profit: round2((row?.profit ?? 0) - (ret?.profit ?? 0)) };
   });
 
-  const t = today[0] ?? { total: 0, tax: 0, cost: 0, count: 0, cash: 0, credit: 0 };
+  const s = today[0] ?? { total: 0, tax: 0, cost: 0, count: 0, credit: 0 };
+  const r = todayReturns[0] ?? { total: 0, tax: 0, cost: 0, credit: 0, cashRefund: 0, count: 0 };
+  // Today's figures are net of returns made today.
+  const t = {
+    total: s.total - r.total,
+    tax: s.tax - r.tax,
+    cost: s.cost - r.cost,
+    count: s.count,
+    cash: (todayCash[0]?.total ?? 0) - r.cashRefund,
+    credit: s.credit - r.credit,
+    returns: r.total,
+    returnCount: r.count,
+  };
   // Low stock is per branch: compare each product's stock here with its alert level.
   const levels = await branchStock(tid, branchId);
   const low = lowStock
@@ -85,6 +127,8 @@ export const GET = handle(async () => {
       cash: round2(t.cash),
       credit: round2(t.credit),
       expenses: round2(todayExpenses[0]?.total ?? 0),
+      returns: round2(t.returns),
+      returnCount: t.returnCount,
     },
     receivable: { total: round2(receivable[0]?.total ?? 0), count: receivable[0]?.count ?? 0 },
     payable: { total: round2(payable[0]?.total ?? 0), count: payable[0]?.count ?? 0 },

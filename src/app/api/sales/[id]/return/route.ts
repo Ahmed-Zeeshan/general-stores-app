@@ -1,47 +1,45 @@
-import { ApiError, handle } from "@/lib/api";
+import { z } from "zod";
+import { handle } from "@/lib/api";
 import { requireBranch } from "@/lib/branches";
-import { syncSaleToFbr } from "@/lib/fbr";
-import { moveStock, postLedger } from "@/lib/services";
-import { Sale, Tenant } from "@/models";
+import { syncReturnToFbr } from "@/lib/fbr";
+import { createReturn } from "@/lib/returns";
+import { Sale, SaleReturn, Tenant } from "@/models";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** Full return of a bill: puts stock back, reverses any udhaar and reports a credit note to FBR. */
-export const POST = handle<Ctx>(async (_req, { params }) => {
+const Body = z.object({
+  /** Items to return by their position on the bill. Omitted = everything not yet returned. */
+  items: z
+    .array(z.object({ index: z.coerce.number().int().min(0), qty: z.coerce.number().positive("Quantity must be more than zero") }))
+    .optional(),
+  /** How the money that is not udhaar is given back. */
+  refundMethod: z.enum(["cash", "card", "jazzcash", "easypaisa", "bank", "khata"]).optional(),
+  reason: z.string().trim().max(200).optional(),
+});
+
+/** Returns all or some items of a bill. */
+export const POST = handle<Ctx>(async (req, { params }) => {
   const { user, tid, branchId } = await requireBranch(["owner", "manager"]);
   const { id } = await params;
-  // Atomic status flip prevents returning the same bill twice.
-  const sale = await Sale.findOneAndUpdate(
-    { _id: id, tenant: tid, status: "completed" },
-    { status: "returned", returnedAt: new Date() },
-    { new: true },
-  );
-  if (!sale) throw new ApiError(400, "Bill not found or already returned.");
-
-  for (const item of sale.items) {
-    if (item.product) {
-      // Stock goes back to the branch that sold it.
-      await moveStock({ tid, branch: sale.branch ?? branchId, productId: item.product, qty: item.qty, type: "return", refNo: sale.invoiceNo, userId: user.id });
-    }
-  }
-  if (sale.customer && sale.creditAmount > 0) {
-    await postLedger({
-      tid,
-      partyId: sale.customer,
-      kind: "return",
-      amount: -sale.creditAmount,
-      refType: "sale",
-      refId: sale._id,
-      refNo: sale.invoiceNo,
-      note: `Return of bill ${sale.invoiceNo}`,
-      userId: user.id,
-    });
-  }
-
+  const body = Body.parse(await req.json().catch(() => ({})));
+  const ret = await createReturn({
+    tid,
+    saleId: id,
+    lines: body.items,
+    refundMethod: body.refundMethod,
+    reason: body.reason,
+    user: { id: user.id, name: user.name },
+    fallbackBranch: branchId,
+  });
   const tenant = await Tenant.findById(tid).select("fbrEnabled").lean();
-  if (tenant?.fbrEnabled && sale.fbrInvoiceNumber) {
-    await Sale.updateOne({ _id: sale._id, tenant: tid }, { fbrStatus: "pending" });
-    await syncSaleToFbr(tid, sale._id, "return");
-  }
-  return Sale.findOne({ _id: sale._id, tenant: tid }).lean();
+  if (tenant?.fbrEnabled && ret.fbrStatus === "pending") await syncReturnToFbr(tid, ret._id);
+  const [sale, saved] = await Promise.all([Sale.findOne({ _id: id, tenant: tid }).lean(), SaleReturn.findOne({ _id: ret._id, tenant: tid }).lean()]);
+  return { ...sale, return: saved };
+});
+
+/** All returns of this bill. */
+export const GET = handle<Ctx>(async (_req, { params }) => {
+  const { tid } = await requireBranch();
+  const { id } = await params;
+  return SaleReturn.find({ tenant: tid, sale: id }).sort({ createdAt: 1 }).lean();
 });

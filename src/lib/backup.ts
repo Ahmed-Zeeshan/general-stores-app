@@ -13,6 +13,7 @@ import {
   Purchase,
   Recipe,
   Sale,
+  SaleReturn,
   Reminder,
   StockLevel,
   StockMovement,
@@ -34,6 +35,7 @@ const SHOP_DATA: [string, Model<any>][] = [
   ["parties", Party],
   ["ledger", LedgerEntry],
   ["sales", Sale],
+  ["saleReturns", SaleReturn],
   ["purchases", Purchase],
   ["expenses", Expense],
   ["stockMovements", StockMovement],
@@ -163,6 +165,7 @@ export async function restoreTenant(tid: Types.ObjectId, file: unknown) {
     ["purchase", maxNo(find(Purchase as Model<unknown>), "purchaseNo")],
     ["production", maxNo(find(Production as Model<unknown>), "productionNo")],
     ["transfer", maxNo(find(Transfer as Model<unknown>), "transferNo")],
+    ["return", maxNo(find(SaleReturn as Model<unknown>), "returnNo")],
   ];
   for (const [name, seq] of counters) {
     await Counter.updateOne({ _id: `${String(tid)}:${name}` }, { $set: { seq } }, { upsert: true });
