@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ApiError, forgetUser, handle, requireTenant } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { assertSeatAvailable, hashPassword } from "@/lib/tenants";
 import { Branch, User } from "@/models";
 
@@ -36,5 +37,15 @@ export const PUT = handle<Ctx>(async (req, { params }) => {
   if (body.password) update.passwordHash = await hashPassword(body.password);
   const updated = await User.findOneAndUpdate({ _id: id, tenant: tid }, { $set: update, $unset: unset }, { new: true }).lean();
   forgetUser(id);
+  const changes = [
+    body.name && body.name !== target.name && `name → ${body.name}`,
+    body.role && body.role !== target.role && `role ${target.role} → ${body.role}`,
+    body.active !== undefined && body.active !== target.active && (body.active ? "enabled" : "disabled"),
+    body.password && "password reset",
+    (body.branch !== undefined && String(body.branch || "") !== String(target.branch ?? "")) && "branch changed",
+  ].filter(Boolean);
+  if (changes.length) {
+    await logActivity({ tid, user: me }, { action: "user.update", summary: `Staff ${target.name}: ${changes.join(", ")}`, refType: "user", refId: target._id });
+  }
   return updated;
 });

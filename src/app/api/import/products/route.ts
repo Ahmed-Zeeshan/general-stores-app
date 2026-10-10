@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { branchStock, requireBranch } from "@/lib/branches";
 import { UNITS } from "@/lib/constants";
 import { parseCsv } from "@/lib/csv";
@@ -113,5 +114,6 @@ export const POST = handle(async (req) => {
       errors.push(`Row ${line} (${name}): ${(err as { code?: number }).code === 11000 ? "barcode already used by another product" : (err as Error).message}`);
     }
   }
+  await logActivity({ tid, user, branchId }, { action: "product.import", summary: `Imported products from a file: ${created} new, ${updated} updated${errors.length ? `, ${errors.length} rows with errors` : ""}` });
   return { created, updated, errors: errors.slice(0, 50), errorCount: errors.length };
 });

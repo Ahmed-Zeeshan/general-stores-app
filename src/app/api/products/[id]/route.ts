@@ -1,4 +1,5 @@
 import { ApiError, handle, requireTenant } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { branchStock, requireBranch } from "@/lib/branches";
 import { withCategories } from "@/lib/categories";
 import { assertBarcodesFree } from "@/lib/barcode-server";
@@ -27,7 +28,7 @@ export const GET = handle<Ctx>(async (_req, { params }) => {
 });
 
 export const PUT = handle<Ctx>(async (req, { params }) => {
-  const { tid } = await requireTenant(["owner", "manager"]);
+  const { tid, user } = await requireTenant(["owner", "manager"]);
   const { id } = await params;
   const body = ProductInput.parse(await req.json());
   await assertBarcodesFree(tid, body, id);
@@ -43,17 +44,36 @@ export const PUT = handle<Ctx>(async (req, { params }) => {
     delete update.shelfLifeDays;
     unset.shelfLifeDays = 1;
   }
-  const before = await Product.findOne({ _id: id, tenant: tid }).select("trackExpiry").lean();
+  const before = await Product.findOne({ _id: id, tenant: tid }).select("trackExpiry name salePrice costPrice wholesalePrice").lean();
   const product = await Product.findOneAndUpdate({ _id: id, tenant: tid }, { $set: update, $unset: unset }, { new: true, runValidators: true }).lean();
   if (!product) throw new ApiError(404, "Product not found.");
   if (product.trackExpiry && !before?.trackExpiry) await startBatches(tid, product);
+  const priceChanges = (
+    [
+      ["sale price", before?.salePrice, product.salePrice],
+      ["cost price", before?.costPrice, product.costPrice],
+      ["wholesale price", before?.wholesalePrice ?? null, product.wholesalePrice ?? null],
+    ] as const
+  ).filter(([, a, b]) => (a ?? null) !== (b ?? null));
+  if (priceChanges.length) {
+    await logActivity(
+      { tid, user },
+      {
+        action: "product.price",
+        summary: `${product.name}: ${priceChanges.map(([k, a, b]) => `${k} ${a ?? "—"} → ${b ?? "—"}`).join(", ")}`,
+        refType: "product",
+        refId: product._id,
+      },
+    );
+  }
   return product;
 });
 
 /** Soft delete so old bills still show the product. */
 export const DELETE = handle<Ctx>(async (_req, { params }) => {
-  const { tid } = await requireTenant(["owner", "manager"]);
+  const { tid, user } = await requireTenant(["owner", "manager"]);
   const { id } = await params;
-  await Product.updateOne({ _id: id, tenant: tid }, { active: false });
+  const p = await Product.findOneAndUpdate({ _id: id, tenant: tid }, { active: false }).select("name stock").lean();
+  if (p) await logActivity({ tid, user }, { action: "product.remove", summary: `Removed product ${p.name} (stock ${p.stock})`, refType: "product", refId: p._id });
   return { ok: true };
 });

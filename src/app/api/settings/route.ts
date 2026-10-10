@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { handle, requireTenant } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { Sale, SaleReturn, Tenant } from "@/models";
 
 export const GET = handle(async () => {
@@ -36,11 +37,41 @@ const Body = z.object({
   waPaymentTemplate: z.string().trim().max(1000).optional(),
 });
 
+const SETTING_LABELS: Record<string, string> = {
+  shopName: "shop name",
+  shopType: "shop type",
+  ownerName: "owner name",
+  phone: "phone",
+  address: "address",
+  ntn: "NTN",
+  strn: "STRN",
+  taxEnabled: "sales tax on/off",
+  taxRate: "tax rate",
+  pricesIncludeTax: "prices include tax",
+  receiptFooter: "receipt footer",
+  fbrEnabled: "FBR on/off",
+  fbrMode: "FBR mode",
+  fbrPosId: "FBR POS ID",
+  fbrDefaultPct: "FBR PCT code",
+  fbrToken: "FBR token",
+  waTemplate: "WhatsApp reminder message",
+  waPaymentTemplate: "WhatsApp payment message",
+};
+
 export const PUT = handle(async (req) => {
-  const { tid } = await requireTenant(["owner"]);
+  const { tid, user } = await requireTenant(["owner"]);
   const { fbrToken, ...body } = Body.parse(await req.json());
+  const before = (await Tenant.findById(tid).lean()) as Record<string, unknown> | null;
   const update: Record<string, unknown> = { ...body };
   // Secret: an empty field means "keep the saved one".
   if (fbrToken) update.fbrToken = fbrToken;
-  return Tenant.findByIdAndUpdate(tid, update, { new: true }).select("-adminNotes").lean();
+  const saved = await Tenant.findByIdAndUpdate(tid, update, { new: true }).select("-adminNotes").lean();
+  const changed = Object.keys(update).filter((k) => k === "fbrToken" || JSON.stringify(before?.[k] ?? null) !== JSON.stringify(update[k] ?? null));
+  if (changed.length) {
+    await logActivity(
+      { tid, user },
+      { action: "settings.update", summary: `Changed shop settings: ${changed.map((k) => SETTING_LABELS[k] ?? k).join(", ")}`, meta: { changed: Object.fromEntries(changed.filter((k) => k !== "fbrToken").map((k) => [k, { from: before?.[k] ?? null, to: update[k] }])) } },
+    );
+  }
+  return saved;
 });

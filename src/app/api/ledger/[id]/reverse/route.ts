@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { requireBranch } from "@/lib/branches";
 import { postLedger } from "@/lib/services";
-import { LedgerEntry } from "@/models";
+import { LedgerEntry, Party } from "@/models";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -25,6 +26,11 @@ export const POST = handle<Ctx>(async (req, { params }) => {
     { $set: { reversed: true, reversedAt: new Date(), reversedBy: user.id, reverseReason: reason } },
   );
   if (!claimed.modifiedCount) throw new ApiError(400, "This payment is already cancelled.");
+  const party = await Party.findOne({ _id: entry.party, tenant: tid }).select("name").lean();
+  await logActivity(
+    { tid, user, branchId },
+    { action: "payment.cancel", summary: `Cancelled payment ${entry.refNo ?? ""} of Rs ${Math.abs(entry.amount)} (${party?.name ?? ""})${reason ? ` — ${reason}` : ""}`, refType: "ledger", refId: entry._id, refNo: entry.refNo, amount: Math.abs(entry.amount) },
+  );
   return postLedger({
     tid,
     partyId: entry.party,

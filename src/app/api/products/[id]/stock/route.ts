@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { branchStock, requireBranch } from "@/lib/branches";
 import { batchExpiry } from "@/lib/batches";
 import { moveStock } from "@/lib/services";
@@ -43,5 +44,15 @@ export const POST = handle<Ctx>(async (req, { params }) => {
         ? { incoming: [{ expiryDate: batchExpiry(expiryDate ? new Date(`${expiryDate}T23:59:59`) : null, product.shelfLifeDays), batchNo }], source: { type: mode === "set" ? "count" : "adjustment" } }
         : undefined,
   });
+  await logActivity(
+    { tid, user, branchId },
+    {
+      action: mode === "wastage" ? "stock.wastage" : "stock.adjust",
+      summary: `${product.name}: ${mode === "set" ? `count set to ${qty} (was ${current})` : `${delta > 0 ? "+" : ""}${Math.round(delta * 1000) / 1000} ${product.unit}`}${mode === "wastage" ? " wastage" : ""}${note ? ` — ${note}` : ""}`,
+      refType: "product",
+      refId: product._id,
+      amount: Math.round(Math.abs(delta) * (product.costPrice ?? 0) * 100) / 100,
+    },
+  );
   return { ...moved!.product.toObject(), totalStock: moved!.product.stock, stock: moved!.branchQty };
 });

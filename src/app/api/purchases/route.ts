@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ApiError, dateRange, handle } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { reportBranchFilter, requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
 import { optionalId } from "@/lib/schemas";
@@ -129,5 +130,9 @@ export const POST = handle(async (req) => {
       await postLedger({ tid, partyId: supplier._id, kind: "payment", amount: -amountPaid, method: "cash", refType: "purchase", refId: purchase._id, refNo: purchaseNo, note: `Paid for ${purchaseNo}`, userId: user.id, branch: branchId });
     }
   }
+  await logActivity(
+    { tid, user, branchId },
+    { action: "purchase.create", summary: `${purchaseNo}: Rs ${total} from ${supplier?.name ?? "no supplier"}, paid Rs ${amountPaid}`, refType: "purchase", refId: purchase._id, refNo: purchaseNo, amount: total },
+  );
   return purchase.toObject();
 });

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { requireBranch } from "@/lib/branches";
 import { Branch, StockLevel, Tenant, User } from "@/models";
 
@@ -13,7 +14,7 @@ const Body = z.object({
 });
 
 export const PUT = handle<Ctx>(async (req, { params }) => {
-  const { tid } = await requireBranch(["owner"]);
+  const { tid, user } = await requireBranch(["owner"]);
   const { id } = await params;
   const body = Body.parse(await req.json());
   const branch = await Branch.findOne({ _id: id, tenant: tid }).lean();
@@ -32,5 +33,9 @@ export const PUT = handle<Ctx>(async (req, { params }) => {
     const [tenant, active] = await Promise.all([Tenant.findById(tid).select("maxBranches").lean(), Branch.countDocuments({ tenant: tid, active: true })]);
     if (active >= (tenant?.maxBranches ?? 1)) throw new ApiError(400, "Branch limit reached. Ask the administrator to increase it.");
   }
-  return Branch.findOneAndUpdate({ _id: id, tenant: tid }, body, { new: true }).lean();
+  const saved = await Branch.findOneAndUpdate({ _id: id, tenant: tid }, body, { new: true }).lean();
+  if (body.active !== undefined && body.active !== branch.active) {
+    await logActivity({ tid, user }, { action: "branch.update", summary: `${body.active ? "Re-opened" : "Closed"} branch ${branch.name}`, refType: "branch", refId: branch._id });
+  }
+  return saved;
 });

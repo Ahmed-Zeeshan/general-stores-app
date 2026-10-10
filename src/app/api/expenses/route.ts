@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { dateRange, handle } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { reportBranchFilter, requireBranch } from "@/lib/branches";
 import { Expense, User } from "@/models";
 
@@ -32,5 +33,7 @@ export const POST = handle(async (req) => {
   const { user, tid, branchId } = await requireBranch(["owner", "manager"]);
   const body = Body.parse(await req.json());
   const date = body.date ? new Date(`${body.date}T12:00:00`) : new Date();
-  return Expense.create({ ...body, tenant: tid, branch: branchId, date, user: user.id });
+  const expense = await Expense.create({ ...body, tenant: tid, branch: branchId, date, user: user.id });
+  await logActivity({ tid, user, branchId }, { action: "expense.add", summary: `Expense ${body.category} Rs ${body.amount}${body.note ? ` — ${body.note}` : ""}`, refType: "expense", refId: expense._id, amount: body.amount });
+  return expense;
 });

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { requireBranch } from "@/lib/branches";
 import { Branch, Tenant, User } from "@/models";
 
@@ -30,12 +31,14 @@ const Body = z.object({
 });
 
 export const POST = handle(async (req) => {
-  const { tid } = await requireBranch(["owner"]);
+  const { tid, user } = await requireBranch(["owner"]);
   const body = Body.parse(await req.json());
   const [tenant, active] = await Promise.all([Tenant.findById(tid).select("maxBranches").lean(), Branch.countDocuments({ tenant: tid, active: true })]);
   const max = tenant?.maxBranches ?? 1;
   if (active >= max) {
     throw new ApiError(400, `Your plan allows ${max} branch${max === 1 ? "" : "es"}. Ask the administrator to increase the limit.`);
   }
-  return Branch.create({ ...body, tenant: tid });
+  const created = await Branch.create({ ...body, tenant: tid });
+  await logActivity({ tid, user }, { action: "branch.create", summary: `Opened branch ${created.name}`, refType: "branch", refId: created._id });
+  return created;
 });

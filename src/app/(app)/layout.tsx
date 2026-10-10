@@ -14,6 +14,7 @@ import {
   BookOpen,
   Building2,
   ChefHat,
+  History,
   KeyRound,
   LayoutDashboard,
   LogOut,
@@ -54,6 +55,7 @@ const NAV: { href: string; label: string; urdu: string; icon: typeof Package; ro
   { href: "/suppliers", label: "Suppliers", urdu: "سپلائرز", icon: Truck, roles: ["owner", "manager"] },
   { href: "/expenses", label: "Expenses", urdu: "اخراجات", icon: Wallet, roles: ["owner", "manager"] },
   { href: "/reports", label: "Reports", urdu: "رپورٹس", icon: BarChart3, roles: ["owner", "manager"] },
+  { href: "/activity", label: "Activity Log", urdu: "سرگرمی", icon: History, roles: ["owner"] },
   { href: "/settings", label: "Settings", urdu: "ترتیبات", icon: SettingsIcon, roles: ["owner"] },
 ];
 

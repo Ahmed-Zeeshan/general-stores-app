@@ -19,3 +19,4 @@ export * from "./SaleReturn";
 export * from "./Shift";
 export * from "./PurchaseReturn";
 export * from "./StockBatch";
+export * from "./ActivityLog";

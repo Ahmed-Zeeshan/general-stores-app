@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ApiError, escapeRegex, handle, requireTenant } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { postLedger } from "@/lib/services";
 import { Party } from "@/models";
 
@@ -37,6 +38,7 @@ export const POST = handle(async (req) => {
   const party = await Party.create({ ...body, tenant: tid, balance: 0 });
   if (openingBalance) {
     await postLedger({ tid, partyId: party._id, kind: "opening", amount: openingBalance, note: "Opening balance", userId: user.id });
+    await logActivity({ tid, user }, { action: "khata.opening", summary: `New ${body.type} ${body.name} with old balance Rs ${openingBalance}`, refType: "party", refId: party._id, amount: openingBalance });
   }
   return Party.findOne({ _id: party._id, tenant: tid }).lean();
 });

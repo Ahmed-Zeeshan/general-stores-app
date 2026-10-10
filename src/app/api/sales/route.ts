@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ApiError, dateRange, escapeRegex, handle } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { reportBranchFilter, requireBranch } from "@/lib/branches";
 import { syncSaleToFbr } from "@/lib/fbr";
 import { round2 } from "@/lib/money";
@@ -98,6 +99,7 @@ export const POST = handle(async (req) => {
     if (!customer) throw new ApiError(400, "Customer not found.");
   }
   const wholesale = customer?.priceLevel === "wholesale";
+  const priceChanges: string[] = [];
 
   const items = body.items.map((i) => {
     const p = byId.get(i.productId);
@@ -105,7 +107,9 @@ export const POST = handle(async (req) => {
     const pack = findPack(p, i.pack);
     if (i.pack && !pack) throw new ApiError(400, `${p.name} is not sold in "${i.pack}" any more. Please refresh.`);
     // Cashiers always sell at the saved price; owner/manager may change the price at the counter.
-    const price = user.role === "cashier" || i.price === undefined ? sellPrice(p, pack, wholesale) : i.price;
+    const listPrice = sellPrice(p, pack, wholesale);
+    const price = user.role === "cashier" || i.price === undefined ? listPrice : i.price;
+    if (Math.abs(price - listPrice) > 0.004) priceChanges.push(`${p.name}${pack ? ` (${pack.name})` : ""} ${listPrice} → ${price}`);
     const gross = round2(i.qty * price);
     const discount = Math.min(round2(i.discount), gross);
     const qty = pack ? Math.round(i.qty * pack.size * 1000) / 1000 : i.qty;
@@ -198,6 +202,26 @@ export const POST = handle(async (req) => {
       note: `Bill ${invoiceNo}`,
       userId: user.id,
     });
+  }
+  const lineDiscounts = round2(items.reduce((a, i) => a + i.discount, 0));
+  if (priceChanges.length || discount > 0 || lineDiscounts > 0) {
+    await logActivity(
+      { tid, user, branchId: branch._id },
+      {
+        action: priceChanges.length ? "sale.price" : "sale.discount",
+        summary: `${invoiceNo} (${total}): ${[
+          priceChanges.length && `price changed — ${priceChanges.join(", ")}`,
+          discount > 0 && `bill discount Rs ${discount}`,
+          lineDiscounts > 0 && `item discounts Rs ${lineDiscounts}`,
+        ]
+          .filter(Boolean)
+          .join("; ")}`,
+        refType: "sale",
+        refId: sale._id,
+        refNo: invoiceNo,
+        amount: round2(discount + lineDiscounts),
+      },
+    );
   }
   if (settings?.fbrEnabled) await syncSaleToFbr(tid, sale._id);
   return Sale.findOne({ _id: sale._id, tenant: tid }).lean();

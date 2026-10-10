@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { requireBranch } from "@/lib/branches";
 import { postLedger } from "@/lib/services";
 import { nextNumber, Party } from "@/models";
@@ -24,11 +25,16 @@ export const POST = handle<Ctx>(async (req, { params }) => {
   if (body.type === "charge" && user.role === "cashier") throw new ApiError(403, "Only owner or manager can add manual udhaar.");
 
   if (body.type === "charge") {
-    return postLedger({ tid, partyId: id, kind: "adjustment", amount: body.amount, note: body.note, userId: user.id, branch: branchId });
+    const entry = await postLedger({ tid, partyId: id, kind: "adjustment", amount: body.amount, note: body.note, userId: user.id, branch: branchId });
+    await logActivity(
+      { tid, user, branchId },
+      { action: "khata.charge", summary: `Added Rs ${body.amount} to ${party.name}'s khata by hand${body.note ? ` — ${body.note}` : ""}`, refType: "party", refId: party._id, amount: body.amount },
+    );
+    return entry;
   }
   // Every payment gets its own receipt / voucher number.
   const refNo = party.type === "customer" ? await nextNumber(tid, "receipt", "RCP") : await nextNumber(tid, "payout", "PAY");
-  return postLedger({
+  const entry = await postLedger({
     tid,
     partyId: id,
     kind: "payment",
@@ -40,4 +46,16 @@ export const POST = handle<Ctx>(async (req, { params }) => {
     userId: user.id,
     branch: branchId,
   });
+  await logActivity(
+    { tid, user, branchId },
+    {
+      action: party.type === "customer" ? "payment.receive" : "payment.supplier",
+      summary: `${party.type === "customer" ? "Received" : "Paid"} Rs ${body.amount} (${body.method}) ${party.type === "customer" ? "from" : "to"} ${party.name} — ${refNo}`,
+      refType: "ledger",
+      refId: entry._id,
+      refNo,
+      amount: body.amount,
+    },
+  );
+  return entry;
 });

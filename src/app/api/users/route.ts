@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { handle, requireTenant } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { assertSeatAvailable, hashPassword, USERNAME_RE } from "@/lib/tenants";
 import { Branch, Tenant, User } from "@/models";
 import { ApiError } from "@/lib/api";
@@ -23,7 +24,7 @@ const Body = z.object({
 });
 
 export const POST = handle(async (req) => {
-  const { tid } = await requireTenant(["owner"]);
+  const { tid, user: me } = await requireTenant(["owner"]);
   const body = Body.parse(await req.json());
   await assertSeatAvailable(tid);
   if (body.branch && !(await Branch.exists({ _id: body.branch, tenant: tid, active: true }))) throw new ApiError(400, "Branch not found.");
@@ -35,6 +36,7 @@ export const POST = handle(async (req) => {
     branch: body.branch || undefined,
     passwordHash: await hashPassword(body.password),
   });
+  await logActivity({ tid, user: me }, { action: "user.create", summary: `Added staff ${body.name} (${body.username}) as ${body.role}`, refType: "user", refId: user._id });
   const { passwordHash: _omit, ...safe } = user.toObject();
   void _omit;
   return safe;

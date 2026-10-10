@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ApiError, dateRange, handle } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { branchStock, requireBranch } from "@/lib/branches";
 import { moveStock } from "@/lib/services";
 import { nextNumber, Product, Transfer } from "@/models";
@@ -69,5 +70,9 @@ export const POST = handle(async (req) => {
       batch: { incoming: out?.allocations.map((a) => ({ qty: a.qty, expiryDate: a.expiryDate, batchNo: a.batchNo })), source: { type: "transfer", refNo: transferNo } },
     });
   }
+  await logActivity(
+    { tid, user, branchId },
+    { action: "stock.transfer", summary: `${transferNo}: ${items.map((i) => `${i.name} ×${i.qty}`).join(", ")} → ${target.name}`, refType: "transfer", refId: transfer._id, refNo: transferNo },
+  );
   return transfer.toObject();
 });

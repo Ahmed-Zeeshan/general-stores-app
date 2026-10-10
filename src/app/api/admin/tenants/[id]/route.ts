@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ApiError, forgetTenant, handle, requireSuperAdmin } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { Branch, Tenant, User } from "@/models";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -31,14 +32,22 @@ const Body = z.object({
 });
 
 export const PUT = handle<Ctx>(async (req, { params }) => {
-  await requireSuperAdmin();
+  const admin = await requireSuperAdmin();
   const { id } = await params;
   const { expiresAt, ...body } = Body.parse(await req.json());
+  const before = (await Tenant.findById(id).select("status maxUsers maxBranches expiresAt").lean()) as Record<string, unknown> | null;
   const update: Record<string, unknown> = { $set: body };
   if (expiresAt) (update.$set as Record<string, unknown>).expiresAt = expiresAt;
   else update.$unset = { expiresAt: 1 };
   const tenant = await Tenant.findByIdAndUpdate(id, update, { new: true }).lean();
   if (!tenant) throw new ApiError(404, "Shop not found.");
   forgetTenant(id);
+  // The shop owner can see what the administrator changed (notes stay private).
+  const watched = ["status", "maxUsers", "maxBranches"] as const;
+  const changes = watched.filter((k) => body[k] !== undefined && String(before?.[k]) !== String(body[k])).map((k) => `${k} ${before?.[k] ?? "—"} → ${body[k]}`);
+  if (String(before?.expiresAt ?? "") !== String(tenant.expiresAt ?? "")) changes.push(`plan end ${tenant.expiresAt ? new Date(tenant.expiresAt).toLocaleDateString("en-PK") : "removed"}`);
+  if (changes.length) {
+    await logActivity({ tid: tenant._id, user: { id: admin.id, name: `${admin.name} (administrator)`, role: "superadmin" } }, { action: "admin.update", summary: `Administrator changed: ${changes.join(", ")}` });
+  }
   return tenant;
 });

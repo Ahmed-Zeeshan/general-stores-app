@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
 import { shiftSummary } from "@/lib/shifts";
@@ -53,5 +54,17 @@ export const POST = handle<Ctx>(async (req, { params }) => {
     { new: true },
   ).lean();
   if (!closed) throw new ApiError(400, "This day is already closed.");
+  const diff = closed.difference ?? 0;
+  await logActivity(
+    { tid, user, branchId },
+    {
+      action: "drawer.close",
+      summary: `Closed ${closed.shiftNo}: counted Rs ${countedCash}, expected Rs ${summary.expectedCash} — ${Math.abs(diff) < 0.5 ? "exact" : diff < 0 ? `SHORT Rs ${-diff}` : `over Rs ${diff}`}`,
+      refType: "shift",
+      refId: closed._id,
+      refNo: closed.shiftNo,
+      amount: Math.abs(diff),
+    },
+  );
   return closed;
 });

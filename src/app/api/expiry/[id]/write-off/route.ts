@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { requireBranch } from "@/lib/branches";
 import { moveStock } from "@/lib/services";
-import { StockBatch } from "@/models";
+import { Product, StockBatch } from "@/models";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -35,5 +36,10 @@ export const POST = handle<Ctx>(async (req, { params }) => {
     userId: ctx.user.id,
     batch: { batchId: batch._id },
   });
+  const product = await Product.findOne({ _id: batch.product, tenant: ctx.tid }).select("name unit").lean();
+  await logActivity(
+    { tid: ctx.tid, user: ctx.user, branchId: batch.branch },
+    { action: "stock.writeoff", summary: `Wrote off ${qty} ${product?.unit ?? ""} of ${product?.name ?? "item"}${expired ? " (expired)" : ""}${body.reason ? ` — ${body.reason}` : ""}`, refType: "product", refId: batch.product, amount: Math.round(qty * (batch.cost ?? 0) * 100) / 100 },
+  );
   return StockBatch.findOne({ _id: id, tenant: ctx.tid }).lean();
 });

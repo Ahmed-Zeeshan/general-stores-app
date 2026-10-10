@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ApiError, handle, requireTenant } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { LedgerEntry, Party, User } from "@/models";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -27,9 +28,16 @@ const Body = z.object({
 });
 
 export const PUT = handle<Ctx>(async (req, { params }) => {
-  const { tid } = await requireTenant(["owner", "manager"]);
+  const { tid, user } = await requireTenant(["owner", "manager"]);
   const { id } = await params;
-  const party = await Party.findOneAndUpdate({ _id: id, tenant: tid }, Body.parse(await req.json()), { new: true }).lean();
+  const body = Body.parse(await req.json());
+  const before = await Party.findOne({ _id: id, tenant: tid }).select("creditLimit priceLevel").lean();
+  const party = await Party.findOneAndUpdate({ _id: id, tenant: tid }, body, { new: true }).lean();
   if (!party) throw new ApiError(404, "Not found.");
+  const changes = [
+    body.creditLimit !== undefined && body.creditLimit !== (before?.creditLimit ?? 0) && `udhaar limit ${before?.creditLimit ?? 0} → ${body.creditLimit}`,
+    body.priceLevel && body.priceLevel !== (before?.priceLevel ?? "retail") && `prices ${before?.priceLevel ?? "retail"} → ${body.priceLevel}`,
+  ].filter(Boolean);
+  if (changes.length) await logActivity({ tid, user }, { action: "party.update", summary: `${party.name}: ${changes.join(", ")}`, refType: "party", refId: party._id });
   return party;
 });

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
 import { Shift } from "@/models";
@@ -23,5 +24,9 @@ export const POST = handle<Ctx>(async (req, { params }) => {
     { new: true },
   ).lean();
   if (!updated) throw new ApiError(400, "This cash drawer is not open at your branch.");
+  await logActivity(
+    { tid, user, branchId },
+    { action: body.kind === "in" ? "drawer.in" : "drawer.out", summary: `Cash ${body.kind === "in" ? "put in" : "taken out"}: Rs ${round2(body.amount)} — ${body.reason}`, refType: "shift", refId: updated._id, refNo: updated.shiftNo, amount: round2(body.amount) },
+  );
   return updated;
 });

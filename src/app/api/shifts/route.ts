@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ApiError, dateRange, handle } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { reportBranchFilter, requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
 import { nextNumber, Shift } from "@/models";
@@ -43,6 +44,7 @@ export const POST = handle(async (req) => {
       openedBy: user.id,
       openedByName: user.name,
     });
+    await logActivity({ tid, user, branchId: branch._id }, { action: "drawer.open", summary: `Opened cash drawer ${shiftNo} with Rs ${round2(body.openingCash)}`, refType: "shift", refId: shift._id, refNo: shiftNo, amount: round2(body.openingCash) });
     return shift.toObject();
   } catch (err) {
     if ((err as { code?: number }).code === 11000) throw new ApiError(409, `The cash drawer of ${branch.name} is already open.`);

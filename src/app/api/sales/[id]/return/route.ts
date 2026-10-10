@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { handle } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { requireBranch } from "@/lib/branches";
 import { syncReturnToFbr } from "@/lib/fbr";
 import { createReturn } from "@/lib/returns";
@@ -31,6 +32,17 @@ export const POST = handle<Ctx>(async (req, { params }) => {
     user: { id: user.id, name: user.name },
     fallbackBranch: branchId,
   });
+  await logActivity(
+    { tid, user, branchId },
+    {
+      action: "sale.return",
+      summary: `${ret.returnNo} on bill ${ret.invoiceNo}: Rs ${ret.total} (${ret.items.map((i) => `${i.name} ×${i.qty}`).join(", ")})${ret.refund > 0 ? `, Rs ${ret.refund} ${ret.refundMethod === "khata" ? "to khata" : `refunded (${ret.refundMethod})`}` : ""}${body.reason ? ` — ${body.reason}` : ""}`,
+      refType: "sale",
+      refId: ret.sale,
+      refNo: ret.returnNo,
+      amount: ret.total,
+    },
+  );
   const tenant = await Tenant.findById(tid).select("fbrEnabled").lean();
   if (tenant?.fbrEnabled && ret.fbrStatus === "pending") await syncReturnToFbr(tid, ret._id);
   const [sale, saved] = await Promise.all([Sale.findOne({ _id: id, tenant: tid }).lean(), SaleReturn.findOne({ _id: ret._id, tenant: tid }).lean()]);

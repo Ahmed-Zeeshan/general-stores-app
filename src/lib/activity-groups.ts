@@ -1,0 +1,59 @@
+/** Activity log actions grouped for filtering, with plain labels (shared by the API and the page). */
+export const ACTIVITY_GROUPS: Record<string, string[]> = {
+  sales: ["sale.price", "sale.discount", "sale.return"],
+  money: ["payment.receive", "payment.supplier", "payment.cancel", "khata.charge", "khata.opening", "party.update", "expense.add", "expense.delete"],
+  stock: ["stock.adjust", "stock.wastage", "stock.writeoff", "stock.transfer", "product.price", "product.remove", "product.import", "purchase.create", "purchase.return", "purchase.cancel"],
+  drawer: ["drawer.open", "drawer.in", "drawer.out", "drawer.close"],
+  staff: ["login", "login.failed", "user.create", "user.update"],
+  shop: ["settings.update", "branch.create", "branch.update", "backup.download", "backup.restore", "admin.update"],
+};
+
+export const GROUP_LABELS: Record<string, string> = {
+  sales: "Bills & returns",
+  money: "Money & khata",
+  stock: "Stock & prices",
+  drawer: "Cash drawer",
+  staff: "Logins & staff",
+  shop: "Shop settings",
+};
+
+export const ACTION_LABELS: Record<string, string> = {
+  "sale.price": "Price changed on bill",
+  "sale.discount": "Discount on bill",
+  "sale.return": "Bill return",
+  "payment.receive": "Udhaar received",
+  "payment.supplier": "Supplier paid",
+  "payment.cancel": "Payment cancelled",
+  "khata.charge": "Udhaar added by hand",
+  "khata.opening": "Old balance entered",
+  "party.update": "Customer changed",
+  "expense.add": "Expense",
+  "expense.delete": "Expense deleted",
+  "stock.adjust": "Stock adjusted",
+  "stock.wastage": "Wastage",
+  "stock.writeoff": "Lot written off",
+  "stock.transfer": "Stock transfer",
+  "product.price": "Price changed",
+  "product.remove": "Product removed",
+  "product.import": "Products imported",
+  "purchase.create": "Purchase",
+  "purchase.return": "Returned to supplier",
+  "purchase.cancel": "Purchase cancelled",
+  "drawer.open": "Drawer opened",
+  "drawer.in": "Cash in",
+  "drawer.out": "Cash out",
+  "drawer.close": "Day closed",
+  login: "Login",
+  "login.failed": "Wrong password",
+  "user.create": "Staff added",
+  "user.update": "Staff changed",
+  "settings.update": "Settings changed",
+  "branch.create": "Branch opened",
+  "branch.update": "Branch changed",
+  "backup.download": "Backup downloaded",
+  "backup.restore": "Backup restored",
+  "admin.update": "Administrator change",
+};
+
+/** Actions that deserve attention (shown in red). */
+export const WARNING_ACTIONS = new Set(["sale.price", "payment.cancel", "khata.charge", "product.remove", "purchase.cancel", "login.failed", "backup.restore", "expense.delete", "stock.writeoff", "stock.wastage"]);
