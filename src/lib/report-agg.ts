@@ -1,3 +1,5 @@
+import type { PipelineStage } from "mongoose";
+
 /**
  * Aggregation pieces shared by reports, dashboard and shift reports.
  * Sales are counted on the day of the bill; returns are subtracted on the day of the return.
@@ -23,3 +25,17 @@ export const PAYMENTS_EXPR = {
   },
 };
 
+/**
+ * Khata payments by method: money received from customers (partyType "customer") or paid to
+ * suppliers ("supplier"), net of cancelled payments. `match` must start with the tenant filter.
+ */
+export function khataPaymentsPipeline(match: Record<string, unknown>, partyType: "customer" | "supplier"): PipelineStage[] {
+  return [
+    { $match: { ...match, kind: { $in: ["payment", "reversal"] } } },
+    { $lookup: { from: "parties", localField: "party", foreignField: "_id", as: "p", pipeline: [{ $project: { type: 1 } }] } },
+    { $match: { "p.type": partyType } },
+    { $group: { _id: { $ifNull: ["$method", "cash"] }, total: { $sum: { $multiply: ["$amount", -1] } }, count: { $sum: { $cond: [{ $eq: ["$kind", "payment"] }, 1, -1] } } } },
+    { $match: { total: { $ne: 0 } } },
+    { $sort: { total: -1 as const } },
+  ];
+}

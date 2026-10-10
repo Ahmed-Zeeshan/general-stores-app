@@ -63,6 +63,7 @@ const RESTORABLE_SETTINGS = [
   "fbrPosId",
   "fbrDefaultPct",
   "waTemplate",
+  "waPaymentTemplate",
 ] as const;
 
 /** Full JSON export of one shop's data (passwords and secrets excluded). */
@@ -166,6 +167,8 @@ export async function restoreTenant(tid: Types.ObjectId, file: unknown) {
     ["production", maxNo(find(Production as Model<unknown>), "productionNo")],
     ["transfer", maxNo(find(Transfer as Model<unknown>), "transferNo")],
     ["return", maxNo(find(SaleReturn as Model<unknown>), "returnNo")],
+    ["receipt", maxNo(find(LedgerEntry as Model<unknown>).filter((e) => /^RCP-/.test(String(e.refNo ?? ""))), "refNo")],
+    ["payout", maxNo(find(LedgerEntry as Model<unknown>).filter((e) => /^PAY-/.test(String(e.refNo ?? ""))), "refNo")],
   ];
   for (const [name, seq] of counters) {
     await Counter.updateOne({ _id: `${String(tid)}:${name}` }, { $set: { seq } }, { upsert: true });

@@ -9,6 +9,7 @@ import {
   CloudOff,
   RefreshCw,
   CreditCard,
+  HandCoins,
   Landmark,
   Minus,
   Plus,
@@ -27,6 +28,7 @@ import { CameraButton, CameraScanner, beep, useBarcodeScanner } from "@/componen
 import { useCan, useSession } from "@/components/session";
 import { useToast } from "@/components/toast";
 import { useConfirm } from "@/components/confirm";
+import { ReceivePaymentModal } from "@/components/receive-payment";
 import { api, LOOSE_UNITS, NetworkError, UNIT_LABELS } from "@/lib/client";
 import {
   addToOutbox,
@@ -95,6 +97,7 @@ export default function PosPage() {
   const [payOpen, setPayOpen] = useState(false);
   const [done, setDone] = useState<{ _id: string; invoiceNo: string; total: number; change: number } | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [receiveOpen, setReceiveOpen] = useState(false);
 
   const loadProducts = useCallback(() => {
     api<Product[]>("/api/products?limit=5000")
@@ -128,6 +131,10 @@ export default function PosPage() {
       if (e.key === "F2") {
         e.preventDefault();
         searchRef.current?.focus();
+      }
+      if (e.key === "F8") {
+        e.preventDefault();
+        setReceiveOpen(true);
       }
       if (e.key === "F9" && cart.length) {
         e.preventDefault();
@@ -174,7 +181,7 @@ export default function PosPage() {
     }
   }
   // Scanner works anywhere on this screen, except while a pop-up window is open.
-  useBarcodeScanner(addByCode, !payOpen && !looseFor && !pickCustomer && !done && !offlineDone && !cameraOpen);
+  useBarcodeScanner(addByCode, !payOpen && !looseFor && !pickCustomer && !done && !offlineDone && !cameraOpen && !receiveOpen);
 
   function onSearchEnter(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key !== "Enter") return;
@@ -219,7 +226,7 @@ export default function PosPage() {
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">New Bill <span className="urdu ml-2 text-base text-slate-400">نیا بل</span></h1>
-            <p className="hidden text-xs text-slate-500 sm:block">Tip: scan a barcode or type and press Enter · F2 = search · F9 = pay</p>
+            <p className="hidden text-xs text-slate-500 sm:block">Tip: scan a barcode or type and press Enter · F2 = search · F9 = pay · F8 = receive udhaar</p>
           </div>
           <div className="flex items-center gap-2">
             {usingSaved && (
@@ -232,6 +239,10 @@ export default function PosPage() {
                 {outbox.length} waiting
               </Button>
             )}
+            <Button size="sm" variant="outline" icon={<HandCoins className="h-4 w-4 text-brand-600" />} onClick={() => setReceiveOpen(true)} title="Customer pays old udhaar (F8)">
+              <span className="hidden sm:inline">Receive udhaar</span>
+              <span className="sm:hidden">Udhaar</span>
+            </Button>
           </div>
         </div>
         <div className="flex gap-2">
@@ -540,6 +551,8 @@ export default function PosPage() {
           </div>
         )}
       </Modal>
+
+      <ReceivePaymentModal open={receiveOpen} onClose={() => setReceiveOpen(false)} />
 
       <CameraScanner open={cameraOpen} onClose={() => setCameraOpen(false)} onScan={addByCode} continuous title="Scan items" />
 

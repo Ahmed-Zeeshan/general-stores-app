@@ -9,7 +9,7 @@ import { useConfirm } from "@/components/confirm";
 import { api } from "@/lib/client";
 import { RestoreButton } from "@/components/restore";
 import { WaModePicker } from "@/components/wa-mode";
-import { DEFAULT_WA_TEMPLATE, reminderMessage } from "@/lib/whatsapp";
+import { DEFAULT_WA_PAYMENT_TEMPLATE, DEFAULT_WA_TEMPLATE, paymentMessage, reminderMessage } from "@/lib/whatsapp";
 
 type User = { _id: string; name: string; username: string; role: "owner" | "manager" | "cashier"; active: boolean; branch?: string };
 type BranchRow = { _id: string; name: string; address?: string; phone?: string; isMain: boolean; active: boolean; staff: number };
@@ -79,6 +79,7 @@ export default function SettingsPage() {
           fbrDefaultPct: form.fbrDefaultPct,
           fbrToken: form.fbrToken,
           waTemplate: form.waTemplate,
+          waPaymentTemplate: form.waPaymentTemplate,
         },
       });
       toast.success("Settings saved");
@@ -173,7 +174,7 @@ export default function SettingsPage() {
             </div>
           </Card>
           <Card className="p-6">
-            <h2 className="mb-5 flex items-center gap-2 font-bold text-slate-900"><MessageCircle className="h-5 w-5 text-emerald-600" /> WhatsApp reminders</h2>
+            <h2 className="mb-5 flex items-center gap-2 font-bold text-slate-900"><MessageCircle className="h-5 w-5 text-emerald-600" /> WhatsApp messages</h2>
             <div className="space-y-4">
               <div>
                 <div className="mb-1.5 text-sm font-medium text-slate-700">Open messages in (this computer)</div>
@@ -185,6 +186,12 @@ export default function SettingsPage() {
               </Field>
               <pre className="whitespace-pre-wrap rounded-xl border border-emerald-200 bg-emerald-50 p-3 font-sans text-xs text-emerald-950">
                 {reminderMessage(form.waTemplate, { name: "Bilal", amount: 2500, shop: form.shopName, shopPhone: form.phone })}
+              </pre>
+              <Field label="Payment received message" hint="{name} · {amount} paid · {balance} still due · {receiptNo} · {date} · {method} · {shop} · {shopPhone}">
+                <Textarea value={form.waPaymentTemplate || DEFAULT_WA_PAYMENT_TEMPLATE} onChange={set("waPaymentTemplate")} className="min-h-[110px]" />
+              </Field>
+              <pre className="whitespace-pre-wrap rounded-xl border border-emerald-200 bg-emerald-50 p-3 font-sans text-xs text-emerald-950">
+                {paymentMessage(form.waPaymentTemplate, { name: "Bilal", amount: 1500, balance: 1000, receiptNo: "RCP-000012", date: new Date().toISOString(), method: "cash", shop: form.shopName, shopPhone: form.phone })}
               </pre>
             </div>
           </Card>

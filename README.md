@@ -33,17 +33,17 @@ Data isolation is enforced in the database layer: every shop record carries a `t
 
 | Area | What you can do |
 |---|---|
-| **New Bill (POS)** | Barcode scan or search, category tabs, loose items **by kg or by rupees** ("Rs 100 ki cheeni"), discounts, change calculation, Cash / JazzCash / Easypaisa / Card / Bank / Udhaar, 80 mm thermal receipts. `F2` search, `F9` pay. |
+| **New Bill (POS)** | Barcode scan or search, category tabs, loose items **by kg or by rupees** ("Rs 100 ki cheeni"), discounts, change calculation, Cash / JazzCash / Easypaisa / Card / Bank / Udhaar, 80 mm thermal receipts. **Receive udhaar** right from the bill screen. `F2` search, `F9` pay, `F8` receive udhaar. |
 | **Products & Stock** | Units (piece, kg, gram, litre, dozen…), cost & sale price, low-stock and expiry alerts, stock add / remove / wastage / exact count, full stock history. |
 | **Production (bakery)** | Recipes (ingredients per batch → finished items), production runs that deduct ingredients and add finished stock, automatic cost per item, shortage warnings, production history. |
-| **Customers Khata** | Udhaar with running balance, credit limits, partial payments, opening balances, printable **khata statement** (save as PDF). |
+| **Customers Khata** | Udhaar with running balance, credit limits, opening balances, printable **khata statement** (save as PDF). **Full or part payments** with one-tap *Full* / *Half* amounts, any method (cash, JazzCash, Easypaisa, bank, card); extra money is kept as advance. Every payment gets a numbered **payment receipt** (RCP-…, printable 80 mm, Urdu heading) and a **WhatsApp confirmation** with the amount and the balance still due. A payment entered by mistake can be cancelled by the owner/manager (kept in the khata as cancelled, never deleted). Supplier payments get a numbered voucher (PAY-…). |
 | **Udhaar Report & WhatsApp** | Who owes how much and for how long (0–30 / 31–60 / 61–90 / 90+ days, payments clear the oldest udhaar first), last payment, last reminder. One click opens **WhatsApp Desktop or WhatsApp Web** with the reminder already typed; "Remind all" walks through customers one by one. Message template is editable. Print or export to Excel. |
 | **Barcodes** | **USB/Bluetooth scanners** work anywhere on the billing, products, purchase, transfer and label screens. **Camera scanning** on phones/laptops. **Create barcodes** for items without one (GS1 in-store EAN-13 starting with 20, never clashes with company barcodes). **Print labels** on label printers (38×25, 50×30 mm) or A4 sticker sheets (24 or 40 per sheet) with shop name, product, price and barcode. |
 | **Branches** | Each branch has its own stock; bills, purchases, production and expenses belong to a branch; **stock transfers** between branches; reports per branch or all branches; staff can be locked to one branch. |
 | **Offline billing** | If the internet or the shop server goes down, the New Bill screen keeps working from the products saved on the device. Bills are stored on the device and sent automatically when the connection returns (never twice). A provisional receipt can be printed. |
 | **Suppliers & Purchases** | Incoming stock updates stock, cost and sale prices; supplier payable khata. |
-| **Expenses, Sales history, Returns** | Full bill returns put stock back and reverse udhaar. |
-| **Reports & Dashboard** | Sales, profit & loss, best sellers, payment methods, expenses, returns; 7-day chart. |
+| **Expenses, Sales history, Returns** | Return **some or all items** of a bill, as many times as needed (e.g. 2 of 5 soaps today, the rest next week). Each return keeps its fair share of the bill discount and tax, reduces the bill's udhaar first, and gives the rest back in cash / the original method or as credit in the customer's khata. Every return has its own number (RTN-…), receipt and FBR credit note; stock goes back to the branch that sold it. |
+| **Reports & Dashboard** | Sales, profit & loss **net of returns**, best sellers, payment methods, refunds, **udhaar collected**, payments to suppliers, expenses; 7-day chart. |
 | **FBR POS integration** | Bills are sent to FBR; FBR invoice number + QR code printed on the receipt; returns sent as credit notes; if internet/FBR is down bills are saved as *pending* and re-sent with one click. |
 | **Data** | Export products / customers / suppliers / sales / expenses to Excel (CSV), **import products from CSV**, full JSON backup and **restore** (same shop only, validated first, safety copy downloaded before replacing). |
 | **Installable app (PWA)** | "Install" / "Add to Home Screen" on Chrome, Edge and Android. |
@@ -92,7 +92,7 @@ Run it on one shop computer (or a server) and open `http://<that-computer-ip>:30
 
 ### WhatsApp reminders
 
-Install **WhatsApp Desktop** on the shop PC (or keep **web.whatsapp.com** logged in). In the Udhaar Report choose *WhatsApp Desktop* or *WhatsApp Web* (remembered per computer). Clicking *WhatsApp* opens the chat with the message typed; you only press Send. Edit the message in **Settings → WhatsApp reminders**. To send a full statement, open *Statement*, choose *Print → Save as PDF* and attach the PDF in WhatsApp.
+Install **WhatsApp Desktop** on the shop PC (or keep **web.whatsapp.com** logged in). In the Udhaar Report choose *WhatsApp Desktop* or *WhatsApp Web* (remembered per computer). Clicking *WhatsApp* opens the chat with the message typed; you only press Send. After a customer pays, the *WhatsApp* button on the payment screen (or the payment receipt) sends a thank-you with the receipt number and remaining balance. Edit both messages in **Settings → WhatsApp messages**. To send a full statement, open *Statement*, choose *Print → Save as PDF* and attach the PDF in WhatsApp.
 
 ### Backups & restore
 

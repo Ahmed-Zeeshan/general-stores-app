@@ -33,6 +33,7 @@ const Body = z.object({
   /** Empty = keep the saved token. */
   fbrToken: z.string().trim().optional(),
   waTemplate: z.string().trim().max(1000).optional(),
+  waPaymentTemplate: z.string().trim().max(1000).optional(),
 });
 
 export const PUT = handle(async (req) => {

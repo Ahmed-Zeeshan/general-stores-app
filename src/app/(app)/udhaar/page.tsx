@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, BellRing, Download, FileText, MessageCircle, Printer, Search, SkipForward, Users } from "lucide-react";
+import { AlertTriangle, BellRing, Download, FileText, HandCoins, MessageCircle, Printer, Search, SkipForward, Users } from "lucide-react";
 import { Badge, Button, Card, EmptyState, Input, Modal, PageHeader, Select, Spinner, StatCard, Table, Td, Th } from "@/components/ui";
 import { WaModePicker } from "@/components/wa-mode";
+import { ReceivePaymentModal, type PayParty } from "@/components/receive-payment";
 import { useSession } from "@/components/session";
 import { useToast } from "@/components/toast";
 import { api, formatDate } from "@/lib/client";
@@ -42,6 +43,7 @@ export default function UdhaarReportPage() {
   const [minAmount, setMinAmount] = useState("");
   const [notReminded, setNotReminded] = useState(false);
   const [queue, setQueue] = useState<Row[] | null>(null);
+  const [paying, setPaying] = useState<PayParty | null>(null);
 
   const load = useCallback(() => {
     api<Report>("/api/reminders/report").then(setData).catch((e) => toast.error(e.message));
@@ -181,6 +183,9 @@ export default function UdhaarReportPage() {
                         <Td className="text-slate-500">{r.lastRemindedAt ? `${ago(r.lastRemindedAt)} (${r.reminders})` : "Never"}</Td>
                         <Td className="no-print text-right">
                           <div className="flex justify-end gap-1">
+                            <Button size="sm" variant="ghost" icon={<HandCoins className="h-4 w-4 text-brand-600" />} onClick={() => setPaying({ _id: r._id, type: "customer", name: r.name, phone: r.phone, balance: r.balance })}>
+                              Receive
+                            </Button>
                             <Button size="sm" variant="ghost" disabled={!waNumber(r.phone)} icon={<MessageCircle className="h-4 w-4 text-emerald-600" />} onClick={() => send(r)}>
                               WhatsApp
                             </Button>
@@ -210,6 +215,7 @@ export default function UdhaarReportPage() {
         </>
       )}
 
+      <ReceivePaymentModal open={!!paying} party={paying} onClose={() => setPaying(null)} onSaved={load} />
       <ReminderQueue queue={queue} onClose={() => setQueue(null)} message={message} onSend={send} />
     </div>
   );

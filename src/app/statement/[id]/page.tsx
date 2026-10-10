@@ -27,6 +27,7 @@ const KIND: Record<string, string> = {
   return: "Bill returned",
   opening: "Old balance",
   adjustment: "Udhaar added",
+  reversal: "Payment cancelled",
 };
 
 export default function StatementPage({ params }: { params: Promise<{ id: string }> }) {

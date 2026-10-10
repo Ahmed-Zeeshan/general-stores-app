@@ -9,7 +9,7 @@ type Id = string | Types.ObjectId;
 export async function postLedger(opts: {
   tid: Types.ObjectId;
   partyId: Id;
-  kind: "sale" | "purchase" | "payment" | "return" | "opening" | "adjustment";
+  kind: "sale" | "purchase" | "payment" | "return" | "opening" | "adjustment" | "reversal";
   amount: number;
   method?: string;
   refType?: string;
@@ -17,6 +17,7 @@ export async function postLedger(opts: {
   refNo?: string;
   note?: string;
   userId?: Id;
+  branch?: Id;
 }) {
   const amount = round2(opts.amount);
   const party = await Party.findOneAndUpdate({ _id: opts.partyId, tenant: opts.tid }, { $inc: { balance: amount } }, { new: true });
@@ -37,6 +38,7 @@ export async function postLedger(opts: {
     refNo: opts.refNo,
     note: opts.note,
     user: opts.userId,
+    branch: opts.branch,
   });
 }
 

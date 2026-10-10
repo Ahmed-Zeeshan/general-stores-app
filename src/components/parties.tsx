@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, BookOpen, FileText, HandCoins, MessageCircle, Pencil, Phone, Plus, Search, Truck, UserRound } from "lucide-react";
-import { Button, Card, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Spinner, StatCard, Table, Td, Th, Textarea } from "./ui";
+import { ArrowLeft, Ban, BookOpen, FileText, HandCoins, MessageCircle, Pencil, Phone, Plus, Printer, Search, Truck, UserRound } from "lucide-react";
+import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Spinner, StatCard, Table, Td, Th, Textarea } from "./ui";
 import { useCan, useSession } from "./session";
+import { useConfirm } from "./confirm";
+import { printPaymentReceipt, ReceivePaymentModal, sendPaymentWhatsApp } from "./receive-payment";
 import { useToast } from "./toast";
 import { api, formatDate, PAYMENT_LABELS } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
@@ -13,7 +15,19 @@ import { openWhatsApp, reminderMessage, waNumber } from "@/lib/whatsapp";
 
 type PartyType = "customer" | "supplier";
 type Party = { _id: string; type: PartyType; name: string; phone?: string; address?: string; creditLimit: number; balance: number; notes?: string; updatedAt: string };
-type Entry = { _id: string; kind: string; amount: number; balanceAfter: number; method?: string; refNo?: string; note?: string; createdAt: string; user?: { name: string } };
+type Entry = {
+  _id: string;
+  kind: string;
+  amount: number;
+  balanceAfter: number;
+  method?: string;
+  refType?: string;
+  refNo?: string;
+  note?: string;
+  createdAt: string;
+  user?: { name: string };
+  reversed?: boolean;
+};
 
 const TEXT = {
   customer: {
@@ -210,6 +224,7 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
   const t = TEXT[type];
   const toast = useToast();
   const can = useCan();
+  const confirm = useConfirm();
   const { settings } = useSession();
   const [data, setData] = useState<{ party: Party; ledger: Entry[] } | null>(null);
   const [txn, setTxn] = useState<"payment" | "charge" | null>(null);
@@ -229,6 +244,29 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
     await api("/api/reminders", { body: { partyId: party._id, kind: "reminder" } }).catch(() => {});
     toast.success("WhatsApp opened — press Send there");
   }
+  async function cancelPayment(e: Entry) {
+    const ok = await confirm({
+      title: `Cancel payment ${e.refNo ?? ""}?`,
+      message: "Use this only if the payment was entered by mistake. The entry stays in the khata, marked as cancelled.",
+      details: [
+        { label: type === "customer" ? "Received from" : "Paid to", value: party.name },
+        { label: "Amount", value: formatPKR(-e.amount), strong: true },
+        { label: "Date", value: formatDate(e.createdAt, true) },
+      ],
+      points: [`${formatPKR(-e.amount)} will be added back to the ${type === "customer" ? "customer's udhaar" : "amount you owe"}.`],
+      tone: "danger",
+      confirmLabel: "Cancel payment",
+      cancelLabel: "Keep it",
+    });
+    if (!ok) return;
+    try {
+      await api(`/api/ledger/${e._id}/reverse`, { body: {} });
+      toast.success("Payment cancelled");
+      load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
   const canCharge = can.manage;
   const canPay = type === "customer" || can.manage;
 
@@ -239,6 +277,7 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
     return: "Bill returned",
     opening: "Old balance",
     adjustment: type === "customer" ? "Udhaar added" : "Bill added",
+    reversal: "Payment cancelled",
   };
 
   return (
@@ -315,6 +354,7 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
                 <Th className="text-right">{type === "customer" ? "Udhaar (+)" : "Bill (+)"}</Th>
                 <Th className="text-right">Paid (−)</Th>
                 <Th className="text-right">Balance</Th>
+                <Th />
               </tr>
             </thead>
             <tbody>
@@ -322,14 +362,47 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
                 <tr key={e._id}>
                   <Td className="text-slate-500">{formatDate(e.createdAt, true)}</Td>
                   <Td>
-                    <div className="font-medium text-slate-800">{KIND[e.kind] ?? e.kind}</div>
+                    <div className="flex flex-wrap items-center gap-1.5 font-medium text-slate-800">
+                      <span className={e.reversed ? "line-through decoration-rose-400" : ""}>{KIND[e.kind] ?? e.kind}</span>
+                      {e.reversed && <Badge color="red">Cancelled</Badge>}
+                    </div>
                     <div className="text-xs text-slate-400">
-                      {[e.refNo, e.method && PAYMENT_LABELS[e.method], e.note !== `Bill ${e.refNo}` ? e.note : null, e.user?.name && `by ${e.user.name}`].filter(Boolean).join(" · ")}
+                      {[
+                        e.refNo,
+                        e.method && PAYMENT_LABELS[e.method],
+                        e.note && e.note !== `Bill ${e.refNo}` ? (e.refNo && e.note.startsWith(`${e.refNo} cancelled`) ? e.note.slice(e.refNo.length + 11).replace(/^ — /, "") || null : e.note) : null,
+                        e.user?.name && `by ${e.user.name}`,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </div>
                   </Td>
                   <Td className="text-right font-semibold text-amber-700">{e.amount > 0 ? formatPKR(e.amount) : ""}</Td>
                   <Td className="text-right font-semibold text-emerald-700">{e.amount < 0 ? formatPKR(-e.amount) : ""}</Td>
                   <Td className="text-right font-bold text-slate-900">{formatPKR(e.balanceAfter)}</Td>
+                  <Td className="text-right">
+                    {e.kind === "payment" && e.refType === "payment" && (
+                      <div className="flex justify-end gap-1">
+                        <Button size="sm" variant="ghost" title={type === "customer" ? "Print receipt" : "Print voucher"} aria-label="Print receipt" icon={<Printer className="h-4 w-4" />} onClick={() => printPaymentReceipt(e._id)} />
+                        {type === "customer" && wa && !e.reversed && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title="Send payment confirmation on WhatsApp"
+                            aria-label="WhatsApp receipt"
+                            icon={<MessageCircle className="h-4 w-4 text-emerald-600" />}
+                            onClick={() => {
+                              sendPaymentWhatsApp(settings, party, e);
+                              toast.success("WhatsApp opened — press Send there");
+                            }}
+                          />
+                        )}
+                        {can.manage && !e.reversed && (
+                          <Button size="sm" variant="ghost" className="hover:text-rose-600" title="Cancel this payment" aria-label="Cancel payment" icon={<Ban className="h-4 w-4" />} onClick={() => cancelPayment(e)} />
+                        )}
+                      </div>
+                    )}
+                  </Td>
                 </tr>
               ))}
             </tbody>
@@ -337,21 +410,21 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
         )}
       </Card>
 
-      <TxnModal type={type} mode={txn} party={party} onClose={() => setTxn(null)} onSaved={() => { setTxn(null); load(); }} />
+      <ReceivePaymentModal open={txn === "payment"} party={party} onClose={() => setTxn(null)} onSaved={load} />
+      <TxnModal type={type} mode={txn === "charge" ? "charge" : null} party={party} onClose={() => setTxn(null)} onSaved={() => { setTxn(null); load(); }} />
       <PartyForm type={type} open={editing} party={party} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); load(); }} />
     </div>
   );
 }
 
-function TxnModal({ type, mode, party, onClose, onSaved }: { type: PartyType; mode: "payment" | "charge" | null; party: Party; onClose: () => void; onSaved: () => void }) {
+/** Manual udhaar / supplier bill added to the khata (payments use ReceivePaymentModal). */
+function TxnModal({ type, mode, party, onClose, onSaved }: { type: PartyType; mode: "charge" | null; party: Party; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const [amount, setAmount] = useState("");
-  const [method, setMethod] = useState("cash");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   useEffect(() => {
     setAmount("");
-    setMethod("cash");
     setNote("");
   }, [mode]);
   if (!mode) return null;
@@ -361,7 +434,7 @@ function TxnModal({ type, mode, party, onClose, onSaved }: { type: PartyType; mo
     e.preventDefault();
     setSaving(true);
     try {
-      await api(`/api/parties/${party._id}/payment`, { body: { type: mode, amount: Number(amount), method, note } });
+      await api(`/api/parties/${party._id}/payment`, { body: { type: "charge", amount: Number(amount), note } });
       toast.success("Khata updated");
       onSaved();
     } catch (err) {
@@ -372,26 +445,12 @@ function TxnModal({ type, mode, party, onClose, onSaved }: { type: PartyType; mo
   }
 
   return (
-    <Modal open onClose={onClose} title={mode === "payment" ? t.payLabel : t.chargeLabel} size="sm">
+    <Modal open onClose={onClose} title={t.chargeLabel} size="sm">
       <form onSubmit={save} className="space-y-4">
         <Field label="Amount (Rs)">
           <Input autoFocus required type="number" inputMode="decimal" min="1" step="any" value={amount} onChange={(e) => setAmount(e.target.value)} className="h-14 text-2xl font-bold" />
         </Field>
-        {mode === "payment" && party.balance > 0 && (
-          <button type="button" onClick={() => setAmount(String(party.balance))} className="text-sm font-semibold text-brand-700 hover:underline">
-            Full amount: {formatPKR(party.balance)}
-          </button>
-        )}
-        {mode === "payment" && (
-          <Field label="Paid by">
-            <Select value={method} onChange={(e) => setMethod(e.target.value)}>
-              {["cash", "jazzcash", "easypaisa", "bank", "card"].map((m) => (
-                <option key={m} value={m}>{PAYMENT_LABELS[m]}</option>
-              ))}
-            </Select>
-          </Field>
-        )}
-        <Field label="Note (optional)">
+        <Field label="Note (optional)" hint={type === "customer" ? "e.g. items taken without a bill" : "e.g. supplier bill number"}>
           <Input value={note} onChange={(e) => setNote(e.target.value)} />
         </Field>
         <Button type="submit" size="lg" className="w-full" loading={saving}>

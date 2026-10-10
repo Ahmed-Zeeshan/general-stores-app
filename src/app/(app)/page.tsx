@@ -23,7 +23,7 @@ import { api, formatDate, PAYMENT_LABELS, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty } from "@/lib/money";
 
 type Dashboard = {
-  today: { sales: number; bills: number; profit: number; cash: number; credit: number; expenses: number; returns: number; returnCount: number };
+  today: { sales: number; bills: number; profit: number; cash: number; credit: number; expenses: number; returns: number; returnCount: number; collected: number; collectedCash: number };
   receivable: { total: number; count: number };
   payable: { total: number; count: number };
   lowStock: { _id: string; name: string; stock: number; unit: string; lowStockAlert: number }[];
@@ -102,7 +102,13 @@ export default function DashboardPage() {
                 hint={`${formatPKR(data.today.profit)} profit − ${formatPKR(data.today.expenses)} expenses`}
               />
             ) : (
-              <StatCard label="Cash Received Today" value={formatPKR(data.today.cash)} icon={<Wallet className="h-5 w-5" />} tone="violet" />
+              <StatCard
+                label="Cash Received Today"
+                value={formatPKR(data.today.cash + data.today.collectedCash)}
+                icon={<Wallet className="h-5 w-5" />}
+                tone="violet"
+                hint={data.today.collectedCash ? `incl. ${formatPKR(data.today.collectedCash)} udhaar collected` : "From bills"}
+              />
             )}
             <Link href="/customers?due=1">
               <StatCard
@@ -110,7 +116,7 @@ export default function DashboardPage() {
                 value={formatPKR(data.receivable.total)}
                 icon={<BookOpen className="h-5 w-5" />}
                 tone="amber"
-                hint={`${data.receivable.count} customers owe you`}
+                hint={`${data.receivable.count} customers owe you${data.today.collected ? ` · ${formatPKR(data.today.collected)} collected today` : ""}`}
               />
             </Link>
             {can.manage ? (

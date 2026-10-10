@@ -1,8 +1,8 @@
 import { dateRange, handle, TIMEZONE } from "@/lib/api";
 import { reportBranchFilter, requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
-import { PAYMENTS_EXPR } from "@/lib/report-agg";
-import { Expense, Purchase, Sale, SaleReturn } from "@/models";
+import { khataPaymentsPipeline, PAYMENTS_EXPR } from "@/lib/report-agg";
+import { Expense, LedgerEntry, Purchase, Sale, SaleReturn } from "@/models";
 
 /**
  * Profit & loss for a period. Bills count on their own date; returns are subtracted on the date
@@ -18,7 +18,7 @@ export const GET = handle(async (req) => {
   const match = { tenant: tid, ...b, createdAt: { $gte: from, $lte: to } };
   const day = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: TIMEZONE } };
 
-  const [summary, byMethod, refundsByMethod, byDay, returnsByDay, topItems, expenses, purchases, returns, byBranch, returnsByBranch] = await Promise.all([
+  const [summary, byMethod, refundsByMethod, byDay, returnsByDay, topItems, expenses, purchases, returns, byBranch, returnsByBranch, collected, paidOut] = await Promise.all([
     Sale.aggregate([
       { $match: match },
       {
@@ -120,6 +120,8 @@ export const GET = handle(async (req) => {
       { $match: match },
       { $group: { _id: "$branch", total: { $sum: "$total" }, profit: { $sum: { $subtract: [{ $subtract: ["$total", "$tax"] }, "$costTotal"] } } } },
     ]),
+    LedgerEntry.aggregate(khataPaymentsPipeline(match, "customer")),
+    LedgerEntry.aggregate(khataPaymentsPipeline(match, "supplier")),
   ]);
 
   const s = summary[0] ?? { bills: 0, subtotal: 0, discount: 0, tax: 0, total: 0, cost: 0, credit: 0 };
@@ -167,7 +169,10 @@ export const GET = handle(async (req) => {
       credit: round2(s.credit - r.credit),
       avgBill: s.bills ? round2(s.total / s.bills) : 0,
       purchases: round2(purchases[0]?.total ?? 0),
+      udhaarCollected: round2(collected.reduce((a, x) => a + x.total, 0)),
+      paidToSuppliers: round2(paidOut.reduce((a, x) => a + x.total, 0)),
     },
+    collectedByMethod: collected.map((x) => ({ ...x, total: round2(x.total) })),
     byMethod,
     refundsByMethod,
     byDay: [...days.values()].sort((a, c) => a.date.localeCompare(c.date)).map((d) => ({ ...d, total: round2(d.total), profit: round2(d.profit) })),

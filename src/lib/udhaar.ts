@@ -30,7 +30,7 @@ export async function udhaarReport(tid: Types.ObjectId, now = new Date()): Promi
   if (!customers.length) return [];
   const ids = customers.map((c) => c._id);
   const [entries, reminders] = await Promise.all([
-    LedgerEntry.find({ tenant: tid, party: { $in: ids } }).sort({ createdAt: 1, _id: 1 }).select("party amount kind createdAt").lean(),
+    LedgerEntry.find({ tenant: tid, party: { $in: ids } }).sort({ createdAt: 1, _id: 1 }).select("party amount kind reversed createdAt").lean(),
     Reminder.aggregate([
       { $match: { tenant: tid, party: { $in: ids } } },
       { $group: { _id: "$party", last: { $max: "$createdAt" }, count: { $sum: 1 } } },
@@ -51,6 +51,8 @@ export async function udhaarReport(tid: Types.ObjectId, now = new Date()): Promi
       let lastPaymentAt: Date | null = null;
       let lastPurchaseAt: Date | null = null;
       for (const e of list) {
+        // A cancelled payment and its reversal cancel out: leave both out of the ageing.
+        if (e.kind === "reversal" || e.reversed) continue;
         if (e.kind === "payment") lastPaymentAt = e.createdAt;
         if (e.kind === "sale") lastPurchaseAt = e.createdAt;
         if (e.amount > 0) open.push({ at: e.createdAt, left: e.amount });

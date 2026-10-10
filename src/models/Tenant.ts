@@ -39,6 +39,8 @@ const TenantSchema = new Schema(
       default:
         "Assalam o Alaikum {name},\n{shop} ki taraf se yaad-dehani: aap ke khate mein {amount} baqaya hai.\nMeharbani farma kar jald ada kar dein. Shukriya!\n{shop} {shopPhone}",
     },
+    /** Sent after a customer pays udhaar. Empty = the built-in message. */
+    waPaymentTemplate: { type: String, trim: true },
 
   },
   { timestamps: true },

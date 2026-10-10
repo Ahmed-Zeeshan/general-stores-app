@@ -8,6 +8,9 @@ const MODE_KEY = "dukaan:wa-mode";
 export const DEFAULT_WA_TEMPLATE =
   "Assalam o Alaikum {name},\n{shop} ki taraf se yaad-dehani: aap ke khate mein {amount} baqaya hai.\nMeharbani farma kar jald ada kar dein. Shukriya!\n{shop} {shopPhone}";
 
+export const DEFAULT_WA_PAYMENT_TEMPLATE =
+  "Assalam o Alaikum {name},\nAap ki adaigi {amount} ({method}) wusool ho gayi. Shukriya!\nRaseed: {receiptNo} — {date}\nBaqaya: {balance}\n{shop} {shopPhone}";
+
 /** Which WhatsApp this computer opens: the Desktop app, WhatsApp Web, or let the browser ask. */
 export function getWaMode(): WaMode {
   try {
@@ -65,6 +68,27 @@ export function reminderMessage(template: string | undefined, v: { name: string;
     .trim();
 }
 
+/** Confirmation after a customer pays: amount received, receipt number and what is still due. */
+export function paymentMessage(
+  template: string | undefined,
+  v: { name: string; amount: number; balance: number; receiptNo?: string; date: string; method?: string; shop: string; shopPhone?: string },
+) {
+  const due = v.balance > 0 ? formatPKR(v.balance) : v.balance < 0 ? `${formatPKR(-v.balance)} advance (jama)` : "Rs 0 — khata clear ✓";
+  const date = new Intl.DateTimeFormat("en-PK", { day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(v.date));
+  return (template || DEFAULT_WA_PAYMENT_TEMPLATE)
+    .replace(/\{name\}/g, v.name)
+    .replace(/\{amount\}/g, formatPKR(v.amount))
+    .replace(/\{balance\}/g, due)
+    .replace(/\{receiptNo\}/g, v.receiptNo ?? "")
+    .replace(/\{date\}/g, date)
+    .replace(/\{method\}/g, METHOD[v.method ?? "cash"] ?? v.method ?? "")
+    .replace(/\{shop\}/g, v.shop)
+    .replace(/\{shopPhone\}/g, v.shopPhone ?? "")
+    .trim();
+}
+
+const METHOD: Record<string, string> = { cash: "Cash", card: "Card", jazzcash: "JazzCash", easypaisa: "Easypaisa", bank: "Bank transfer" };
+
 type StatementRow = { date: string; kind: string; refNo?: string; amount: number; balance: number };
 
 const KIND: Record<string, string> = {
@@ -74,6 +98,7 @@ const KIND: Record<string, string> = {
   opening: "Old balance",
   adjustment: "Udhaar added",
   purchase: "Purchase",
+  reversal: "Payment cancelled",
 };
 
 /** Short text version of a khata statement for WhatsApp (latest entries). */

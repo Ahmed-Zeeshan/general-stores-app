@@ -23,6 +23,7 @@ export type ShopSettings = {
   fbrPosId?: string;
   fbrDefaultPct?: string;
   waTemplate?: string;
+  waPaymentTemplate?: string;
 };
 
 export type BranchInfo = { _id: string; name: string; address?: string; phone?: string };

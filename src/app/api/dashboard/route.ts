@@ -1,8 +1,8 @@
 import { addDays, endOfDay, handle, startOfDay, TIMEZONE } from "@/lib/api";
 import { branchStock, requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
-import { PAYMENTS_EXPR } from "@/lib/report-agg";
-import { Expense, Party, Product, Sale, SaleReturn } from "@/models";
+import { khataPaymentsPipeline, PAYMENTS_EXPR } from "@/lib/report-agg";
+import { Expense, LedgerEntry, Party, Product, Sale, SaleReturn } from "@/models";
 
 export const GET = handle(async () => {
   const { tid, branchId } = await requireBranch();
@@ -14,7 +14,7 @@ export const GET = handle(async () => {
 
   const todayMatch = { tenant: tid, branch: branchId, createdAt: { $gte: todayStart, $lte: todayEnd } };
   const day = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: TIMEZONE } };
-  const [today, todayCash, todayReturns, todayExpenses, week, weekReturns, topProducts, receivable, payable, lowStock, expiring, recent] = await Promise.all([
+  const [today, todayCash, todayReturns, todayExpenses, week, weekReturns, topProducts, receivable, payable, lowStock, expiring, recent, collected] = await Promise.all([
     Sale.aggregate([
       { $match: todayMatch },
       {
@@ -88,6 +88,7 @@ export const GET = handle(async () => {
     Product.find({ tenant: tid, active: true }).select("name unit lowStockAlert").lean(),
     Product.countDocuments({ tenant: tid, active: true, expiryDate: { $ne: null, $lte: addDays(now, 7) } }),
     Sale.find({ tenant: tid, branch: branchId }).sort({ createdAt: -1 }).limit(6).select("invoiceNo total paymentMethod customerName createdAt status fbrStatus").lean(),
+    LedgerEntry.aggregate(khataPaymentsPipeline(todayMatch, "customer")),
   ]);
 
   // Fill missing days so the chart always shows 7 bars.
@@ -129,6 +130,8 @@ export const GET = handle(async () => {
       expenses: round2(todayExpenses[0]?.total ?? 0),
       returns: round2(t.returns),
       returnCount: t.returnCount,
+      collected: round2(collected.reduce((a, x) => a + x.total, 0)),
+      collectedCash: round2(collected.find((x) => x._id === "cash")?.total ?? 0),
     },
     receivable: { total: round2(receivable[0]?.total ?? 0), count: receivable[0]?.count ?? 0 },
     payable: { total: round2(payable[0]?.total ?? 0), count: payable[0]?.count ?? 0 },

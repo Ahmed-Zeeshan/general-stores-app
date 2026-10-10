@@ -28,7 +28,10 @@ type Report = {
     purchases: number;
     returns: number;
     returnCount: number;
+    udhaarCollected: number;
+    paidToSuppliers: number;
   };
+  collectedByMethod: { _id: string; total: number; count: number }[];
   byMethod: { _id: string; total: number; count: number }[];
   refundsByMethod: { _id: string; total: number; count: number }[];
   byDay: { date: string; total: number; profit: number; bills: number }[];
@@ -103,6 +106,8 @@ export default function ReportsPage() {
                 <div className="flex justify-between"><span>Stock purchased</span><b>{formatPKR(s.purchases)}</b></div>
                 <div className="flex justify-between"><span>Given on udhaar</span><b>{formatPKR(s.credit)}</b></div>
                 <div className="flex justify-between"><span>Money refunded on returns</span><b>{formatPKR(s.refunds)}</b></div>
+                <div className="flex justify-between"><span>Udhaar collected</span><b className="text-emerald-700">{formatPKR(s.udhaarCollected)}</b></div>
+                <div className="flex justify-between"><span>Paid to suppliers</span><b>{formatPKR(s.paidToSuppliers)}</b></div>
               </div>
             </Card>
           </div>
@@ -181,6 +186,19 @@ export default function ReportsPage() {
                       </li>
                     ))}
                   </ul>
+                )}
+                {data.collectedByMethod.length > 0 && (
+                  <>
+                    <div className="mb-2 mt-4 border-t border-dashed border-slate-200 pt-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Old udhaar collected</div>
+                    <ul className="space-y-2 text-sm">
+                      {data.collectedByMethod.map((m) => (
+                        <li key={m._id} className="flex justify-between">
+                          <span className="text-slate-600">{PAYMENT_LABELS[m._id] ?? m._id} <span className="text-slate-400">({m.count})</span></span>
+                          <b className="text-emerald-700">+{formatPKR(m.total)}</b>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
                 )}
                 {data.refundsByMethod.some((r) => r.total > 0) && (
                   <>
