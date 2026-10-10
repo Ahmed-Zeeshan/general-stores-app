@@ -1,14 +1,17 @@
 import { z } from "zod";
-import { ApiError, dateRange, handle, requireTenant } from "@/lib/api";
+import { ApiError, dateRange, handle } from "@/lib/api";
+import { reportBranchFilter, requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
 import { optionalId } from "@/lib/schemas";
 import { moveStock, postLedger } from "@/lib/services";
 import { nextNumber, Party, Product, Purchase } from "@/models";
 
 export const GET = handle(async (req) => {
-  const { tid } = await requireTenant(["owner", "manager"]);
-  const { from, to } = dateRange(new URL(req.url), 30);
-  return Purchase.find({ tenant: tid, createdAt: { $gte: from, $lte: to } }).sort({ createdAt: -1 }).limit(500).lean();
+  const ctx = await requireBranch(["owner", "manager"]);
+  const url = new URL(req.url);
+  const { from, to } = dateRange(url, 30);
+  const branch = reportBranchFilter(ctx, url.searchParams.get("branch"));
+  return Purchase.find({ tenant: ctx.tid, createdAt: { $gte: from, $lte: to }, ...(branch ? { branch } : {}) }).sort({ createdAt: -1 }).limit(500).lean();
 });
 
 const Body = z.object({
@@ -30,7 +33,7 @@ const Body = z.object({
 });
 
 export const POST = handle(async (req) => {
-  const { user, tid } = await requireTenant(["owner", "manager"]);
+  const { user, tid, branchId, branch } = await requireBranch(["owner", "manager"]);
   const body = Body.parse(await req.json());
   const products = await Product.find({ tenant: tid, _id: { $in: body.items.map((i) => i.productId) } }).lean();
   const byId = new Map(products.map((p) => [String(p._id), p]));
@@ -53,6 +56,8 @@ export const POST = handle(async (req) => {
   const purchase = await Purchase.create({
     tenant: tid,
     purchaseNo,
+    branch: branchId,
+    branchName: branch.name,
     supplier: supplier?._id,
     supplierName: supplier?.name,
     supplierInvoice: body.supplierInvoice,
@@ -64,7 +69,7 @@ export const POST = handle(async (req) => {
   });
 
   for (const item of items) {
-    await moveStock({ tid, productId: item.product, qty: item.qty, type: "purchase", refNo: purchaseNo, userId: user.id });
+    await moveStock({ tid, branch: branchId, productId: item.product, qty: item.qty, type: "purchase", refNo: purchaseNo, userId: user.id });
     if (body.updatePrices) {
       const set: Record<string, number> = { costPrice: item.cost };
       if (item.salePrice !== undefined && item.salePrice > 0) set.salePrice = item.salePrice;

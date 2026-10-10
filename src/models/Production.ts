@@ -5,6 +5,8 @@ import { Schema, model, models, type InferSchemaType, type Model } from "mongoos
 const ProductionSchema = new Schema(
   {
     productionNo: { type: String, required: true },
+    branch: { type: Schema.Types.ObjectId, ref: "Branch" },
+    branchName: { type: String },
     recipe: { type: Schema.Types.ObjectId, ref: "Recipe" },
     recipeName: { type: String, required: true },
     output: { type: Schema.Types.ObjectId, ref: "Product", required: true },

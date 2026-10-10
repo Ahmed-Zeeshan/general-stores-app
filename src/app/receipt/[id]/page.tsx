@@ -26,6 +26,7 @@ type Sale = {
   fbrStatus?: string;
   fbrInvoiceNumber?: string;
   fbrReturnInvoiceNumber?: string;
+  branchName?: string;
 };
 type Settings = { shopName: string; phone?: string; address?: string; ntn?: string; strn?: string; receiptFooter?: string };
 
@@ -42,14 +43,22 @@ function Receipt({ id }: { id: string }) {
   const search = useSearchParams();
   const [sale, setSale] = useState<Sale | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [branchCount, setBranchCount] = useState(1);
+  const [branchInfo, setBranchInfo] = useState<{ name: string; address?: string; phone?: string }[]>([]);
   const [error, setError] = useState("");
   const [qr, setQr] = useState("");
 
   useEffect(() => {
-    Promise.all([api<Sale>(`/api/sales/${id}`), api<{ settings: Settings }>("/api/auth/me")])
-      .then(([s, me]) => {
+    Promise.all([
+      api<Sale>(`/api/sales/${id}`),
+      api<{ settings: Settings; branches?: { name: string }[] }>("/api/auth/me"),
+      api<{ branches: { name: string; address?: string; phone?: string }[] }>("/api/branches").catch(() => ({ branches: [] })),
+    ])
+      .then(([s, me, br]) => {
         setSale(s);
         setSettings(me.settings);
+        setBranchCount(me.branches?.length ?? 1);
+        setBranchInfo(br.branches);
       })
       .catch((e) => setError(e.message));
   }, [id]);
@@ -82,8 +91,19 @@ function Receipt({ id }: { id: string }) {
       <div className="mx-auto w-[300px] bg-white p-4 font-mono text-[12px] leading-snug text-black shadow-lg print:w-full print:p-0 print:shadow-none">
         <div className="text-center">
           <div className="text-base font-bold uppercase">{settings.shopName}</div>
-          {settings.address && <div>{settings.address}</div>}
-          {settings.phone && <div>Ph: {settings.phone}</div>}
+          {branchCount > 1 && sale.branchName && <div className="font-bold">{sale.branchName}</div>}
+          {(() => {
+            // Multi-branch shops print the selling branch's address and phone when it has them.
+            const b = branchCount > 1 ? branchInfo.find((x) => x.name === sale.branchName) : undefined;
+            const address = b?.address || settings.address;
+            const phone = b?.phone || settings.phone;
+            return (
+              <>
+                {address && <div>{address}</div>}
+                {phone && <div>Ph: {phone}</div>}
+              </>
+            );
+          })()}
           {settings.ntn && <div>NTN: {settings.ntn}</div>}
           {settings.strn && <div>STRN: {settings.strn}</div>}
         </div>

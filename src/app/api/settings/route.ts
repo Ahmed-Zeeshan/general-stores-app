@@ -31,12 +31,14 @@ const Body = z.object({
   fbrDefaultPct: z.string().trim().optional(),
   /** Empty = keep the saved token. */
   fbrToken: z.string().trim().optional(),
+  waTemplate: z.string().trim().max(1000).optional(),
 });
 
 export const PUT = handle(async (req) => {
   const { tid } = await requireTenant(["owner"]);
   const { fbrToken, ...body } = Body.parse(await req.json());
   const update: Record<string, unknown> = { ...body };
+  // Secret: an empty field means "keep the saved one".
   if (fbrToken) update.fbrToken = fbrToken;
   return Tenant.findByIdAndUpdate(tid, update, { new: true }).select("-adminNotes").lean();
 });

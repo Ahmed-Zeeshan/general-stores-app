@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Eye, Receipt, RotateCcw, Search } from "lucide-react";
 import { Badge, Button, Card, EmptyState, Input, PageHeader, Spinner, StatCard, Table, Td, Th } from "@/components/ui";
 import { DateRange } from "@/components/date-range";
+import { BranchFilter } from "@/components/branch-filter";
 import { useCan } from "@/components/session";
 import { useToast } from "@/components/toast";
 import { api, formatDate, PAYMENT_LABELS, todayISO } from "@/lib/client";
@@ -24,6 +25,8 @@ type Sale = {
   fbrStatus?: string;
   fbrInvoiceNumber?: string;
   fbrError?: string;
+  branchName?: string;
+  offline?: boolean;
 };
 
 export default function SalesPage() {
@@ -31,11 +34,13 @@ export default function SalesPage() {
   const can = useCan();
   const [range, setRange] = useState({ from: todayISO(), to: todayISO() });
   const [q, setQ] = useState("");
+  const [branch, setBranch] = useState("");
   const [sales, setSales] = useState<Sale[] | null>(null);
+  const showBranch = branch === "all";
 
   const load = useCallback(() => {
-    api<Sale[]>(`/api/sales?from=${range.from}&to=${range.to}&q=${encodeURIComponent(q)}`).then(setSales).catch((e) => toast.error(e.message));
-  }, [range, q, toast]);
+    api<Sale[]>(`/api/sales?from=${range.from}&to=${range.to}&branch=${branch}&q=${encodeURIComponent(q)}`).then(setSales).catch((e) => toast.error(e.message));
+  }, [range, branch, q, toast]);
   useEffect(() => {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
@@ -65,7 +70,10 @@ export default function SalesPage() {
       </div>
       <Card>
         <div className="flex flex-col gap-3 border-b border-slate-100 p-4 xl:flex-row xl:items-center xl:justify-between">
-          <DateRange from={range.from} to={range.to} onChange={setRange} />
+          <div className="flex flex-wrap items-center gap-3">
+            <DateRange from={range.from} to={range.to} onChange={setRange} />
+            <BranchFilter value={branch} onChange={setBranch} />
+          </div>
           <div className="relative xl:w-72">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Bill no. or customer" className="pl-10" />
@@ -92,7 +100,11 @@ export default function SalesPage() {
                 <tr key={s._id} className={s.status === "returned" ? "opacity-60" : "hover:bg-slate-50/60"}>
                   <Td>
                     <div className="font-semibold text-slate-800">{s.invoiceNo}</div>
-                    <div className="text-xs text-slate-400">{s.items.length} items · {s.cashierName}</div>
+                    <div className="text-xs text-slate-400">
+                      {s.items.length} items · {s.cashierName}
+                      {showBranch && s.branchName && ` · ${s.branchName}`}
+                      {s.offline && " · made offline"}
+                    </div>
                   </Td>
                   <Td className="text-slate-500">{formatDate(s.createdAt, true)}</Td>
                   <Td>

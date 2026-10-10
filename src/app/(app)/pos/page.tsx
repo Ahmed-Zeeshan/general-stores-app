@@ -6,6 +6,8 @@ import {
   Banknote,
   BookOpen,
   CheckCircle2,
+  CloudOff,
+  RefreshCw,
   CreditCard,
   Landmark,
   Minus,
@@ -21,9 +23,22 @@ import {
 } from "lucide-react";
 import { Badge, Button, Field, Input, Modal, Segmented, Spinner, cn } from "@/components/ui";
 import { CustomerPicker, type PartyLite } from "@/components/customer-picker";
+import { CameraButton, CameraScanner, beep, useBarcodeScanner } from "@/components/barcode-scanner";
 import { useCan, useSession } from "@/components/session";
 import { useToast } from "@/components/toast";
-import { api, LOOSE_UNITS, UNIT_LABELS } from "@/lib/client";
+import { api, LOOSE_UNITS, NetworkError, UNIT_LABELS } from "@/lib/client";
+import {
+  addToOutbox,
+  cache,
+  getOutbox,
+  newClientId,
+  onOutboxChange,
+  printOfflineReceipt,
+  removeFromOutbox,
+  retryOutbox,
+  syncOutbox,
+  type OutboxBill,
+} from "@/lib/offline";
 import { formatPKR, formatQty, round2 } from "@/lib/money";
 
 type Product = {
@@ -51,9 +66,21 @@ const METHODS = [
 
 export default function PosPage() {
   const toast = useToast();
-  const { settings } = useSession();
+  const { settings, user, branch } = useSession();
   const can = useCan();
   const searchRef = useRef<HTMLInputElement>(null);
+  const tenantId = user.tenantId ?? "";
+  const productsKey = `${tenantId}:${branch?._id ?? ""}:products`;
+  const [usingSaved, setUsingSaved] = useState(false);
+  const [offlineDone, setOfflineDone] = useState<OutboxBill | null>(null);
+  const [outboxOpen, setOutboxOpen] = useState(false);
+  const [outbox, setOutbox] = useState<OutboxBill[]>([]);
+  useEffect(() => {
+    const refresh = () => setOutbox(getOutbox(tenantId));
+    refresh();
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("outbox") === "1") setOutboxOpen(true);
+    return onOutboxChange(refresh);
+  }, [tenantId]);
 
   const [products, setProducts] = useState<Product[] | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -66,15 +93,34 @@ export default function PosPage() {
   const [looseFor, setLooseFor] = useState<Product | null>(null);
   const [payOpen, setPayOpen] = useState(false);
   const [done, setDone] = useState<{ _id: string; invoiceNo: string; total: number; change: number } | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   const loadProducts = useCallback(() => {
-    api<Product[]>("/api/products?limit=2000").then(setProducts).catch((e) => toast.error(e.message));
-  }, [toast]);
+    api<Product[]>("/api/products?limit=5000")
+      .then((list) => {
+        setProducts(list);
+        setUsingSaved(false);
+        cache.set(productsKey, list);
+      })
+      .catch((e) => {
+        // Offline: bill from the product list saved on this device.
+        const saved = cache.get<Product[] | null>(productsKey, null);
+        if (e instanceof NetworkError && saved) {
+          setProducts(saved);
+          setUsingSaved(true);
+        } else toast.error(e.message);
+      });
+  }, [toast, productsKey]);
 
   useEffect(() => {
     loadProducts();
-    api<Category[]>("/api/categories").then(setCategories).catch(() => {});
-  }, [loadProducts]);
+    api<Category[]>("/api/categories")
+      .then((c) => {
+        setCategories(c);
+        cache.set(`${tenantId}:categories`, c);
+      })
+      .catch(() => setCategories(cache.get<Category[]>(`${tenantId}:categories`, [])));
+  }, [loadProducts, tenantId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -114,6 +160,21 @@ export default function PosPage() {
     else addToCart(p);
   }
 
+  /** A barcode from a USB scanner or the camera: add the matching product to the bill. */
+  function addByCode(raw: string) {
+    const code = raw.trim();
+    if (!products || !code) return;
+    const p = products.find((x) => x.barcode === code || (x.sku && x.sku.toLowerCase() === code.toLowerCase()));
+    if (p) {
+      onPick(p);
+      setQ("");
+    } else {
+      toast.error(`No product has barcode ${code}. Add it in Products first.`);
+    }
+  }
+  // Scanner works anywhere on this screen, except while a pop-up window is open.
+  useBarcodeScanner(addByCode, !payOpen && !looseFor && !pickCustomer && !done && !offlineDone && !cameraOpen);
+
   function onSearchEnter(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key !== "Enter") return;
     const term = q.trim();
@@ -121,6 +182,7 @@ export default function PosPage() {
     const exact = products.find((p) => p.barcode === term || p.sku?.toLowerCase() === term.toLowerCase());
     const pick = exact ?? (filtered.length === 1 ? filtered[0] : null);
     if (pick) {
+      if (exact) beep();
       onPick(pick);
       setQ("");
     } else if (filtered.length === 0) {
@@ -150,7 +212,7 @@ export default function PosPage() {
   }
 
   return (
-    <div className="flex flex-col lg:h-screen lg:flex-row">
+    <div className="flex flex-col lg:h-[calc(100vh-var(--banner-h,0px))] lg:flex-row">
       {/* Products */}
       <section className="flex min-w-0 flex-1 flex-col p-4 sm:p-6 lg:overflow-hidden">
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -158,8 +220,21 @@ export default function PosPage() {
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">New Bill <span className="urdu ml-2 text-base text-slate-400">نیا بل</span></h1>
             <p className="hidden text-xs text-slate-500 sm:block">Tip: scan a barcode or type and press Enter · F2 = search · F9 = pay</p>
           </div>
+          <div className="flex items-center gap-2">
+            {usingSaved && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800">
+                <CloudOff className="h-4 w-4" /> Offline mode
+              </span>
+            )}
+            {outbox.length > 0 && (
+              <Button size="sm" variant="outline" icon={<RefreshCw className="h-4 w-4" />} onClick={() => setOutboxOpen(true)}>
+                {outbox.length} waiting
+              </Button>
+            )}
+          </div>
         </div>
-        <div className="relative">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
           <ScanBarcode className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
           <Input
             ref={searchRef}
@@ -175,6 +250,10 @@ export default function PosPage() {
               <X className="h-5 w-5" />
             </button>
           )}
+        </div>
+          <div className="[&>button]:h-14 [&>button]:w-14">
+            <CameraButton onClick={() => setCameraOpen(true)} />
+          </div>
         </div>
 
         <div className="scrollbar-thin -mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
@@ -237,7 +316,7 @@ export default function PosPage() {
       </section>
 
       {/* Cart */}
-      <aside className="flex w-full flex-col border-t border-slate-200 bg-white lg:h-screen lg:w-[420px] lg:border-l lg:border-t-0">
+      <aside className="flex w-full flex-col border-t border-slate-200 bg-white lg:h-full lg:w-[420px] lg:border-l lg:border-t-0">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <h2 className="flex items-center gap-2 font-bold text-slate-900">
             <ShoppingCart className="h-5 w-5 text-brand-600" /> Bill items
@@ -401,6 +480,26 @@ export default function PosPage() {
           resetBill();
           loadProducts();
         }}
+        onOffline={(bill) => {
+          const full: OutboxBill = {
+            ...bill,
+            branchId: branch?._id,
+            branchName: branch?.name,
+            customerName: customer?.name,
+            lines: cart.map((i) => ({ name: i.product.name, qty: i.qty, unit: UNIT_LABELS[i.product.unit], price: i.price, total: round2(i.qty * i.price - i.discount) })),
+          };
+          addToOutbox(tenantId, full);
+          // Show the reduced stock on this device until the bill reaches the server.
+          if (products) {
+            const sold = new Map(cart.map((i) => [i.product._id, i.qty]));
+            const next = products.map((p) => (sold.has(p._id) ? { ...p, stock: round2(p.stock - sold.get(p._id)!) } : p));
+            setProducts(next);
+            cache.set(productsKey, next);
+          }
+          setPayOpen(false);
+          setOfflineDone(full);
+          resetBill();
+        }}
       />
 
       <CustomerPicker
@@ -411,6 +510,39 @@ export default function PosPage() {
           setPickCustomer(false);
         }}
       />
+
+      <Modal open={!!offlineDone} onClose={() => setOfflineDone(null)} title="Bill saved on this device" size="sm">
+        {offlineDone && (
+          <div className="text-center">
+            <CloudOff className="mx-auto h-14 w-14 text-amber-500" />
+            <p className="mt-3 text-sm text-slate-500">No connection right now. The bill is saved on this device and will be sent automatically.</p>
+            <p className="mt-2 text-3xl font-extrabold text-slate-900">{formatPKR(offlineDone.total)}</p>
+            {offlineDone.change > 0 && (
+              <div className="mt-4 rounded-2xl bg-amber-50 p-4">
+                <p className="text-sm font-medium text-amber-800">Give change back</p>
+                <p className="text-3xl font-extrabold text-amber-900">{formatPKR(offlineDone.change)}</p>
+              </div>
+            )}
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <Button
+                variant="outline"
+                size="lg"
+                icon={<Printer className="h-5 w-5" />}
+                onClick={() => printOfflineReceipt({ shopName: settings?.shopName ?? "", branchName: offlineDone.branchName, bill: offlineDone, footer: settings?.receiptFooter })}
+              >
+                Print
+              </Button>
+              <Button size="lg" onClick={() => setOfflineDone(null)}>
+                Next bill
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <CameraScanner open={cameraOpen} onClose={() => setCameraOpen(false)} onScan={addByCode} continuous title="Scan items" />
+
+      <OutboxModal open={outboxOpen} onClose={() => setOutboxOpen(false)} tenantId={tenantId} bills={outbox} onSynced={loadProducts} />
 
       <Modal open={!!done} onClose={() => setDone(null)} title="Bill saved" size="sm">
         {done && (
@@ -528,6 +660,7 @@ function PaymentModal({
   onChooseCustomer,
   payload,
   onDone,
+  onOffline,
 }: {
   open: boolean;
   onClose: () => void;
@@ -536,16 +669,20 @@ function PaymentModal({
   onChooseCustomer: () => void;
   payload: { items: unknown[]; discount: number; customerId?: string };
   onDone: (sale: { _id: string; invoiceNo: string; total: number; change: number }) => void;
+  onOffline: (bill: Omit<OutboxBill, "lines">) => void;
 }) {
   const toast = useToast();
   const [method, setMethod] = useState<string>("cash");
   const [received, setReceived] = useState("");
   const [saving, setSaving] = useState(false);
+  // One id per bill, reused if Confirm is pressed again, so a bill can never be saved twice.
+  const clientId = useRef(newClientId());
 
   useEffect(() => {
     if (open) {
       setMethod("cash");
       setReceived("");
+      clientId.current = newClientId();
     }
   }, [open]);
 
@@ -556,13 +693,14 @@ function PaymentModal({
 
   async function confirm() {
     setSaving(true);
+    const body = { ...payload, paymentMethod: method, amountPaid: receivedNum, clientId: clientId.current };
     try {
-      const sale = await api<{ _id: string; invoiceNo: string; total: number; change: number }>("/api/sales", {
-        body: { ...payload, paymentMethod: method, amountPaid: receivedNum },
-      });
+      const sale = await api<{ _id: string; invoiceNo: string; total: number; change: number }>("/api/sales", { body });
       onDone(sale);
     } catch (err) {
-      toast.error((err as Error).message);
+      if (err instanceof NetworkError) {
+        onOffline({ clientId: clientId.current, soldAt: new Date().toISOString(), payload: body, total, change, status: "pending" });
+      } else toast.error((err as Error).message);
     } finally {
       setSaving(false);
     }
@@ -642,6 +780,67 @@ function PaymentModal({
       <Button size="xl" className="mt-6 w-full" loading={saving} disabled={remaining > 0 && !customer} onClick={confirm} icon={<CheckCircle2 className="h-6 w-6" />}>
         Confirm & Save Bill
       </Button>
+    </Modal>
+  );
+}
+
+function OutboxModal({ open, onClose, tenantId, bills, onSynced }: { open: boolean; onClose: () => void; tenantId: string; bills: OutboxBill[]; onSynced: () => void }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  async function sendNow() {
+    setBusy(true);
+    const r = await syncOutbox(tenantId);
+    setBusy(false);
+    if (r.offline) toast.error("Still no connection. Bills will be sent automatically when it is back.");
+    else if (r.sent) {
+      toast.success(`${r.sent} bill(s) sent`);
+      onSynced();
+    }
+  }
+  return (
+    <Modal open={open} onClose={onClose} title="Bills waiting to be sent" size="md">
+      {bills.length === 0 ? (
+        <p className="py-8 text-center text-sm text-slate-500">All bills have been sent.</p>
+      ) : (
+        <>
+          <ul className="divide-y divide-slate-100">
+            {bills.map((b) => (
+              <li key={b.clientId} className="py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-800">
+                      {formatPKR(b.total)} <span className="text-xs font-normal text-slate-400">· {new Date(b.soldAt).toLocaleString("en-PK")}</span>
+                    </div>
+                    <div className="truncate text-xs text-slate-500">
+                      {b.lines.map((l) => `${l.name} ×${l.qty}`).join(", ")}
+                      {b.customerName && ` · ${b.customerName}`}
+                    </div>
+                    {b.status === "failed" && <div className="mt-1 text-xs font-medium text-rose-600">Not saved: {b.error}</div>}
+                  </div>
+                  {b.status === "failed" ? (
+                    <div className="flex shrink-0 gap-1">
+                      <Button size="sm" variant="outline" onClick={() => retryOutbox(tenantId, b.clientId)}>Retry</Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="hover:text-rose-600"
+                        onClick={() => confirm("Remove this bill from the device? It will not be saved.") && removeFromOutbox(tenantId, b.clientId)}
+                      >
+                        Discard
+                      </Button>
+                    </div>
+                  ) : (
+                    <Badge color="amber">Waiting</Badge>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+          <Button className="mt-4 w-full" loading={busy} icon={<RefreshCw className="h-4 w-4" />} onClick={sendNow}>
+            Send now
+          </Button>
+        </>
+      )}
     </Modal>
   );
 }

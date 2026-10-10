@@ -1,4 +1,5 @@
-import { ApiError, handle, requireTenant } from "@/lib/api";
+import { ApiError, handle } from "@/lib/api";
+import { requireBranch } from "@/lib/branches";
 import { syncSaleToFbr } from "@/lib/fbr";
 import { moveStock, postLedger } from "@/lib/services";
 import { Sale, Tenant } from "@/models";
@@ -7,7 +8,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 /** Full return of a bill: puts stock back, reverses any udhaar and reports a credit note to FBR. */
 export const POST = handle<Ctx>(async (_req, { params }) => {
-  const { user, tid } = await requireTenant(["owner", "manager"]);
+  const { user, tid, branchId } = await requireBranch(["owner", "manager"]);
   const { id } = await params;
   // Atomic status flip prevents returning the same bill twice.
   const sale = await Sale.findOneAndUpdate(
@@ -19,7 +20,8 @@ export const POST = handle<Ctx>(async (_req, { params }) => {
 
   for (const item of sale.items) {
     if (item.product) {
-      await moveStock({ tid, productId: item.product, qty: item.qty, type: "return", refNo: sale.invoiceNo, userId: user.id });
+      // Stock goes back to the branch that sold it.
+      await moveStock({ tid, branch: sale.branch ?? branchId, productId: item.product, qty: item.qty, type: "return", refNo: sale.invoiceNo, userId: user.id });
     }
   }
   if (sale.customer && sale.creditAmount > 0) {

@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Button, Card, Field, Input, PageHeader, Table, Td, Th } from "@/components/ui";
 import { CustomerPicker, type PartyLite } from "@/components/customer-picker";
 import { useToast } from "@/components/toast";
+import { CameraButton, CameraScanner, beep, useBarcodeScanner } from "@/components/barcode-scanner";
 import { api, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, round2 } from "@/lib/money";
 
@@ -41,6 +42,18 @@ export default function NewPurchasePage() {
     }
     setQ("");
   }
+  /** USB scanner or camera: add the product with this barcode. */
+  function addByCode(raw: string) {
+    const code = raw.trim();
+    const p = products.find((x) => x.barcode === code);
+    if (p) {
+      beep();
+      add(p);
+    } else toast.error(`No product has barcode ${code}.`);
+  }
+  const [cameraOpen, setCameraOpen] = useState(false);
+  useBarcodeScanner(addByCode, !cameraOpen);
+
   const update = (id: string, patch: Partial<Line>) => setLines(lines.map((l) => (l.product._id === id ? { ...l, ...patch } : l)));
   const total = round2(lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.cost) || 0), 0));
 
@@ -73,9 +86,18 @@ export default function NewPurchasePage() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="p-5 lg:col-span-2">
-          <div className="relative">
+          <div className="flex gap-2">
+          <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search product or scan barcode to add" className="pl-10" />
+            <Input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search product or scan barcode to add" className="pl-10"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && q.trim()) {
+                  e.preventDefault();
+                  if (products.some((x) => x.barcode === q.trim())) addByCode(q);
+                  else if (matches.length === 1) add(matches[0]);
+                }
+              }}
+            />
             {matches.length > 0 && (
               <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
                 {matches.map((p) => (
@@ -88,6 +110,8 @@ export default function NewPurchasePage() {
                 ))}
               </ul>
             )}
+          </div>
+          <CameraButton onClick={() => setCameraOpen(true)} />
           </div>
 
           {lines.length === 0 ? (
@@ -161,6 +185,7 @@ export default function NewPurchasePage() {
       </div>
 
       <CustomerPicker type="supplier" open={pick} onClose={() => setPick(false)} onPick={(p) => { setSupplier(p); setPick(false); }} />
+      <CameraScanner open={cameraOpen} onClose={() => setCameraOpen(false)} onScan={addByCode} continuous title="Scan items" />
     </div>
   );
 }

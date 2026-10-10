@@ -4,7 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  ArrowLeftRight,
+  Barcode,
   BarChart3,
+  BellRing,
+  MapPin,
   BookOpen,
   Building2,
   ChefHat,
@@ -22,21 +26,25 @@ import {
   X,
 } from "lucide-react";
 import { ToastProvider, useToast } from "@/components/toast";
-import { SessionContext, type ShopSettings } from "@/components/session";
+import { SessionContext, type SessionData } from "@/components/session";
 import { Logo } from "@/components/logo";
 import { Button, Field, Input, Modal, Spinner, cn } from "@/components/ui";
-import { api } from "@/lib/client";
-import type { Role, SessionUser } from "@/lib/session";
+import { api, NetworkError } from "@/lib/client";
+import { cache, clearOfflineCache, getOutbox, onOutboxChange, syncOutbox } from "@/lib/offline";
+import type { Role } from "@/lib/session";
 
 const SHOP: Role[] = ["owner", "manager", "cashier"];
-const NAV: { href: string; label: string; urdu: string; icon: typeof Package; roles: Role[] }[] = [
+const NAV: { href: string; label: string; urdu: string; icon: typeof Package; roles: Role[]; multiBranch?: boolean }[] = [
   { href: "/admin", label: "Shops", urdu: "دکانیں", icon: Building2, roles: ["superadmin"] },
   { href: "/", label: "Dashboard", urdu: "ڈیش بورڈ", icon: LayoutDashboard, roles: SHOP },
   { href: "/pos", label: "New Bill", urdu: "نیا بل", icon: ShoppingCart, roles: SHOP },
   { href: "/sales", label: "Sales History", urdu: "فروخت", icon: Receipt, roles: SHOP },
   { href: "/products", label: "Products & Stock", urdu: "اشیاء", icon: Package, roles: SHOP },
   { href: "/customers", label: "Customers Khata", urdu: "کھاتہ", icon: BookOpen, roles: SHOP },
+  { href: "/udhaar", label: "Udhaar Report", urdu: "ادھار رپورٹ", icon: BellRing, roles: ["owner", "manager"] },
+  { href: "/labels", label: "Barcode Labels", urdu: "لیبل", icon: Barcode, roles: ["owner", "manager"] },
   { href: "/production", label: "Production", urdu: "تیاری", icon: ChefHat, roles: ["owner", "manager"] },
+  { href: "/transfers", label: "Stock Transfer", urdu: "منتقلی", icon: ArrowLeftRight, roles: ["owner", "manager"], multiBranch: true },
   { href: "/purchases", label: "Purchases", urdu: "خریداری", icon: PackagePlus, roles: ["owner", "manager"] },
   { href: "/suppliers", label: "Suppliers", urdu: "سپلائرز", icon: Truck, roles: ["owner", "manager"] },
   { href: "/expenses", label: "Expenses", urdu: "اخراجات", icon: Wallet, roles: ["owner", "manager"] },
@@ -49,23 +57,43 @@ const ROLE_LABEL: Record<Role, string> = { superadmin: "Super Admin", owner: "Ow
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [data, setData] = useState<{ user: SessionUser; settings: ShopSettings | null } | null>(null);
+  const [data, setData] = useState<SessionData | null>(null);
   const [open, setOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
 
+  const [offline, setOffline] = useState(false);
   const load = useCallback(() => {
-    api<{ user: SessionUser; settings: ShopSettings | null }>("/api/auth/me").then(setData).catch(() => {});
+    api<SessionData>("/api/auth/me")
+      .then((d) => {
+        setData(d);
+        setOffline(false);
+        cache.set("me", d);
+      })
+      .catch((err) => {
+        // No connection: keep working with the details saved at the last successful login.
+        if (err instanceof NetworkError) {
+          const saved = cache.get<SessionData | null>("me", null);
+          if (saved) {
+            setData(saved);
+            setOffline(true);
+          }
+        }
+      });
   }, []);
   useEffect(load, [load]);
   useEffect(() => setOpen(false), [pathname]);
 
   async function logout() {
+    const waiting = data?.user.tenantId ? getOutbox(data.user.tenantId).length : 0;
+    if (waiting && !confirm(`${waiting} offline bill(s) are not yet sent to the server. They stay on this device and are sent after the next login. Log out?`)) return;
     await api("/api/auth/logout", { method: "POST" }).catch(() => {});
+    clearOfflineCache(data?.user.tenantId);
     router.replace("/login");
   }
 
   if (!data) return <Spinner className="min-h-screen" />;
-  const nav = NAV.filter((n) => n.roles.includes(data.user.role));
+  const multiBranch = (data.branches?.length ?? 0) > 1;
+  const nav = NAV.filter((n) => n.roles.includes(data.user.role) && (!n.multiBranch || multiBranch));
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
   const isAdmin = data.user.role === "superadmin";
 
@@ -79,6 +107,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="text-xs text-brand-700">
           {data.user.name} · {ROLE_LABEL[data.user.role]}
         </div>
+        {multiBranch && data.branch && <BranchSwitcher data={data} />}
       </div>
       <nav className="scrollbar-thin flex-1 space-y-1 overflow-y-auto px-3 py-2">
         {nav.map((item) => (
@@ -145,6 +174,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             )}
           </header>
 
+          {data.user.tenantId && <OfflineSync tenantId={data.user.tenantId} offline={offline} onOnline={load} />}
           <main className={pathname === "/pos" ? "" : "mx-auto max-w-7xl p-4 sm:p-6 lg:p-8"}>{children}</main>
         </div>
         <ChangePasswordModal open={pwOpen} onClose={() => setPwOpen(false)} />
@@ -193,5 +223,107 @@ function ChangePasswordModal({ open, onClose }: { open: boolean; onClose: () => 
         </Button>
       </form>
     </Modal>
+  );
+}
+
+function BranchSwitcher({ data }: { data: SessionData }) {
+  const [busy, setBusy] = useState(false);
+  if (data.branchLocked || !data.branches) {
+    return (
+      <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-brand-800">
+        <MapPin className="h-3.5 w-3.5" /> {data.branch?.name}
+      </div>
+    );
+  }
+  async function change(id: string) {
+    setBusy(true);
+    try {
+      await api("/api/branches/switch", { body: { branchId: id } });
+      // Reload so every screen shows the new branch's stock and sales.
+      window.location.reload();
+    } catch {
+      setBusy(false);
+    }
+  }
+  return (
+    <label className="mt-2 flex items-center gap-1.5 rounded-lg bg-white/70 px-2 py-1 ring-1 ring-brand-200">
+      <MapPin className="h-3.5 w-3.5 shrink-0 text-brand-700" />
+      <span className="sr-only">Branch</span>
+      <select
+        value={data.branch?._id}
+        disabled={busy}
+        onChange={(e) => change(e.target.value)}
+        className="w-full bg-transparent text-xs font-semibold text-brand-900 focus:outline-none"
+      >
+        {data.branches.map((b) => (
+          <option key={b._id} value={b._id}>
+            {b.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/** Sends offline bills in the background and shows a banner while offline or bills are waiting. */
+function OfflineSync({ tenantId, offline, onOnline }: { tenantId: string; offline: boolean; onOnline: () => void }) {
+  const toast = useToast();
+  const [waiting, setWaiting] = useState(0);
+  const [failed, setFailed] = useState(0);
+  const [netDown, setNetDown] = useState(offline);
+
+  useEffect(() => setNetDown(offline), [offline]);
+
+  useEffect(() => {
+    const refresh = () => {
+      const box = getOutbox(tenantId);
+      setWaiting(box.filter((b) => b.status === "pending").length);
+      setFailed(box.filter((b) => b.status === "failed").length);
+    };
+    refresh();
+    return onOutboxChange(refresh);
+  }, [tenantId]);
+
+  useEffect(() => {
+    let stopped = false;
+    const run = async () => {
+      if (stopped || !getOutbox(tenantId).some((b) => b.status === "pending")) return;
+      const r = await syncOutbox(tenantId);
+      setNetDown(r.offline);
+      if (r.sent) toast.success(`${r.sent} offline bill(s) sent to the server`);
+      if (!r.offline && offline) onOnline();
+    };
+    run();
+    const timer = setInterval(run, 20_000);
+    const back = () => {
+      run();
+      onOnline();
+    };
+    window.addEventListener("online", back);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      window.removeEventListener("online", back);
+    };
+  }, [tenantId, toast, offline, onOnline]);
+
+  const visible = netDown || waiting > 0 || failed > 0;
+  // Full-height screens (New Bill) subtract the banner's height so nothing is hidden under it.
+  useEffect(() => {
+    document.documentElement.style.setProperty("--banner-h", visible ? "2.5rem" : "0px");
+    return () => document.documentElement.style.setProperty("--banner-h", "0px");
+  }, [visible]);
+
+  if (!visible) return null;
+  return (
+    <div className={`no-print z-30 flex h-10 items-center justify-center truncate px-4 text-center text-sm font-semibold lg:sticky lg:top-0 ${netDown ? "bg-amber-500 text-white" : failed ? "bg-rose-600 text-white" : "bg-sky-600 text-white"}`}>
+      {netDown ? "Offline — you can still make bills. " : ""}
+      {waiting > 0 && `${waiting} bill(s) waiting to be sent. `}
+      {failed > 0 && (
+        <Link href="/pos?outbox=1" className="underline">
+          {failed} bill(s) could not be saved — tap to review
+        </Link>
+      )}
+    </div>
   );
 }

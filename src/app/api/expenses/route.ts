@@ -1,12 +1,16 @@
 import { z } from "zod";
-import { dateRange, handle, requireTenant } from "@/lib/api";
+import { dateRange, handle } from "@/lib/api";
+import { reportBranchFilter, requireBranch } from "@/lib/branches";
 import { Expense, User } from "@/models";
 
 export const GET = handle(async (req) => {
-  const { tid } = await requireTenant(["owner", "manager"]);
-  const { from, to } = dateRange(new URL(req.url), 30);
+  const ctx = await requireBranch(["owner", "manager"]);
+  const { tid } = ctx;
+  const url = new URL(req.url);
+  const { from, to } = dateRange(url, 30);
+  const branch = reportBranchFilter(ctx, url.searchParams.get("branch"));
   const [list, users] = await Promise.all([
-    Expense.find({ tenant: tid, date: { $gte: from, $lte: to } }).sort({ date: -1 }).lean(),
+    Expense.find({ tenant: tid, date: { $gte: from, $lte: to }, ...(branch ? { branch } : {}) }).sort({ date: -1 }).lean(),
     User.find({ tenant: tid }).select("name").lean(),
   ]);
   const names = new Map(users.map((u) => [String(u._id), u.name]));
@@ -24,8 +28,8 @@ const Body = z.object({
 });
 
 export const POST = handle(async (req) => {
-  const { user, tid } = await requireTenant(["owner", "manager"]);
+  const { user, tid, branchId } = await requireBranch(["owner", "manager"]);
   const body = Body.parse(await req.json());
   const date = body.date ? new Date(`${body.date}T12:00:00`) : new Date();
-  return Expense.create({ ...body, tenant: tid, date, user: user.id });
+  return Expense.create({ ...body, tenant: tid, branch: branchId, date, user: user.id });
 });

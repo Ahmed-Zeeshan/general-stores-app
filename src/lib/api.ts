@@ -20,7 +20,7 @@ export async function currentUser(): Promise<SessionUser | null> {
   if (!session) return null;
   const fresh = await freshUser(session.id);
   if (!fresh.active || fresh.tenant !== session.tenantId) return null;
-  return { ...session, role: fresh.role as SessionUser["role"] };
+  return { ...session, role: fresh.role as SessionUser["role"], branchId: fresh.branch };
 }
 
 /** Reason a shop cannot be used right now, or null if it is fine. */
@@ -37,7 +37,7 @@ export function tenantBlockReason(t: { status?: string | null; expiresAt?: Date 
 // accounts take effect within 15 seconds even though the login cookie is still valid.
 const TTL = 15_000;
 const tenantCache = new Map<string, { at: number; reason: string | null }>();
-const userCache = new Map<string, { at: number; active: boolean; role: string; tenant: string | null }>();
+const userCache = new Map<string, { at: number; active: boolean; role: string; tenant: string | null; branch: string | null }>();
 export function forgetTenant(id: string) {
   tenantCache.delete(id);
 }
@@ -48,8 +48,14 @@ export function forgetUser(id: string) {
 async function freshUser(id: string) {
   const hit = userCache.get(id);
   if (hit && Date.now() - hit.at < TTL) return hit;
-  const u = await User.findById(id).select("active role tenant").lean();
-  const entry = { at: Date.now(), active: !!u?.active, role: u?.role ?? "", tenant: u?.tenant ? String(u.tenant) : null };
+  const u = await User.findById(id).select("active role tenant branch").lean();
+  const entry = {
+    at: Date.now(),
+    active: !!u?.active,
+    role: u?.role ?? "",
+    tenant: u?.tenant ? String(u.tenant) : null,
+    branch: u?.branch ? String(u.branch) : null,
+  };
   userCache.set(id, entry);
   return entry;
 }

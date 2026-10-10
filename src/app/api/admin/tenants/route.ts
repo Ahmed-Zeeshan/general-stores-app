@@ -2,14 +2,14 @@ import { z } from "zod";
 import { addDays, handle, requireSuperAdmin } from "@/lib/api";
 import { round2 } from "@/lib/money";
 import { createTenantWithOwner, USERNAME_RE } from "@/lib/tenants";
-import { Product, Sale, Tenant, User } from "@/models";
+import { Branch, Product, Sale, Tenant, User } from "@/models";
 
 export const GET = handle(async () => {
   await requireSuperAdmin();
   const tenants = await Tenant.find().sort({ createdAt: -1 }).lean();
   const ids = tenants.map((t) => t._id);
   const since = addDays(new Date(), -30);
-  const [users, sales, products] = await Promise.all([
+  const [users, sales, products, branches] = await Promise.all([
     User.aggregate([{ $match: { tenant: { $in: ids } } }, { $group: { _id: "$tenant", total: { $sum: 1 }, active: { $sum: { $cond: ["$active", 1, 0] } } } }]),
     Sale.aggregate([
       { $match: { tenant: { $in: ids }, status: "completed" } },
@@ -23,7 +23,9 @@ export const GET = handle(async () => {
       },
     ]),
     Product.aggregate([{ $match: { tenant: { $in: ids }, active: true } }, { $group: { _id: "$tenant", count: { $sum: 1 } } }]),
+    Branch.aggregate([{ $match: { tenant: { $in: ids }, active: true } }, { $group: { _id: "$tenant", count: { $sum: 1 } } }]),
   ]);
+  const br = new Map(branches.map((x) => [String(x._id), x.count]));
   const u = new Map(users.map((x) => [String(x._id), x]));
   const s = new Map(sales.map((x) => [String(x._id), x]));
   const p = new Map(products.map((x) => [String(x._id), x]));
@@ -38,6 +40,8 @@ export const GET = handle(async () => {
       status: t.status,
       plan: t.plan,
       maxUsers: t.maxUsers,
+      maxBranches: t.maxBranches ?? 1,
+      branches: br.get(id) ?? 1,
       expiresAt: t.expiresAt,
       createdAt: t.createdAt,
       users: u.get(id)?.total ?? 0,
@@ -56,6 +60,7 @@ const Body = z.object({
   phone: z.string().trim().optional(),
   address: z.string().trim().optional(),
   maxUsers: z.coerce.number().int().min(1, "At least 1 user").max(1000),
+  maxBranches: z.coerce.number().int().min(1, "At least 1 branch").max(200).default(1),
   plan: z.string().trim().optional(),
   expiresAt: z
     .string()

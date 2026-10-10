@@ -22,6 +22,11 @@ const SaleItemSchema = new Schema(
 const SaleSchema = new Schema(
   {
     invoiceNo: { type: String, required: true },
+    branch: { type: Schema.Types.ObjectId, ref: "Branch" },
+    branchName: { type: String },
+    /** Set by the POS for bills made offline, so re-sending never creates duplicates. */
+    clientId: { type: String },
+    offline: { type: Boolean, default: false },
     items: { type: [SaleItemSchema], required: true },
     subtotal: { type: Number, required: true },
     discount: { type: Number, default: 0 },
@@ -56,6 +61,8 @@ SaleSchema.index({ tenant: 1, invoiceNo: 1 }, { unique: true });
 SaleSchema.index({ tenant: 1, createdAt: -1 });
 SaleSchema.index({ tenant: 1, status: 1, createdAt: -1 });
 SaleSchema.index({ tenant: 1, fbrStatus: 1 });
+SaleSchema.index({ tenant: 1, branch: 1, createdAt: -1 });
+SaleSchema.index({ tenant: 1, clientId: 1 }, { unique: true, partialFilterExpression: { clientId: { $type: "string" } } });
 
 export type SaleDoc = InferSchemaType<typeof SaleSchema>;
 export const Sale: Model<SaleDoc> = models.Sale || model<SaleDoc>("Sale", SaleSchema);

@@ -15,15 +15,25 @@ export type ShopSettings = {
   pricesIncludeTax: boolean;
   receiptFooter?: string;
   maxUsers?: number;
+  maxBranches?: number;
   plan?: string;
   expiresAt?: string;
   fbrEnabled?: boolean;
   fbrMode?: "sandbox" | "live";
   fbrPosId?: string;
   fbrDefaultPct?: string;
+  waTemplate?: string;
 };
 
-type Ctx = { user: SessionUser; settings: ShopSettings | null; reload: () => void };
+export type BranchInfo = { _id: string; name: string; address?: string; phone?: string };
+export type SessionData = {
+  user: SessionUser;
+  settings: ShopSettings | null;
+  branch?: BranchInfo;
+  branches?: { _id: string; name: string }[];
+  branchLocked?: boolean;
+};
+type Ctx = SessionData & { reload: () => void };
 export const SessionContext = createContext<Ctx | null>(null);
 
 export function useSession() {

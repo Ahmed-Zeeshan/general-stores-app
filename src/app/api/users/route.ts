@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { handle, requireTenant } from "@/lib/api";
 import { assertSeatAvailable, hashPassword, USERNAME_RE } from "@/lib/tenants";
-import { Tenant, User } from "@/models";
+import { Branch, Tenant, User } from "@/models";
+import { ApiError } from "@/lib/api";
 
 export const GET = handle(async () => {
   const { tid } = await requireTenant(["owner"]);
@@ -17,17 +18,21 @@ const Body = z.object({
   username: z.string().trim().toLowerCase().regex(USERNAME_RE, "Use 3-30 letters or numbers, no spaces"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   role: z.enum(["owner", "manager", "cashier"]),
+  /** Empty = can work in (and switch between) all branches. */
+  branch: z.string().regex(/^[a-f0-9]{24}$/i).optional().or(z.literal("")).or(z.null()),
 });
 
 export const POST = handle(async (req) => {
   const { tid } = await requireTenant(["owner"]);
   const body = Body.parse(await req.json());
   await assertSeatAvailable(tid);
+  if (body.branch && !(await Branch.exists({ _id: body.branch, tenant: tid, active: true }))) throw new ApiError(400, "Branch not found.");
   const user = await User.create({
     tenant: tid,
     name: body.name,
     username: body.username,
     role: body.role,
+    branch: body.branch || undefined,
     passwordHash: await hashPassword(body.password),
   });
   const { passwordHash: _omit, ...safe } = user.toObject();

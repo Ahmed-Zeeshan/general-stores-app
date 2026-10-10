@@ -2,7 +2,10 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Boxes, Package, Pencil, Plus, Search, SlidersHorizontal, Tags, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Barcode, Boxes, Package, Pencil, Plus, Printer, Search, SlidersHorizontal, Tags, Trash2, Wand2 } from "lucide-react";
+import { BarcodeSvg } from "@/components/barcode";
+import { CameraButton, CameraScanner, useBarcodeScanner } from "@/components/barcode-scanner";
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Spinner, Table, Td, Th, Textarea } from "@/components/ui";
 import { useCan, useSession } from "@/components/session";
 import { useToast } from "@/components/toast";
@@ -61,14 +64,20 @@ function ProductsPage() {
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [adjusting, setAdjusting] = useState<Product | null>(null);
   const [catsOpen, setCatsOpen] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const { branch, branches, branchLocked } = useSession();
+  const multiBranch = (branches?.length ?? 0) > 1;
+  const [allBranches, setAllBranches] = useState(false);
 
   const load = useCallback(() => {
     const sp = new URLSearchParams();
     if (q) sp.set("q", q);
     if (cat) sp.set("category", cat);
     if (filter !== "all") sp.set("filter", filter);
+    if (allBranches) sp.set("branch", "all");
     api<Product[]>(`/api/products?${sp}`).then(setProducts).catch((e) => toast.error(e.message));
-  }, [q, cat, filter, toast]);
+  }, [q, cat, filter, allBranches, toast]);
 
   const loadCats = useCallback(() => {
     api<Category[]>("/api/categories").then(setCategories).catch(() => {});
@@ -79,6 +88,24 @@ function ProductsPage() {
     return () => clearTimeout(t);
   }, [load]);
   useEffect(loadCats, [loadCats]);
+
+  // Scanning a product's barcode (USB scanner or camera) finds it in the list.
+  useBarcodeScanner((code) => setQ(code), editing === null && adjusting === null && !catsOpen && !cameraOpen);
+
+  async function assignMissing() {
+    const missing = products?.filter((p) => !p.barcode).length ?? 0;
+    if (!confirm(`Create barcodes for all products that do not have one${missing ? ` (${missing} in this list)` : ""}? Existing barcodes are not changed.`)) return;
+    setAssigning(true);
+    try {
+      const r = await api<{ assigned: number }>("/api/barcodes/assign", { body: {} });
+      toast.success(r.assigned ? `${r.assigned} barcode(s) created. Print labels to stick on the items.` : "Every product already has a barcode.");
+      load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setAssigning(false);
+    }
+  }
 
   const stockValue = products?.reduce((s, p) => s + Math.max(0, p.stock) * p.costPrice, 0) ?? 0;
 
@@ -98,13 +125,23 @@ function ProductsPage() {
       <PageHeader
         title="Products & Stock"
         urdu="اشیاء اور اسٹاک"
-        subtitle={products ? `${products.length} items${can.manage ? ` · Stock value ${formatPKR(stockValue)}` : ""}` : undefined}
+        subtitle={
+          products
+            ? `${products.length} items${multiBranch ? ` · Stock at ${allBranches ? "all branches" : branch?.name}` : ""}${can.manage ? ` · Stock value ${formatPKR(stockValue)}` : ""}`
+            : undefined
+        }
         actions={
           can.manage && (
             <>
               <Button variant="outline" icon={<Tags className="h-4 w-4" />} onClick={() => setCatsOpen(true)}>
                 Categories
               </Button>
+              <Button variant="outline" icon={<Wand2 className="h-4 w-4" />} loading={assigning} onClick={assignMissing}>
+                Create barcodes
+              </Button>
+              <Link href="/labels">
+                <Button variant="outline" icon={<Printer className="h-4 w-4" />}>Print labels</Button>
+              </Link>
               <Button icon={<Plus className="h-4 w-4" />} onClick={() => setEditing("new")}>
                 Add product
               </Button>
@@ -115,9 +152,12 @@ function ProductsPage() {
 
       <Card>
         <div className="flex flex-col gap-3 border-b border-slate-100 p-4 lg:flex-row lg:items-center">
-          <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or barcode" className="pl-10" />
+          <div className="flex flex-1 gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or scan barcode" className="pl-10" />
+            </div>
+            <CameraButton onClick={() => setCameraOpen(true)} />
           </div>
           <Select value={cat} onChange={(e) => setCat(e.target.value)} className="lg:w-56">
             <option value="">All categories</option>
@@ -127,6 +167,16 @@ function ProductsPage() {
               </option>
             ))}
           </Select>
+          {multiBranch && can.manage && !branchLocked && (
+            <Segmented
+              value={allBranches ? "all" : "here"}
+              onChange={(v) => setAllBranches(v === "all")}
+              options={[
+                { value: "here", label: "This branch" },
+                { value: "all", label: "All branches" },
+              ]}
+            />
+          )}
           <Segmented
             value={filter}
             onChange={setFilter}
@@ -191,6 +241,11 @@ function ProductsPage() {
                           <Button size="sm" variant="ghost" icon={<SlidersHorizontal className="h-4 w-4" />} onClick={() => setAdjusting(p)}>
                             Stock
                           </Button>
+                          <Link href={`/labels?ids=${p._id}`} title="Print barcode labels">
+                            <Button size="sm" variant="ghost" aria-label="Print labels">
+                              <Barcode className="h-4 w-4" />
+                            </Button>
+                          </Link>
                           <Button size="sm" variant="ghost" onClick={() => setEditing(p)} aria-label="Edit">
                             <Pencil className="h-4 w-4" />
                           </Button>
@@ -226,6 +281,7 @@ function ProductsPage() {
           load();
         }}
       />
+      <CameraScanner open={cameraOpen} onClose={() => setCameraOpen(false)} onScan={(code) => setQ(code)} />
       <CategoriesModal open={catsOpen} onClose={() => setCatsOpen(false)} categories={categories} onChanged={loadCats} />
     </div>
   );
@@ -272,6 +328,20 @@ function ProductForm({
   }, [open, product]);
 
   const set = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm({ ...form, [k]: e.target.value });
+  const [scanOpen, setScanOpen] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  async function generate() {
+    if (form.barcode && !confirm("Replace the current barcode with a new one?")) return;
+    setGenerating(true);
+    try {
+      const r = await api<{ barcode: string }>("/api/barcodes/next", { method: "POST" });
+      setForm((f) => ({ ...f, barcode: r.barcode }));
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setGenerating(false);
+    }
+  }
   const margin = Number(form.salePrice) - Number(form.costPrice);
 
   async function save(e: React.FormEvent) {
@@ -325,9 +395,37 @@ function ProductForm({
             ))}
           </Select>
         </Field>
-        <Field label="Barcode" hint="Scan it with your barcode scanner">
-          <Input value={form.barcode} onChange={set("barcode")} placeholder="e.g. 8961014000123" />
-        </Field>
+        <div>
+          <Field label="Barcode" hint="Click the box and scan, use the camera, or create one">
+            <div className="flex gap-2">
+              <Input
+                value={form.barcode}
+                onChange={set("barcode")}
+                // Scanners press Enter after the code: don't let that submit the form.
+                onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
+                placeholder="e.g. 8961014000123"
+                className="min-w-0 flex-1"
+              />
+              <CameraButton onClick={() => setScanOpen(true)} />
+              <button
+                type="button"
+                onClick={generate}
+                disabled={generating}
+                title="Create a new barcode"
+                aria-label="Create a new barcode"
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-600 shadow-sm hover:bg-slate-50 hover:text-brand-700 disabled:opacity-50"
+              >
+                <Wand2 className="h-5 w-5" />
+              </button>
+            </div>
+          </Field>
+          {form.barcode && (
+            <div className="mt-2 flex justify-center rounded-xl border border-slate-200 bg-white p-2">
+              <BarcodeSvg value={form.barcode} height={36} width={1.4} fontSize={11} />
+            </div>
+          )}
+          <CameraScanner open={scanOpen} onClose={() => setScanOpen(false)} onScan={(code) => setForm((f) => ({ ...f, barcode: code }))} />
+        </div>
         <Field label="Cost price (you buy at) *">
           <Input required type="number" inputMode="decimal" step="any" min="0" value={form.costPrice} onChange={set("costPrice")} placeholder="0" />
         </Field>
@@ -361,16 +459,22 @@ function StockModal({ product, onClose, onSaved }: { product: Product | null; on
   const [qty, setQty] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const { branch } = useSession();
+  const [detail, setDetail] = useState<{ product: { stock: number }; byBranch: { branch: string; name: string; qty: number }[] } | null>(null);
 
   useEffect(() => {
     setMode("add");
     setQty("");
     setNote("");
+    setDetail(null);
+    if (product) api<typeof detail>(`/api/products/${product._id}`).then(setDetail).catch(() => {});
   }, [product]);
   if (!product) return null;
 
+  // Adjustments apply to the branch you are working in.
+  const here = detail?.product.stock ?? product.stock;
   const n = Number(qty) || 0;
-  const after = mode === "add" ? product.stock + n : mode === "set" ? n : product.stock - n;
+  const after = mode === "add" ? here + n : mode === "set" ? n : here - n;
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -390,10 +494,19 @@ function StockModal({ product, onClose, onSaved }: { product: Product | null; on
     <Modal open onClose={onClose} title={`Stock: ${product.name}`} size="sm">
       <form onSubmit={save} className="space-y-4">
         <div className="rounded-xl bg-slate-50 p-4 text-center">
-          <div className="text-sm text-slate-500">Current stock</div>
+          <div className="text-sm text-slate-500">Current stock{detail && detail.byBranch.length > 1 ? ` in ${branch?.name}` : ""}</div>
           <div className="text-3xl font-extrabold text-slate-900">
-            {formatQty(product.stock)} <span className="text-base font-medium text-slate-500">{UNIT_LABELS[product.unit]}</span>
+            {formatQty(here)} <span className="text-base font-medium text-slate-500">{UNIT_LABELS[product.unit]}</span>
           </div>
+          {detail && detail.byBranch.length > 1 && (
+            <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-slate-500">
+              {detail.byBranch.map((b) => (
+                <span key={b.branch}>
+                  {b.name}: <b className="text-slate-700">{formatQty(b.qty)}</b>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-2">
           {(

@@ -6,6 +6,7 @@ const TenantSchema = new Schema(
     // --- Managed by super admin ---
     status: { type: String, enum: ["active", "suspended"], default: "active" },
     maxUsers: { type: Number, default: 3, min: 1 },
+    maxBranches: { type: Number, default: 1, min: 1 },
     plan: { type: String, trim: true, default: "Standard" },
     expiresAt: { type: Date },
     adminNotes: { type: String, trim: true },
@@ -30,6 +31,15 @@ const TenantSchema = new Schema(
     fbrPosId: { type: String, trim: true },
     fbrToken: { type: String, trim: true, select: false },
     fbrDefaultPct: { type: String, trim: true, default: "11001010" },
+
+    // --- WhatsApp udhaar reminders ---
+    waTemplate: {
+      type: String,
+      trim: true,
+      default:
+        "Assalam o Alaikum {name},\n{shop} ki taraf se yaad-dehani: aap ke khate mein {amount} baqaya hai.\nMeharbani farma kar jald ada kar dein. Shukriya!\n{shop} {shopPhone}",
+    },
+
   },
   { timestamps: true },
 );

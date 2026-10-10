@@ -1,14 +1,17 @@
 import { z } from "zod";
-import { ApiError, dateRange, handle, requireTenant } from "@/lib/api";
+import { ApiError, dateRange, handle } from "@/lib/api";
+import { reportBranchFilter, requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
 import { recipesWithDetails } from "@/lib/recipes";
 import { moveStock } from "@/lib/services";
 import { nextNumber, Product, Production } from "@/models";
 
 export const GET = handle(async (req) => {
-  const { tid } = await requireTenant(["owner", "manager"]);
-  const { from, to } = dateRange(new URL(req.url), 29);
-  return Production.find({ tenant: tid, createdAt: { $gte: from, $lte: to } }).sort({ createdAt: -1 }).limit(500).lean();
+  const ctx = await requireBranch(["owner", "manager"]);
+  const url = new URL(req.url);
+  const { from, to } = dateRange(url, 29);
+  const branch = reportBranchFilter(ctx, url.searchParams.get("branch"));
+  return Production.find({ tenant: ctx.tid, createdAt: { $gte: from, $lte: to }, ...(branch ? { branch } : {}) }).sort({ createdAt: -1 }).limit(500).lean();
 });
 
 const Body = z.object({
@@ -22,9 +25,9 @@ const Body = z.object({
 
 /** Records a production run: consumes ingredients from stock and adds the finished item to stock. */
 export const POST = handle(async (req) => {
-  const { user, tid } = await requireTenant(["owner", "manager"]);
+  const { user, tid, branchId, branch } = await requireBranch(["owner", "manager"]);
   const body = Body.parse(await req.json());
-  const [recipe] = await recipesWithDetails(tid, { _id: body.recipeId });
+  const [recipe] = await recipesWithDetails(tid, branchId, { _id: body.recipeId });
   if (!recipe || !recipe.outputProduct) throw new ApiError(404, "Recipe not found.");
 
   const used = recipe.ingredients.map((i) => ({
@@ -48,6 +51,8 @@ export const POST = handle(async (req) => {
   const run = await Production.create({
     tenant: tid,
     productionNo,
+    branch: branchId,
+    branchName: branch.name,
     recipe: recipe._id,
     recipeName: recipe.name,
     output: recipe.output,
@@ -64,9 +69,9 @@ export const POST = handle(async (req) => {
   });
 
   for (const u of used) {
-    await moveStock({ tid, productId: u.product, qty: -u.qty, type: "production", refNo: productionNo, note: `Used in ${recipe.name}`, userId: user.id });
+    await moveStock({ tid, branch: branchId, productId: u.product, qty: -u.qty, type: "production", refNo: productionNo, note: `Used in ${recipe.name}`, userId: user.id });
   }
-  await moveStock({ tid, productId: recipe.output, qty: outputQty, type: "production", refNo: productionNo, note: `Made from ${recipe.name}`, userId: user.id });
+  await moveStock({ tid, branch: branchId, productId: recipe.output, qty: outputQty, type: "production", refNo: productionNo, note: `Made from ${recipe.name}`, userId: user.id });
   if (body.updateCost && unitCost > 0) {
     await Product.updateOne({ _id: recipe.output, tenant: tid }, { costPrice: unitCost });
   }

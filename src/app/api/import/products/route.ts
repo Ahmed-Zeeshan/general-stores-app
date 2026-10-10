@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { ApiError, handle, requireTenant } from "@/lib/api";
+import { ApiError, handle } from "@/lib/api";
+import { branchStock, requireBranch } from "@/lib/branches";
 import { UNITS } from "@/lib/constants";
 import { parseCsv } from "@/lib/csv";
 import { moveStock } from "@/lib/services";
@@ -14,7 +15,7 @@ const UNIT_ALIASES: Record<string, string> = { piece: "pcs", pc: "pcs", kilo: "k
  * barcode, then by name, and updated; new ones are created. Stock is set to the CSV value.
  */
 export const POST = handle(async (req) => {
-  const { user, tid } = await requireTenant(["owner", "manager"]);
+  const { user, tid, branchId } = await requireBranch(["owner", "manager"]);
   const rows = parseCsv(Body.parse(await req.json()).csv);
   if (rows.length < 2) throw new ApiError(400, "The file has no product rows.");
   const header = rows[0].map((h) => h.trim().toLowerCase());
@@ -98,7 +99,7 @@ export const POST = handle(async (req) => {
       if (existing) {
         await Product.updateOne({ _id: existing._id, tenant: tid }, { $set: data });
         productId = existing._id;
-        currentStock = existing.stock;
+        currentStock = (await branchStock(tid, branchId, [existing._id])).get(String(existing._id)) ?? 0;
         updated++;
       } else {
         const p = await Product.create({ ...data, tenant: tid, stock: 0 });
@@ -106,7 +107,7 @@ export const POST = handle(async (req) => {
         created++;
       }
       if (stock !== undefined && stock !== currentStock) {
-        await moveStock({ tid, productId, qty: stock - currentStock, type: "import", note: "CSV import", userId: user.id });
+        await moveStock({ tid, branch: branchId, productId, qty: stock - currentStock, type: "import", note: "CSV import", userId: user.id });
       }
     } catch (err) {
       errors.push(`Row ${line} (${name}): ${(err as { code?: number }).code === 11000 ? "barcode already used by another product" : (err as Error).message}`);

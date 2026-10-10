@@ -7,6 +7,8 @@ const UserSchema = new Schema(
     name: { type: String, required: true, trim: true },
     username: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true, select: false },
+    /** If set, the user can only work in this branch. Empty = can switch between branches. */
+    branch: { type: Schema.Types.ObjectId, ref: "Branch" },
     role: { type: String, enum: ["superadmin", "owner", "manager", "cashier"], default: "cashier" },
     active: { type: Boolean, default: true },
     lastLoginAt: { type: Date },

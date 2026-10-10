@@ -1,9 +1,10 @@
-import { addDays, endOfDay, handle, requireTenant, startOfDay, TIMEZONE } from "@/lib/api";
+import { addDays, endOfDay, handle, startOfDay, TIMEZONE } from "@/lib/api";
+import { branchStock, requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
 import { Expense, Party, Product, Sale } from "@/models";
 
 export const GET = handle(async () => {
-  const { tid } = await requireTenant();
+  const { tid, branchId } = await requireBranch();
   const now = new Date();
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
@@ -12,7 +13,7 @@ export const GET = handle(async () => {
 
   const [today, todayExpenses, week, topProducts, receivable, payable, lowStock, expiring, recent] = await Promise.all([
     Sale.aggregate([
-      { $match: { tenant: tid, status: "completed", createdAt: { $gte: todayStart, $lte: todayEnd } } },
+      { $match: { tenant: tid, branch: branchId, status: "completed", createdAt: { $gte: todayStart, $lte: todayEnd } } },
       {
         $group: {
           _id: null,
@@ -26,11 +27,11 @@ export const GET = handle(async () => {
       },
     ]),
     Expense.aggregate([
-      { $match: { tenant: tid, date: { $gte: todayStart, $lte: todayEnd } } },
+      { $match: { tenant: tid, branch: branchId, date: { $gte: todayStart, $lte: todayEnd } } },
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]),
     Sale.aggregate([
-      { $match: { tenant: tid, status: "completed", createdAt: { $gte: weekStart, $lte: todayEnd } } },
+      { $match: { tenant: tid, branch: branchId, status: "completed", createdAt: { $gte: weekStart, $lte: todayEnd } } },
       {
         $group: {
           _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: TIMEZONE } },
@@ -41,7 +42,7 @@ export const GET = handle(async () => {
       { $sort: { _id: 1 } },
     ]),
     Sale.aggregate([
-      { $match: { tenant: tid, status: "completed", createdAt: { $gte: monthStart } } },
+      { $match: { tenant: tid, branch: branchId, status: "completed", createdAt: { $gte: monthStart } } },
       { $unwind: "$items" },
       { $group: { _id: "$items.name", qty: { $sum: "$items.qty" }, total: { $sum: "$items.total" }, unit: { $first: "$items.unit" } } },
       { $sort: { total: -1 } },
@@ -55,13 +56,9 @@ export const GET = handle(async () => {
       { $match: { tenant: tid, type: "supplier", balance: { $gt: 0 } } },
       { $group: { _id: null, total: { $sum: "$balance" }, count: { $sum: 1 } } },
     ]),
-    Product.find({ tenant: tid, active: true, $expr: { $lte: ["$stock", "$lowStockAlert"] } })
-      .sort({ stock: 1 })
-      .limit(8)
-      .select("name stock unit lowStockAlert")
-      .lean(),
+    Product.find({ tenant: tid, active: true }).select("name unit lowStockAlert").lean(),
     Product.countDocuments({ tenant: tid, active: true, expiryDate: { $ne: null, $lte: addDays(now, 7) } }),
-    Sale.find({ tenant: tid }).sort({ createdAt: -1 }).limit(6).select("invoiceNo total paymentMethod customerName createdAt status fbrStatus").lean(),
+    Sale.find({ tenant: tid, branch: branchId }).sort({ createdAt: -1 }).limit(6).select("invoiceNo total paymentMethod customerName createdAt status fbrStatus").lean(),
   ]);
 
   // Fill missing days so the chart always shows 7 bars.
@@ -73,7 +70,13 @@ export const GET = handle(async () => {
   });
 
   const t = today[0] ?? { total: 0, tax: 0, cost: 0, count: 0, cash: 0, credit: 0 };
-  const lowStockCount = await Product.countDocuments({ tenant: tid, active: true, $expr: { $lte: ["$stock", "$lowStockAlert"] } });
+  // Low stock is per branch: compare each product's stock here with its alert level.
+  const levels = await branchStock(tid, branchId);
+  const low = lowStock
+    .map((p) => ({ ...p, stock: levels.get(String(p._id)) ?? 0 }))
+    .filter((p) => p.stock <= p.lowStockAlert)
+    .sort((x, y) => x.stock - y.stock);
+  const lowStockCount = low.length;
   return {
     today: {
       sales: round2(t.total),
@@ -85,7 +88,7 @@ export const GET = handle(async () => {
     },
     receivable: { total: round2(receivable[0]?.total ?? 0), count: receivable[0]?.count ?? 0 },
     payable: { total: round2(payable[0]?.total ?? 0), count: payable[0]?.count ?? 0 },
-    lowStock,
+    lowStock: low.slice(0, 8),
     lowStockCount,
     expiringCount: expiring,
     series,

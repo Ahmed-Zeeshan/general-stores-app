@@ -71,6 +71,7 @@ export default function AdminShopsPage() {
                 <Th>Shop</Th>
                 <Th>Status</Th>
                 <Th>Users</Th>
+                <Th>Branches</Th>
                 <Th className="text-right">Products</Th>
                 <Th className="text-right">Sales (30d)</Th>
                 <Th>Last sale</Th>
@@ -100,6 +101,7 @@ export default function AdminShopsPage() {
                         {s.activeUsers} / {s.maxUsers}
                       </span>
                     </Td>
+                    <Td className="text-slate-700">{s.branches} / {s.maxBranches}</Td>
                     <Td className="text-right text-slate-600">{s.products}</Td>
                     <Td className="text-right font-semibold">{formatPKR(s.sales30)}</Td>
                     <Td className="text-slate-500">{s.lastSaleAt ? formatDate(s.lastSaleAt) : "—"}</Td>
@@ -115,7 +117,7 @@ export default function AdminShopsPage() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <Td colSpan={7} className="py-10 text-center text-slate-500">No shops match your search.</Td>
+                  <Td colSpan={8} className="py-10 text-center text-slate-500">No shops match your search.</Td>
                 </tr>
               )}
             </tbody>
@@ -137,7 +139,7 @@ export default function AdminShopsPage() {
 
 function CreateShopModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
   const toast = useToast();
-  const empty = { shopName: "", shopType: "karyana", phone: "", address: "", maxUsers: "3", plan: "Standard", expiresAt: "", ownerName: "", username: "", password: "" };
+  const empty = { shopName: "", shopType: "karyana", phone: "", address: "", maxUsers: "3", maxBranches: "1", plan: "Standard", expiresAt: "", ownerName: "", username: "", password: "" };
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
   useEffect(() => {
@@ -150,7 +152,7 @@ function CreateShopModal({ open, onClose, onCreated }: { open: boolean; onClose:
     e.preventDefault();
     setSaving(true);
     try {
-      await api("/api/admin/tenants", { body: { ...form, maxUsers: Number(form.maxUsers), expiresAt: form.expiresAt || null } });
+      await api("/api/admin/tenants", { body: { ...form, maxUsers: Number(form.maxUsers), maxBranches: Number(form.maxBranches), expiresAt: form.expiresAt || null } });
       toast.success(`${form.shopName} created. Owner can log in as "${form.username}".`);
       onCreated();
     } catch (err) {
@@ -197,9 +199,12 @@ function CreateShopModal({ open, onClose, onCreated }: { open: boolean; onClose:
         </section>
         <section>
           <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">Plan & limits</h3>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-4">
             <Field label="Max users *" hint="Including the owner">
               <Input required type="number" min={1} max={1000} value={form.maxUsers} onChange={set("maxUsers")} />
+            </Field>
+            <Field label="Max branches *">
+              <Input required type="number" min={1} max={200} value={form.maxBranches} onChange={set("maxBranches")} />
             </Field>
             <Field label="Plan name">
               <Input value={form.plan} onChange={set("plan")} />

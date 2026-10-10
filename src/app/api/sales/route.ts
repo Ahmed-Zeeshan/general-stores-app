@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { ApiError, dateRange, escapeRegex, handle, requireTenant } from "@/lib/api";
+import { ApiError, dateRange, escapeRegex, handle } from "@/lib/api";
+import { reportBranchFilter, requireBranch } from "@/lib/branches";
 import { syncSaleToFbr } from "@/lib/fbr";
 import { round2 } from "@/lib/money";
 import { optionalId } from "@/lib/schemas";
@@ -7,11 +8,13 @@ import { moveStock, postLedger } from "@/lib/services";
 import { nextNumber, PAYMENT_METHODS, Party, Product, Sale, Tenant } from "@/models";
 
 export const GET = handle(async (req) => {
-  const { tid } = await requireTenant();
+  const ctx = await requireBranch();
   const url = new URL(req.url);
   const { from, to } = dateRange(url, 0);
   const q = url.searchParams.get("q")?.trim();
-  const query: Record<string, unknown> = { tenant: tid, createdAt: { $gte: from, $lte: to } };
+  const query: Record<string, unknown> = { tenant: ctx.tid, createdAt: { $gte: from, $lte: to } };
+  const branch = reportBranchFilter(ctx, url.searchParams.get("branch"));
+  if (branch) query.branch = branch;
   if (q) {
     const rx = new RegExp(escapeRegex(q), "i");
     query.$or = [{ invoiceNo: rx }, { customerName: rx }];
@@ -40,11 +43,36 @@ const Body = z.object({
   amountPaid: z.coerce.number().min(0).optional(),
   customerId: optionalId,
   note: z.string().trim().optional(),
+  // Offline bills (made while the server was unreachable) are sent later with these:
+  clientId: z.string().trim().min(8).max(64).optional(),
+  soldAt: z.string().datetime().optional(),
+  branchId: optionalId,
 });
 
 export const POST = handle(async (req) => {
-  const { user, tid } = await requireTenant();
+  const ctx = await requireBranch();
+  const { user, tid } = ctx;
   const body = Body.parse(await req.json());
+
+  // Re-sending the same offline bill returns the bill already saved instead of a duplicate.
+  if (body.clientId) {
+    const existing = await Sale.findOne({ tenant: tid, clientId: body.clientId }).lean();
+    if (existing) return existing;
+  }
+  const offline = !!body.clientId && !!body.soldAt;
+  let soldAt: Date | undefined;
+  if (offline) {
+    soldAt = new Date(body.soldAt!);
+    const age = Date.now() - soldAt.getTime();
+    if (age > 30 * 864e5 || age < -10 * 60_000) throw new ApiError(400, "Offline bill date is not valid. Check this device's date and time.");
+  }
+  // Offline bills keep the branch they were made in (if the user may use it).
+  let branch = ctx.branch;
+  if (body.branchId && body.branchId !== String(ctx.branchId)) {
+    const b = ctx.locked ? undefined : ctx.branches.find((x) => String(x._id) === body.branchId);
+    if (!b) throw new ApiError(403, "You cannot make bills for that branch.");
+    branch = b;
+  }
   const settings = await Tenant.findById(tid).lean();
 
   const products = await Product.find({ tenant: tid, _id: { $in: body.items.map((i) => i.productId) } }).lean();
@@ -98,7 +126,8 @@ export const POST = handle(async (req) => {
   }
   if (creditAmount > 0) {
     if (!customer) throw new ApiError(400, "Amount received is less than the bill. Select a customer to add the rest to their khata (udhaar).");
-    if (customer.creditLimit > 0 && customer.balance + creditAmount > customer.creditLimit && user.role !== "owner") {
+    // An offline bill has already been handed over, so it is recorded even above the limit.
+    if (!offline && customer.creditLimit > 0 && customer.balance + creditAmount > customer.creditLimit && user.role !== "owner") {
       throw new ApiError(400, `Credit limit crossed for ${customer.name}. Limit is Rs ${customer.creditLimit}. Ask the owner.`);
     }
   }
@@ -107,6 +136,11 @@ export const POST = handle(async (req) => {
   const sale = await Sale.create({
     tenant: tid,
     invoiceNo,
+    branch: branch._id,
+    branchName: branch.name,
+    clientId: body.clientId,
+    offline,
+    ...(soldAt ? { createdAt: soldAt } : {}),
     items,
     subtotal,
     discount,
@@ -127,7 +161,7 @@ export const POST = handle(async (req) => {
   });
 
   for (const item of items) {
-    await moveStock({ tid, productId: item.product, qty: -item.qty, type: "sale", refNo: invoiceNo, userId: user.id });
+    await moveStock({ tid, branch: branch._id, productId: item.product, qty: -item.qty, type: "sale", refNo: invoiceNo, userId: user.id });
   }
   if (customer && creditAmount > 0) {
     await postLedger({

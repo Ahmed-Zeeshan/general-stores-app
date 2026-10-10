@@ -1,18 +1,27 @@
 import { ApiError, handle, requireTenant } from "@/lib/api";
+import { branchStock, requireBranch } from "@/lib/branches";
 import { withCategories } from "@/lib/categories";
 import { ProductInput } from "@/lib/schemas";
-import { Product, StockMovement } from "@/models";
+import { Product, StockLevel, StockMovement } from "@/models";
 
 type Ctx = { params: Promise<{ id: string }> };
 
+/** One product with its stock at the current branch, at every branch, and recent movements. */
 export const GET = handle<Ctx>(async (_req, { params }) => {
-  const { tid } = await requireTenant();
+  const ctx = await requireBranch();
+  const { tid } = ctx;
   const { id } = await params;
   const product = await Product.findOne({ _id: id, tenant: tid }).lean();
   if (!product) throw new ApiError(404, "Product not found.");
-  const movements = await StockMovement.find({ tenant: tid, product: id }).sort({ createdAt: -1 }).limit(50).lean();
-  const [withCat] = await withCategories(tid, [product]);
-  return { product: withCat, movements };
+  const [movements, levels, here] = await Promise.all([
+    StockMovement.find({ tenant: tid, product: id, branch: ctx.branchId }).sort({ createdAt: -1 }).limit(50).lean(),
+    StockLevel.find({ tenant: tid, product: id }).select("branch qty").lean(),
+    branchStock(tid, ctx.branchId, [product._id]),
+  ]);
+  const qtyByBranch = new Map(levels.map((l) => [String(l.branch), l.qty]));
+  const byBranch = ctx.branches.map((b) => ({ branch: b._id, name: b.name, qty: qtyByBranch.get(String(b._id)) ?? 0 }));
+  const [withCat] = await withCategories(tid, [{ ...product, totalStock: product.stock, stock: here.get(String(product._id)) ?? 0 }]);
+  return { product: withCat, byBranch, movements };
 });
 
 export const PUT = handle<Ctx>(async (req, { params }) => {

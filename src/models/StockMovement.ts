@@ -5,7 +5,8 @@ import { Schema, model, models, type InferSchemaType, type Model } from "mongoos
 const StockMovementSchema = new Schema(
   {
     product: { type: Schema.Types.ObjectId, ref: "Product", required: true, index: true },
-    type: { type: String, enum: ["sale", "purchase", "return", "adjustment", "wastage", "opening", "production", "import"], required: true },
+    branch: { type: Schema.Types.ObjectId, ref: "Branch" },
+    type: { type: String, enum: ["sale", "purchase", "return", "adjustment", "wastage", "opening", "production", "import", "transfer"], required: true },
     qty: { type: Number, required: true },
     stockAfter: { type: Number },
     refNo: { type: String },

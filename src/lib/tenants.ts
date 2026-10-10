@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import type { Types } from "mongoose";
-import { Category, Tenant, User } from "@/models";
+import { Branch, Category, Tenant, User } from "@/models";
 import { ApiError } from "./api";
 
 export const DEFAULT_CATEGORIES: Record<string, string[]> = {
@@ -22,6 +22,7 @@ export async function createTenantWithOwner(input: {
   phone?: string;
   address?: string;
   maxUsers: number;
+  maxBranches?: number;
   plan?: string;
   expiresAt?: Date | null;
   ownerName: string;
@@ -38,6 +39,7 @@ export async function createTenantWithOwner(input: {
     address: input.address,
     ownerName: input.ownerName,
     maxUsers: input.maxUsers,
+    maxBranches: input.maxBranches ?? 1,
     plan: input.plan,
     expiresAt: input.expiresAt ?? undefined,
   });
@@ -54,6 +56,7 @@ export async function createTenantWithOwner(input: {
     throw err;
   }
   await Category.insertMany(DEFAULT_CATEGORIES[input.shopType].map((name) => ({ tenant: tenant._id, name })));
+  await Branch.create({ tenant: tenant._id, name: "Main Branch", isMain: true, address: input.address, phone: input.phone });
   return tenant;
 }
 

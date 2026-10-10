@@ -1,13 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Database, Download, FileUp, KeyRound, Plus, RefreshCw, Save, ShieldCheck, Store, UserCog, Users } from "lucide-react";
+import { Database, Download, FileUp, KeyRound, MapPin, MessageCircle, Pencil, Plus, RefreshCw, Save, ShieldCheck, Store, UserCog, Users } from "lucide-react";
 import { Badge, Button, Card, Field, Input, Modal, PageHeader, Select, Spinner, Table, Td, Th, Textarea } from "@/components/ui";
 import { useSession, type ShopSettings } from "@/components/session";
 import { useToast } from "@/components/toast";
 import { api } from "@/lib/client";
+import { RestoreButton } from "@/components/restore";
+import { WaModePicker } from "@/components/wa-mode";
+import { DEFAULT_WA_TEMPLATE, reminderMessage } from "@/lib/whatsapp";
 
-type User = { _id: string; name: string; username: string; role: "owner" | "manager" | "cashier"; active: boolean };
+type User = { _id: string; name: string; username: string; role: "owner" | "manager" | "cashier"; active: boolean; branch?: string };
+type BranchRow = { _id: string; name: string; address?: string; phone?: string; isMain: boolean; active: boolean; staff: number };
+type BranchData = { branches: BranchRow[]; maxBranches: number; activeBranches: number };
 type SettingsForm = ShopSettings & { ownerName?: string; fbrToken?: string; fbrTokenSet?: boolean; fbrPending?: number };
 
 const ROLE_INFO = {
@@ -23,12 +28,21 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [team, setTeam] = useState<{ users: User[]; maxUsers: number; activeUsers: number } | null>(null);
   const [userModal, setUserModal] = useState<User | "new" | null>(null);
+  const [branchData, setBranchData] = useState<BranchData | null>(null);
+  const loadBranches = useCallback(() => {
+    api<BranchData>("/api/branches").then(setBranchData).catch(() => {});
+  }, []);
+  useEffect(loadBranches, [loadBranches]);
+  const activeBranches = branchData?.branches.filter((b) => b.active) ?? [];
+  const branchName = (id?: string) => branchData?.branches.find((b) => b._id === id)?.name;
 
   const loadUsers = useCallback(() => {
     api<{ users: User[]; maxUsers: number; activeUsers: number }>("/api/users").then(setTeam).catch(() => {});
   }, []);
   const loadSettings = useCallback(() => {
-    api<SettingsForm>("/api/settings").then((s) => setForm({ ...s, fbrToken: "" })).catch((e) => toast.error(e.message));
+    api<SettingsForm>("/api/settings")
+      .then((s) => setForm({ ...s, fbrToken: "" }))
+      .catch((e) => toast.error(e.message));
   }, [toast]);
 
   useEffect(() => {
@@ -63,6 +77,7 @@ export default function SettingsPage() {
           fbrPosId: form.fbrPosId ?? "",
           fbrDefaultPct: form.fbrDefaultPct,
           fbrToken: form.fbrToken,
+          waTemplate: form.waTemplate,
         },
       });
       toast.success("Settings saved");
@@ -156,6 +171,22 @@ export default function SettingsPage() {
               )}
             </div>
           </Card>
+          <Card className="p-6">
+            <h2 className="mb-5 flex items-center gap-2 font-bold text-slate-900"><MessageCircle className="h-5 w-5 text-emerald-600" /> WhatsApp reminders</h2>
+            <div className="space-y-4">
+              <div>
+                <div className="mb-1.5 text-sm font-medium text-slate-700">Open messages in (this computer)</div>
+                <WaModePicker />
+                <p className="mt-1 text-xs text-slate-500">Desktop opens the WhatsApp app installed on this PC; Web opens web.whatsapp.com.</p>
+              </div>
+              <Field label="Udhaar reminder message" hint="{name} customer · {amount} udhaar · {shop} shop name · {shopPhone} shop phone">
+                <Textarea value={form.waTemplate ?? DEFAULT_WA_TEMPLATE} onChange={set("waTemplate")} className="min-h-[110px]" />
+              </Field>
+              <pre className="whitespace-pre-wrap rounded-xl border border-emerald-200 bg-emerald-50 p-3 font-sans text-xs text-emerald-950">
+                {reminderMessage(form.waTemplate, { name: "Bilal", amount: 2500, shop: form.shopName, shopPhone: form.phone })}
+              </pre>
+            </div>
+          </Card>
           <Button type="submit" size="lg" className="w-full" loading={saving} icon={<Save className="h-5 w-5" />}>Save settings</Button>
         </div>
       </form>
@@ -178,6 +209,7 @@ export default function SettingsPage() {
               <Th>Name</Th>
               <Th>Username</Th>
               <Th>Role</Th>
+              {activeBranches.length > 1 && <Th>Branch</Th>}
               <Th>Status</Th>
               <Th />
             </tr>
@@ -188,6 +220,7 @@ export default function SettingsPage() {
                 <Td className="font-semibold">{u.name}{u._id === me.id && <span className="ml-2 text-xs text-slate-400">(you)</span>}</Td>
                 <Td className="text-slate-500">{u.username}</Td>
                 <Td><Badge color={ROLE_INFO[u.role].color}>{ROLE_INFO[u.role].label}</Badge></Td>
+                {activeBranches.length > 1 && <Td className="text-slate-500">{branchName(u.branch) ?? "All branches"}</Td>}
                 <Td>{u.active ? <Badge color="green">Active</Badge> : <Badge color="red">Disabled</Badge>}</Td>
                 <Td className="text-right">
                   <Button size="sm" variant="ghost" icon={<UserCog className="h-4 w-4" />} onClick={() => setUserModal(u)}>Edit</Button>
@@ -198,9 +231,17 @@ export default function SettingsPage() {
         </Table>
       </Card>
 
+      {branchData && <BranchesCard data={branchData} onChanged={() => { loadBranches(); reload(); }} />}
+
       <DataCard />
 
-      <UserModal value={userModal} isSelf={userModal !== "new" && userModal?._id === me.id} onClose={() => setUserModal(null)} onSaved={() => { setUserModal(null); loadUsers(); }} />
+      <UserModal
+        value={userModal}
+        branches={activeBranches}
+        isSelf={userModal !== "new" && userModal?._id === me.id}
+        onClose={() => setUserModal(null)}
+        onSaved={() => { setUserModal(null); loadUsers(); }}
+      />
     </div>
   );
 }
@@ -249,6 +290,7 @@ const TEMPLATE = "name,nameUrdu,barcode,category,unit,costPrice,salePrice,stock,
 
 function DataCard() {
   const toast = useToast();
+  const { settings } = useSession();
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<{ created: number; updated: number; errors: string[]; errorCount: number } | null>(null);
@@ -325,25 +367,40 @@ function DataCard() {
         <div>
           <h3 className="mb-2 text-sm font-semibold text-slate-700">Full backup</h3>
           <p className="mb-2 text-xs text-slate-500">One file with all products, bills, khata, purchases and expenses. Keep it safe (e.g. USB or Google Drive).</p>
-          <a href="/api/backup">
-            <Button type="button" size="sm" variant="outline" icon={<Download className="h-4 w-4" />}>Download backup</Button>
-          </a>
+          <div className="flex flex-wrap gap-2">
+            <a href="/api/backup">
+              <Button type="button" size="sm" variant="outline" icon={<Download className="h-4 w-4" />}>Download backup</Button>
+            </a>
+            <RestoreButton shopName={settings?.shopName ?? ""} restoreUrl="/api/restore" backupUrl="/api/backup" />
+          </div>
         </div>
       </div>
     </Card>
   );
 }
 
-function UserModal({ value, isSelf, onClose, onSaved }: { value: User | "new" | null; isSelf: boolean; onClose: () => void; onSaved: () => void }) {
+function UserModal({
+  value,
+  branches,
+  isSelf,
+  onClose,
+  onSaved,
+}: {
+  value: User | "new" | null;
+  branches: BranchRow[];
+  isSelf: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const toast = useToast();
-  const [form, setForm] = useState({ name: "", username: "", password: "", role: "cashier", active: true });
+  const [form, setForm] = useState({ name: "", username: "", password: "", role: "cashier", active: true, branch: "" });
   const [saving, setSaving] = useState(false);
   const isNew = value === "new";
 
   useEffect(() => {
     if (!value) return;
-    if (value === "new") setForm({ name: "", username: "", password: "", role: "cashier", active: true });
-    else setForm({ name: value.name, username: value.username, password: "", role: value.role, active: value.active });
+    if (value === "new") setForm({ name: "", username: "", password: "", role: "cashier", active: true, branch: "" });
+    else setForm({ name: value.name, username: value.username, password: "", role: value.role, active: value.active, branch: value.branch ?? "" });
   }, [value]);
   if (!value) return null;
 
@@ -352,7 +409,11 @@ function UserModal({ value, isSelf, onClose, onSaved }: { value: User | "new" | 
     setSaving(true);
     try {
       if (isNew) await api("/api/users", { body: form });
-      else await api(`/api/users/${(value as User)._id}`, { method: "PUT", body: { name: form.name, role: form.role, active: form.active, password: form.password } });
+      else
+        await api(`/api/users/${(value as User)._id}`, {
+          method: "PUT",
+          body: { name: form.name, role: form.role, active: form.active, password: form.password, ...(isSelf ? {} : { branch: form.branch }) },
+        });
       toast.success("Saved");
       onSaved();
     } catch (err) {
@@ -388,6 +449,16 @@ function UserModal({ value, isSelf, onClose, onSaved }: { value: User | "new" | 
             ))}
           </div>
         </Field>
+        {branches.length > 1 && !isSelf && (
+          <Field label="Branch" hint="Assigned staff only see and sell from their branch">
+            <Select value={form.branch} onChange={(e) => setForm({ ...form, branch: e.target.value })}>
+              <option value="">All branches (can switch)</option>
+              {branches.map((b) => (
+                <option key={b._id} value={b._id}>{b.name}</option>
+              ))}
+            </Select>
+          </Field>
+        )}
         {!isNew && !isSelf && (
           <label className="flex items-center gap-3">
             <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} className="h-5 w-5 accent-brand-600" />
@@ -399,3 +470,101 @@ function UserModal({ value, isSelf, onClose, onSaved }: { value: User | "new" | 
     </Modal>
   );
 }
+
+function BranchesCard({ data, onChanged }: { data: BranchData; onChanged: () => void }) {
+  const toast = useToast();
+  const [editing, setEditing] = useState<BranchRow | "new" | null>(null);
+  const [form, setForm] = useState({ name: "", address: "", phone: "" });
+  const [saving, setSaving] = useState(false);
+  const full = data.activeBranches >= data.maxBranches;
+
+  useEffect(() => {
+    if (!editing) return;
+    setForm(editing === "new" ? { name: "", address: "", phone: "" } : { name: editing.name, address: editing.address ?? "", phone: editing.phone ?? "" });
+  }, [editing]);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      if (editing === "new") await api("/api/branches", { body: form });
+      else if (editing) await api(`/api/branches/${editing._id}`, { method: "PUT", body: form });
+      toast.success("Branch saved");
+      setEditing(null);
+      onChanged();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function setActive(b: BranchRow, active: boolean) {
+    if (!active && !confirm(`Close ${b.name}? It must have no stock and no staff assigned. Its old bills stay in reports.`)) return;
+    try {
+      await api(`/api/branches/${b._id}`, { method: "PUT", body: { active } });
+      toast.success(active ? "Branch re-opened" : "Branch closed");
+      onChanged();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
+  return (
+    <Card className="mt-6">
+      <div className="flex flex-col gap-3 border-b border-slate-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="flex items-center gap-2 font-bold text-slate-900"><MapPin className="h-5 w-5 text-brand-600" /> Branches</h2>
+          <p className={`text-xs ${full ? "font-semibold text-amber-700" : "text-slate-500"}`}>
+            {data.activeBranches} of {data.maxBranches} branch{data.maxBranches === 1 ? "" : "es"} used
+            {full && data.maxBranches === 1 && " — ask the administrator if you open another branch."}
+          </p>
+        </div>
+        <Button size="sm" icon={<Plus className="h-4 w-4" />} disabled={full} onClick={() => setEditing("new")}>Add branch</Button>
+      </div>
+      <Table>
+        <thead>
+          <tr>
+            <Th>Branch</Th>
+            <Th>Address</Th>
+            <Th>Assigned staff</Th>
+            <Th>Status</Th>
+            <Th />
+          </tr>
+        </thead>
+        <tbody>
+          {data.branches.map((b) => (
+            <tr key={b._id}>
+              <Td className="font-semibold">
+                {b.name} {b.isMain && <Badge color="violet">Main</Badge>}
+              </Td>
+              <Td className="text-slate-500">{[b.address, b.phone].filter(Boolean).join(" · ") || "—"}</Td>
+              <Td className="text-slate-500">{b.staff}</Td>
+              <Td>{b.active ? <Badge color="green">Open</Badge> : <Badge color="slate">Closed</Badge>}</Td>
+              <Td className="text-right">
+                <div className="flex justify-end gap-1">
+                  <Button size="sm" variant="ghost" icon={<Pencil className="h-4 w-4" />} onClick={() => setEditing(b)}>Edit</Button>
+                  {!b.isMain &&
+                    (b.active ? (
+                      <Button size="sm" variant="ghost" className="hover:text-rose-600" onClick={() => setActive(b, false)}>Close</Button>
+                    ) : (
+                      <Button size="sm" variant="ghost" disabled={full} onClick={() => setActive(b, true)}>Re-open</Button>
+                    ))}
+                </div>
+              </Td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+      <Modal open={editing !== null} onClose={() => setEditing(null)} title={editing === "new" ? "Add branch" : "Edit branch"} size="sm">
+        <form onSubmit={save} className="space-y-4">
+          <Field label="Branch name *"><Input required minLength={2} autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Gulberg Branch" /></Field>
+          <Field label="Address"><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
+          <Field label="Phone"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
+          <Button type="submit" size="lg" className="w-full" loading={saving}>Save branch</Button>
+        </form>
+      </Modal>
+    </Card>
+  );
+}
+

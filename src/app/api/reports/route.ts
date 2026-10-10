@@ -1,13 +1,18 @@
-import { dateRange, handle, requireTenant, TIMEZONE } from "@/lib/api";
+import { dateRange, handle, TIMEZONE } from "@/lib/api";
+import { reportBranchFilter, requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
 import { Expense, Purchase, Sale } from "@/models";
 
 export const GET = handle(async (req) => {
-  const { tid } = await requireTenant(["owner", "manager"]);
-  const { from, to } = dateRange(new URL(req.url), 6);
-  const match = { tenant: tid, status: "completed", createdAt: { $gte: from, $lte: to } };
+  const ctx = await requireBranch(["owner", "manager"]);
+  const { tid } = ctx;
+  const url = new URL(req.url);
+  const { from, to } = dateRange(url, 6);
+  const branch = reportBranchFilter(ctx, url.searchParams.get("branch"));
+  const b = branch ? { branch } : {};
+  const match = { tenant: tid, ...b, status: "completed", createdAt: { $gte: from, $lte: to } };
 
-  const [summary, byMethod, byDay, topItems, expenses, purchases, returns] = await Promise.all([
+  const [summary, byMethod, byDay, topItems, expenses, purchases, returns, byBranch] = await Promise.all([
     Sale.aggregate([
       { $match: match },
       {
@@ -56,17 +61,30 @@ export const GET = handle(async (req) => {
       { $limit: 20 },
     ]),
     Expense.aggregate([
-      { $match: { tenant: tid, date: { $gte: from, $lte: to } } },
+      { $match: { tenant: tid, ...b, date: { $gte: from, $lte: to } } },
       { $group: { _id: "$category", total: { $sum: "$amount" } } },
       { $sort: { total: -1 } },
     ]),
     Purchase.aggregate([
-      { $match: { tenant: tid, createdAt: { $gte: from, $lte: to } } },
+      { $match: { tenant: tid, ...b, createdAt: { $gte: from, $lte: to } } },
       { $group: { _id: null, total: { $sum: "$total" }, count: { $sum: 1 } } },
     ]),
     Sale.aggregate([
-      { $match: { tenant: tid, status: "returned", returnedAt: { $gte: from, $lte: to } } },
+      { $match: { tenant: tid, ...b, status: "returned", returnedAt: { $gte: from, $lte: to } } },
       { $group: { _id: null, total: { $sum: "$total" }, count: { $sum: 1 } } },
+    ]),
+    Sale.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: "$branch",
+          name: { $first: "$branchName" },
+          total: { $sum: "$total" },
+          profit: { $sum: { $subtract: [{ $subtract: ["$total", "$tax"] }, "$costTotal"] } },
+          bills: { $sum: 1 },
+        },
+      },
+      { $sort: { total: -1 } },
     ]),
   ]);
 
@@ -96,5 +114,7 @@ export const GET = handle(async (req) => {
     byDay: byDay.map((d) => ({ date: d._id, total: round2(d.total), profit: round2(d.profit), bills: d.bills })),
     topItems: topItems.map((t) => ({ ...t, total: round2(t.total), profit: round2(t.profit) })),
     expenses,
+    branch: branch ? String(branch) : "all",
+    byBranch: byBranch.map((x) => ({ ...x, total: round2(x.total), profit: round2(x.profit) })),
   };
 });

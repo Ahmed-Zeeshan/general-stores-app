@@ -1,5 +1,5 @@
 import type { Types } from "mongoose";
-import { LedgerEntry, Party, Product, StockMovement } from "@/models";
+import { LedgerEntry, Party, Product, StockLevel, StockMovement } from "@/models";
 import { round2 } from "./money";
 import { ApiError } from "./api";
 
@@ -40,12 +40,16 @@ export async function postLedger(opts: {
   });
 }
 
-/** Atomically change stock and record the movement. qty is signed. */
+/**
+ * Atomically change stock at one branch (and the product's shop-wide total) and record the
+ * movement. qty is signed.
+ */
 export async function moveStock(opts: {
   tid: Types.ObjectId;
+  branch: Types.ObjectId;
   productId: Id;
   qty: number;
-  type: "sale" | "purchase" | "return" | "adjustment" | "wastage" | "opening" | "production" | "import";
+  type: "sale" | "purchase" | "return" | "adjustment" | "wastage" | "opening" | "production" | "import" | "transfer";
   refNo?: string;
   note?: string;
   userId?: Id;
@@ -53,15 +57,25 @@ export async function moveStock(opts: {
   const qty = Math.round(opts.qty * 1000) / 1000;
   const product = await Product.findOneAndUpdate({ _id: opts.productId, tenant: opts.tid }, { $inc: { stock: qty } }, { new: true });
   if (!product) return null;
+  const level = await StockLevel.findOneAndUpdate(
+    { tenant: opts.tid, product: product._id, branch: opts.branch },
+    { $inc: { qty } },
+    { new: true, upsert: true, setDefaultsOnInsert: true },
+  );
+  // Keep values tidy (e.g. 0.30000000000000004 -> 0.3).
+  const clean = (n: number) => Math.round(n * 1000) / 1000;
+  if (clean(level.qty) !== level.qty) await StockLevel.updateOne({ _id: level._id, tenant: opts.tid }, { qty: clean(level.qty) });
+  if (clean(product.stock) !== product.stock) await Product.updateOne({ _id: product._id, tenant: opts.tid }, { stock: clean(product.stock) });
   await StockMovement.create({
     tenant: opts.tid,
+    branch: opts.branch,
     product: product._id,
     type: opts.type,
     qty,
-    stockAfter: product.stock,
+    stockAfter: clean(level.qty),
     refNo: opts.refNo,
     note: opts.note,
     user: opts.userId,
   });
-  return product;
+  return { product, branchQty: clean(level.qty) };
 }

@@ -11,18 +11,19 @@ Designed for non-technical shopkeepers: big buttons, plain language, English wit
 
 ```
 Super Admin (platform)
- ├── Shop A  (limit: 3 users)          ← each shop = one tenant, data fully separated
- │    ├── Owner      – everything in the shop, manages staff
- │    ├── Manager    – products, purchases, production, expenses, reports, returns
- │    └── Cashier    – billing and receiving udhaar only
- └── Shop B  (limit: 5 users)
+ ├── Shop A  (limit: 3 users, 2 branches)   ← each shop = one tenant, data fully separated
+ │    ├── Main Branch / Gulberg Branch       ← each branch has its own stock
+ │    ├── Owner      – everything in the shop, manages staff and branches
+ │    ├── Manager    – products, purchases, production, transfers, expenses, reports, returns
+ │    └── Cashier    – billing and receiving udhaar only (can be locked to one branch)
+ └── Shop B  (limit: 5 users, 1 branch)
       └── ...
 ```
 
 | Who | Can do |
 |---|---|
-| **Super Admin** | Create shops with their owner login · set **maximum users per shop** · set plan name and **access-until date** · suspend / re-activate a shop · add users to any shop, reset passwords, enable/disable users · download any shop's backup · see sales, users and activity of all shops |
-| **Shop Owner** | Everything inside their shop · add/disable staff **up to the limit set by the Super Admin** · shop settings, tax, FBR · import/export/backup |
+| **Super Admin** | Create shops with their owner login · set **maximum users and branches per shop** · set plan name and **access-until date** · suspend / re-activate a shop · add users to any shop, reset passwords, enable/disable users · download any shop's backup · see sales, users and activity of all shops |
+| **Shop Owner** | Everything inside their shop · add/disable staff and branches **up to the limits set by the Super Admin** · shop settings, tax, FBR, WhatsApp · import/export/backup/restore |
 | **Manager** | Daily operations except settings and staff |
 | **Cashier** | New bills, customers and receiving udhaar; cannot change prices |
 
@@ -35,13 +36,17 @@ Data isolation is enforced in the database layer: every shop record carries a `t
 | **New Bill (POS)** | Barcode scan or search, category tabs, loose items **by kg or by rupees** ("Rs 100 ki cheeni"), discounts, change calculation, Cash / JazzCash / Easypaisa / Card / Bank / Udhaar, 80 mm thermal receipts. `F2` search, `F9` pay. |
 | **Products & Stock** | Units (piece, kg, gram, litre, dozen…), cost & sale price, low-stock and expiry alerts, stock add / remove / wastage / exact count, full stock history. |
 | **Production (bakery)** | Recipes (ingredients per batch → finished items), production runs that deduct ingredients and add finished stock, automatic cost per item, shortage warnings, production history. |
-| **Customers Khata** | Udhaar with running balance, credit limits, partial payments, opening balances, **WhatsApp reminder**. |
+| **Customers Khata** | Udhaar with running balance, credit limits, partial payments, opening balances, printable **khata statement** (save as PDF). |
+| **Udhaar Report & WhatsApp** | Who owes how much and for how long (0–30 / 31–60 / 61–90 / 90+ days, payments clear the oldest udhaar first), last payment, last reminder. One click opens **WhatsApp Desktop or WhatsApp Web** with the reminder already typed; "Remind all" walks through customers one by one. Message template is editable. Print or export to Excel. |
+| **Barcodes** | **USB/Bluetooth scanners** work anywhere on the billing, products, purchase, transfer and label screens. **Camera scanning** on phones/laptops. **Create barcodes** for items without one (GS1 in-store EAN-13 starting with 20, never clashes with company barcodes). **Print labels** on label printers (38×25, 50×30 mm) or A4 sticker sheets (24 or 40 per sheet) with shop name, product, price and barcode. |
+| **Branches** | Each branch has its own stock; bills, purchases, production and expenses belong to a branch; **stock transfers** between branches; reports per branch or all branches; staff can be locked to one branch. |
+| **Offline billing** | If the internet or the shop server goes down, the New Bill screen keeps working from the products saved on the device. Bills are stored on the device and sent automatically when the connection returns (never twice). A provisional receipt can be printed. |
 | **Suppliers & Purchases** | Incoming stock updates stock, cost and sale prices; supplier payable khata. |
 | **Expenses, Sales history, Returns** | Full bill returns put stock back and reverse udhaar. |
 | **Reports & Dashboard** | Sales, profit & loss, best sellers, payment methods, expenses, returns; 7-day chart. |
 | **FBR POS integration** | Bills are sent to FBR; FBR invoice number + QR code printed on the receipt; returns sent as credit notes; if internet/FBR is down bills are saved as *pending* and re-sent with one click. |
-| **Data** | Export products / customers / suppliers / sales / expenses to Excel (CSV), **import products from CSV**, full JSON backup. |
-| **Installable app (PWA)** | "Install" / "Add to Home Screen" on Chrome, Edge and Android; shows a friendly offline page when the server can't be reached. |
+| **Data** | Export products / customers / suppliers / sales / expenses to Excel (CSV), **import products from CSV**, full JSON backup and **restore** (same shop only, validated first, safety copy downloaded before replacing). |
+| **Installable app (PWA)** | "Install" / "Add to Home Screen" on Chrome, Edge and Android. |
 | **Security** | bcrypt passwords, signed httpOnly session cookies, role checks on every API, login lockout after 10 wrong attempts, security headers, CSV formula-injection protection, FBR token never sent to the browser. |
 
 ## Getting started (local MongoDB)
@@ -79,10 +84,21 @@ npm start
 
 Run it on one shop computer (or a server) and open `http://<that-computer-ip>:3000` from other PCs and phones on the same Wi-Fi. For access over the internet, put it behind HTTPS (e.g. a reverse proxy such as Caddy or Nginx).
 
-### Backups
+### Barcode scanner & camera
 
-- Shop owners: **Settings → Data → Download backup** (one JSON file per shop).
-- Super Admin: **Shops → (shop) → Backup**.
+- **USB / Bluetooth scanners**: plug in and scan. No setup needed; the app recognises the fast typing + Enter that scanners send.
+- **Camera**: browsers only allow the camera on `https://` or on `localhost`. On the shop PC (`http://localhost:3000`) it works directly. For phones on the shop Wi-Fi, serve the app over HTTPS (e.g. Caddy with a local certificate) or use a USB/Bluetooth scanner.
+- **Labels**: Products → *Create barcodes* gives every item without a barcode its own in-store code; *Print labels* (or the barcode icon on a product) prints stickers. For label printers set the paper size to the label size, margins none, scale 100%.
+
+### WhatsApp reminders
+
+Install **WhatsApp Desktop** on the shop PC (or keep **web.whatsapp.com** logged in). In the Udhaar Report choose *WhatsApp Desktop* or *WhatsApp Web* (remembered per computer). Clicking *WhatsApp* opens the chat with the message typed; you only press Send. Edit the message in **Settings → WhatsApp reminders**. To send a full statement, open *Statement*, choose *Print → Save as PDF* and attach the PDF in WhatsApp.
+
+### Backups & restore
+
+- Shop owners: **Settings → Data → Download backup** (one JSON file per shop) and **Restore from backup**.
+- Super Admin: **Shops → (shop) → Backup / Restore from backup**.
+- Restore only accepts a backup of the same shop, checks the whole file before changing anything, keeps staff logins and the admin's limits, and asks you to download a safety copy first.
 - Whole database: `mongodump --uri "mongodb://127.0.0.1:27017/dukaan" --out backup-folder` (MongoDB Database Tools).
 
 ### FBR setup
@@ -104,21 +120,23 @@ src/
   app/
     (auth)/login, setup          Login, first-run Super Admin setup
     (app)/                       Main app (sidebar layout)
-      admin/                     Super Admin: shops, limits, users
+      admin/                     Super Admin: shops, limits, users, restore
       page.tsx                   Shop dashboard
-      pos/ products/ customers/ suppliers/ purchases/ sales/
-      production/ expenses/ reports/ settings/
+      pos/ products/ customers/ suppliers/ purchases/ sales/ udhaar/ labels/
+      transfers/ production/ expenses/ reports/ settings/
     receipt/[id]                 Printable 80 mm receipt (with FBR QR)
+    statement/[id]               Printable A4 khata statement
     offline/                     Offline page (PWA)
     api/                         REST API route handlers
   components/                    UI kit, charts, shared pages
-  lib/                           DB, auth, tenants, FBR, CSV, backup, business services
+  lib/                           DB, auth, tenants, branches, FBR, CSV, backup/restore,
+                                 udhaar ageing, WhatsApp, barcodes, offline outbox
   models/                        Mongoose schemas + tenant guard plugin
   middleware.ts                  Login and role-based routing
 public/sw.js, icons/             Service worker and app icons
 ```
 
-## Not included yet
+## Notes and limits
 
-- **Offline billing** (making bills with no connection to the server and syncing later). The app needs the shop server to be reachable; with a local MongoDB and the app on the shop PC, internet is only needed for FBR, and pending FBR bills are re-sent later.
-- SMS reminders (WhatsApp reminders are included), restoring from a backup file through the UI, and multiple branches sharing one stock.
+- **Offline billing** covers the New Bill screen on a device that has opened it before while online. Other screens (reports, products, khata) need the server. Offline bills get their final bill number and FBR number when they are sent.
+- **WhatsApp** messages are opened ready to send; WhatsApp does not allow a website to press Send by itself, so the shopkeeper confirms each message.

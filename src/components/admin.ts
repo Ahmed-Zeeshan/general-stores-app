@@ -7,6 +7,8 @@ export type ShopRow = {
   status: "active" | "suspended";
   plan?: string;
   maxUsers: number;
+  maxBranches: number;
+  branches: number;
   expiresAt?: string;
   createdAt: string;
   users: number;

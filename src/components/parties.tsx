@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, BookOpen, HandCoins, MessageCircle, Pencil, Phone, Plus, Search, Truck, UserRound } from "lucide-react";
+import { ArrowLeft, BookOpen, FileText, HandCoins, MessageCircle, Pencil, Phone, Plus, Search, Truck, UserRound } from "lucide-react";
 import { Button, Card, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Spinner, StatCard, Table, Td, Th, Textarea } from "./ui";
 import { useCan, useSession } from "./session";
 import { useToast } from "./toast";
 import { api, formatDate, PAYMENT_LABELS } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
+import { openWhatsApp, reminderMessage, waNumber } from "@/lib/whatsapp";
 
 type PartyType = "customer" | "supplier";
 type Party = { _id: string; type: PartyType; name: string; phone?: string; address?: string; creditLimit: number; balance: number; notes?: string; updatedAt: string };
@@ -39,14 +40,6 @@ const TEXT = {
   },
 };
 
-/** Converts a Pakistani number like 0300-1234567 to 923001234567 for WhatsApp links. */
-function waNumber(phone?: string) {
-  if (!phone) return null;
-  let d = phone.replace(/\D/g, "");
-  if (d.startsWith("0")) d = "92" + d.slice(1);
-  if (d.length < 11) return null;
-  return d;
-}
 
 export function PartiesList({ type }: { type: PartyType }) {
   const t = TEXT[type];
@@ -230,9 +223,12 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
   if (!data) return <Spinner />;
   const { party, ledger } = data;
   const wa = waNumber(party.phone);
-  const reminder = encodeURIComponent(
-    `Assalam o Alaikum ${party.name},\n${settings?.shopName ?? "Our shop"} ka aap ki taraf ${formatPKR(party.balance)} baqaya hai. Meharbani kar ke jald ada kar dein. Shukriya!`,
-  );
+  async function remind() {
+    if (!wa) return;
+    openWhatsApp(wa, reminderMessage(settings?.waTemplate, { name: party.name, amount: party.balance, shop: settings?.shopName ?? "", shopPhone: settings?.phone }));
+    await api("/api/reminders", { body: { partyId: party._id, kind: "reminder" } }).catch(() => {});
+    toast.success("WhatsApp opened — press Send there");
+  }
   const canCharge = can.manage;
   const canPay = type === "customer" || can.manage;
 
@@ -289,10 +285,13 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
             </Button>
           )}
           {type === "customer" && wa && party.balance > 0 && (
-            <a href={`https://wa.me/${wa}?text=${reminder}`} target="_blank" rel="noreferrer">
-              <Button variant="outline" icon={<MessageCircle className="h-4 w-4 text-emerald-600" />}>WhatsApp reminder</Button>
-            </a>
+            <Button variant="outline" icon={<MessageCircle className="h-4 w-4 text-emerald-600" />} onClick={remind}>
+              WhatsApp reminder
+            </Button>
           )}
+          <a href={`/statement/${party._id}`} target="_blank" rel="noreferrer">
+            <Button variant="outline" icon={<FileText className="h-4 w-4" />}>Statement</Button>
+          </a>
           {can.manage && (
             <Button variant="ghost" icon={<Pencil className="h-4 w-4" />} onClick={() => setEditing(true)}>
               Edit

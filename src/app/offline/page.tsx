@@ -14,10 +14,14 @@ export default function OfflinePage() {
         <p className="mt-3 text-slate-600">
           Dukaan Manager cannot reach the server. Check the internet or that the shop computer running the app is on, then try again.
         </p>
+        <p className="mt-2 text-sm text-slate-500">You can still make bills on the New Bill screen if it was opened on this device before.</p>
         {/* A full page load (not client-side navigation) so the browser really retries the server. */}
         {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
         <a href="/" className="mt-6 inline-flex h-12 items-center justify-center rounded-xl bg-brand-600 px-6 font-semibold text-white hover:bg-brand-700">
           Try again
+        </a>
+        <a href="/pos" className="ml-2 mt-6 inline-flex h-12 items-center justify-center rounded-xl border border-slate-300 bg-white px-6 font-semibold text-slate-700 hover:bg-slate-50">
+          New Bill
         </a>
       </div>
     </div>

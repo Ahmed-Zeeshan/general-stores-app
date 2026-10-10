@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Ban, CheckCircle2, Download, Plus, Save, UserCog, Users } from "lucide-react";
 import { Badge, Button, Card, Field, Input, Modal, Select, Spinner, Table, Td, Th, Textarea } from "@/components/ui";
 import { SHOP_TYPES, shopState } from "@/components/admin";
+import { RestoreButton } from "@/components/restore";
 import { useToast } from "@/components/toast";
 import { api, formatDate } from "@/lib/client";
 
@@ -17,11 +18,13 @@ type Tenant = {
   address?: string;
   status: "active" | "suspended";
   maxUsers: number;
+  maxBranches?: number;
   plan?: string;
   expiresAt?: string;
   adminNotes?: string;
   createdAt: string;
 };
+type ShopBranch = { _id: string; name: string; isMain: boolean; active: boolean };
 type ShopUser = { _id: string; name: string; username: string; role: "owner" | "manager" | "cashier"; active: boolean; lastLoginAt?: string };
 
 const ROLE_COLOR = { owner: "violet", manager: "blue", cashier: "slate" } as const;
@@ -29,18 +32,19 @@ const ROLE_COLOR = { owner: "violet", manager: "blue", cashier: "slate" } as con
 export default function AdminShopPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const toast = useToast();
-  const [data, setData] = useState<{ tenant: Tenant; users: ShopUser[] } | null>(null);
-  const [form, setForm] = useState({ shopName: "", maxUsers: "", plan: "", expiresAt: "", adminNotes: "" });
+  const [data, setData] = useState<{ tenant: Tenant; users: ShopUser[]; branches: ShopBranch[] } | null>(null);
+  const [form, setForm] = useState({ shopName: "", maxUsers: "", maxBranches: "", plan: "", expiresAt: "", adminNotes: "" });
   const [saving, setSaving] = useState(false);
   const [userModal, setUserModal] = useState<ShopUser | "new" | null>(null);
 
   const load = useCallback(() => {
-    api<{ tenant: Tenant; users: ShopUser[] }>(`/api/admin/tenants/${id}`)
+    api<{ tenant: Tenant; users: ShopUser[]; branches: ShopBranch[] }>(`/api/admin/tenants/${id}`)
       .then((d) => {
         setData(d);
         setForm({
           shopName: d.tenant.shopName,
           maxUsers: String(d.tenant.maxUsers),
+          maxBranches: String(d.tenant.maxBranches ?? 1),
           plan: d.tenant.plan ?? "",
           expiresAt: d.tenant.expiresAt ? d.tenant.expiresAt.slice(0, 10) : "",
           adminNotes: d.tenant.adminNotes ?? "",
@@ -59,7 +63,10 @@ export default function AdminShopPage({ params }: { params: Promise<{ id: string
     e.preventDefault();
     setSaving(true);
     try {
-      await api(`/api/admin/tenants/${id}`, { method: "PUT", body: { ...form, maxUsers: Number(form.maxUsers), expiresAt: form.expiresAt || null } });
+      await api(`/api/admin/tenants/${id}`, {
+        method: "PUT",
+        body: { ...form, maxUsers: Number(form.maxUsers), maxBranches: Number(form.maxBranches), expiresAt: form.expiresAt || null },
+      });
       toast.success("Shop updated");
       load();
     } catch (err) {
@@ -100,6 +107,7 @@ export default function AdminShopPage({ params }: { params: Promise<{ id: string
           <a href={`/api/admin/tenants/${id}/backup`}>
             <Button variant="outline" icon={<Download className="h-4 w-4" />}>Backup</Button>
           </a>
+          <RestoreButton shopName={tenant.shopName} restoreUrl={`/api/admin/tenants/${id}/restore`} backupUrl={`/api/admin/tenants/${id}/backup`} onDone={load} />
           {tenant.status === "active" ? (
             <Button variant="danger" icon={<Ban className="h-4 w-4" />} onClick={() => setStatus("suspended")}>Suspend shop</Button>
           ) : (
@@ -121,6 +129,12 @@ export default function AdminShopPage({ params }: { params: Promise<{ id: string
               error={Number(form.maxUsers) < activeUsers ? `Lower than the ${activeUsers} active users. Existing users keep working, but no new ones can be added.` : undefined}
             >
               <Input required type="number" min={1} max={1000} value={form.maxUsers} onChange={(e) => setForm({ ...form, maxUsers: e.target.value })} />
+            </Field>
+            <Field
+              label="Maximum branches"
+              hint={`${data.branches.filter((b) => b.active).length} open: ${data.branches.filter((b) => b.active).map((b) => b.name).join(", ") || "Main Branch"}`}
+            >
+              <Input required type="number" min={1} max={200} value={form.maxBranches} onChange={(e) => setForm({ ...form, maxBranches: e.target.value })} />
             </Field>
             <Field label="Plan name">
               <Input value={form.plan} onChange={(e) => setForm({ ...form, plan: e.target.value })} />

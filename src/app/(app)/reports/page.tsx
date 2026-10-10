@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { BadgeDollarSign, Printer, Receipt, ShoppingBag, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import { Button, Card, PageHeader, Spinner, StatCard, Table, Td, Th } from "@/components/ui";
 import { DateRange } from "@/components/date-range";
+import { BranchFilter } from "@/components/branch-filter";
 import { SalesBarChart } from "@/components/charts";
 import { useToast } from "@/components/toast";
 import { api, PAYMENT_LABELS, todayISO, UNIT_LABELS } from "@/lib/client";
@@ -30,17 +31,19 @@ type Report = {
   byDay: { date: string; total: number; profit: number; bills: number }[];
   topItems: { _id: string; unit: string; qty: number; total: number; profit: number }[];
   expenses: { _id: string; total: number }[];
+  byBranch: { _id: string; name: string; total: number; profit: number; bills: number }[];
 };
 
 export default function ReportsPage() {
   const toast = useToast();
   const [range, setRange] = useState({ from: todayISO(-6), to: todayISO() });
+  const [branch, setBranch] = useState("");
   const [data, setData] = useState<Report | null>(null);
 
   useEffect(() => {
     setData(null);
-    api<Report>(`/api/reports?from=${range.from}&to=${range.to}`).then(setData).catch((e) => toast.error(e.message));
-  }, [range, toast]);
+    api<Report>(`/api/reports?from=${range.from}&to=${range.to}&branch=${branch}`).then(setData).catch((e) => toast.error(e.message));
+  }, [range, branch, toast]);
 
   const s = data?.summary;
   return (
@@ -51,8 +54,9 @@ export default function ReportsPage() {
         subtitle="Profit & loss, best sellers and payment summary"
         actions={<Button variant="outline" icon={<Printer className="h-4 w-4" />} onClick={() => window.print()}>Print</Button>}
       />
-      <div className="no-print mb-6">
+      <div className="no-print mb-6 flex flex-wrap items-center gap-3">
         <DateRange from={range.from} to={range.to} onChange={setRange} />
+        <BranchFilter value={branch} onChange={setBranch} />
       </div>
       {!data || !s ? (
         <Spinner />
@@ -97,6 +101,34 @@ export default function ReportsPage() {
               </div>
             </Card>
           </div>
+
+          {data.byBranch.length > 1 && (
+            <Card className="mt-6">
+              <div className="border-b border-slate-100 px-5 py-4">
+                <h2 className="font-bold text-slate-900">Sales by branch</h2>
+              </div>
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>Branch</Th>
+                    <Th className="text-right">Bills</Th>
+                    <Th className="text-right">Sales</Th>
+                    <Th className="text-right">Gross profit</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.byBranch.map((b) => (
+                    <tr key={b._id}>
+                      <Td className="font-medium">{b.name}</Td>
+                      <Td className="text-right">{b.bills}</Td>
+                      <Td className="text-right font-semibold">{formatPKR(b.total)}</Td>
+                      <Td className="text-right text-emerald-700">{formatPKR(b.profit)}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </Card>
+          )}
 
           <div className="mt-6 grid gap-6 lg:grid-cols-3">
             <Card className="lg:col-span-2">

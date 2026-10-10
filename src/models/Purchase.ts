@@ -16,6 +16,8 @@ const PurchaseItemSchema = new Schema(
 const PurchaseSchema = new Schema(
   {
     purchaseNo: { type: String, required: true },
+    branch: { type: Schema.Types.ObjectId, ref: "Branch" },
+    branchName: { type: String },
     supplier: { type: Schema.Types.ObjectId, ref: "Party" },
     supplierName: { type: String },
     supplierInvoice: { type: String, trim: true },

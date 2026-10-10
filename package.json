@@ -11,8 +11,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@zxing/browser": "0.2.1",
+    "@zxing/library": "0.23.0",
     "bcryptjs": "2.4.3",
     "jose": "5.10.0",
+    "jsbarcode": "3.12.3",
     "lucide-react": "0.577.0",
     "mongoose": "8.24.5",
     "next": "15.5.27",

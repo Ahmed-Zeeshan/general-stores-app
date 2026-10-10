@@ -4,7 +4,15 @@ export const SESSION_COOKIE = "dukaan_session";
 export type Role = "superadmin" | "owner" | "manager" | "cashier";
 export type ShopRole = Exclude<Role, "superadmin">;
 /** tenantId is null only for the platform super admin. */
-export type SessionUser = { id: string; name: string; username: string; role: Role; tenantId: string | null };
+export type SessionUser = {
+  id: string;
+  name: string;
+  username: string;
+  role: Role;
+  tenantId: string | null;
+  /** Branch the user is locked to (read fresh from the database, not stored in the cookie). */
+  branchId?: string | null;
+};
 
 function secret() {
   const s = process.env.AUTH_SECRET;

@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { Plus, Search, UserRound } from "lucide-react";
 import { Button, Field, Input, Modal } from "./ui";
 import { useToast } from "./toast";
-import { api } from "@/lib/client";
+import { api, NetworkError } from "@/lib/client";
+import { cache } from "@/lib/offline";
+import { useSession } from "./session";
 import { formatPKR } from "@/lib/money";
 
 export type PartyLite = { _id: string; name: string; phone?: string; balance: number; creditLimit: number };
@@ -27,14 +29,27 @@ export function CustomerPicker({
   const [form, setForm] = useState({ name: "", phone: "" });
   const [saving, setSaving] = useState(false);
   const label = type === "customer" ? "customer" : "supplier";
+  const { user } = useSession();
+  const cacheKey = `${user.tenantId}:parties:${type}`;
 
   useEffect(() => {
     if (!open) return;
     const t = setTimeout(() => {
-      api<PartyLite[]>(`/api/parties?type=${type}&q=${encodeURIComponent(q)}`).then(setList).catch(() => {});
+      api<PartyLite[]>(`/api/parties?type=${type}&q=${encodeURIComponent(q)}`)
+        .then((r) => {
+          setList(r);
+          if (!q) cache.set(cacheKey, r);
+        })
+        .catch((err) => {
+          // Offline: search the list saved on this device.
+          if (!(err instanceof NetworkError)) return;
+          const t = q.trim().toLowerCase();
+          const saved = cache.get<PartyLite[]>(cacheKey, []);
+          setList(saved.filter((p) => !t || p.name.toLowerCase().includes(t) || p.phone?.includes(t)));
+        });
     }, 200);
     return () => clearTimeout(t);
-  }, [q, open, type]);
+  }, [q, open, type, cacheKey]);
 
   useEffect(() => {
     if (open) {

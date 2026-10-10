@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Types } from "mongoose";
 import { ApiError } from "@/lib/api";
 import { round2 } from "@/lib/money";
-import { Product, Recipe } from "@/models";
+import { Product, Recipe, StockLevel } from "@/models";
 
 export const RecipeInput = z.object({
   name: z.string().trim().min(1, "Recipe name is required"),
@@ -25,12 +25,14 @@ export async function validateRecipe(tid: Types.ObjectId, body: z.infer<typeof R
   if (found !== new Set(ids).size) throw new ApiError(400, "One of the items no longer exists. Please refresh.");
 }
 
-/** Recipes with product details and the current cost of one batch. */
-export async function recipesWithDetails(tid: Types.ObjectId, filter: Record<string, unknown> = {}) {
+/** Recipes with product details, stock at the given branch and the current cost of one batch. */
+export async function recipesWithDetails(tid: Types.ObjectId, branch: Types.ObjectId, filter: Record<string, unknown> = {}) {
   const recipes = await Recipe.find({ tenant: tid, active: true, ...filter }).sort({ name: 1 }).lean();
   const ids = recipes.flatMap((r) => [r.output, ...r.ingredients.map((i) => i.product)]);
   const products = await Product.find({ tenant: tid, _id: { $in: ids } }).select("name unit costPrice salePrice stock").lean();
-  const byId = new Map(products.map((p) => [String(p._id), p]));
+  const levels = await StockLevel.find({ tenant: tid, branch, product: { $in: ids } }).select("product qty").lean();
+  const qty = new Map(levels.map((l) => [String(l.product), l.qty]));
+  const byId = new Map(products.map((p) => [String(p._id), { ...p, stock: qty.get(String(p._id)) ?? 0 }]));
   return recipes.map((r) => {
     const ingredients = r.ingredients.map((i) => {
       const p = byId.get(String(i.product));

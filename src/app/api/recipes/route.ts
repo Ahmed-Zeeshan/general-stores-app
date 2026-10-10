@@ -1,10 +1,11 @@
 import { handle, requireTenant } from "@/lib/api";
+import { requireBranch } from "@/lib/branches";
 import { recipesWithDetails, RecipeInput, validateRecipe } from "@/lib/recipes";
 import { Recipe } from "@/models";
 
 export const GET = handle(async () => {
-  const { tid } = await requireTenant(["owner", "manager"]);
-  return recipesWithDetails(tid);
+  const { tid, branchId } = await requireBranch(["owner", "manager"]);
+  return recipesWithDetails(tid, branchId);
 });
 
 export const POST = handle(async (req) => {
