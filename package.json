@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "reset-admin": "node --env-file=.env.local scripts/reset-admin.mjs"
   },
   "dependencies": {
     "@zxing/browser": "0.2.1",

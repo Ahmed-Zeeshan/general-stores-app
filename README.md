@@ -105,6 +105,18 @@ Install **WhatsApp Desktop** on the shop PC (or keep **web.whatsapp.com** logged
 
 In **Settings → FBR POS integration** (owner): turn it on, choose *Sandbox* first, enter the **POS ID** and **access token** you receive when registering your POS with FBR, and a default **PCT code** (each product can override it). Test a few bills in Sandbox, then switch to *Live*. Endpoints can be overridden with `FBR_SANDBOX_URL` / `FBR_LIVE_URL`; confirm the current URLs and fields with FBR before going live.
 
+## Super Admin login
+
+There is no built-in account: the first person to open a new database creates the Super Admin.
+To create it from the command line, or to reset a forgotten Super Admin password:
+
+```bash
+npm run reset-admin                                              # prints username and a new random password
+npm run reset-admin -- --username admin --password "YourStrongPass1"   # choose your own
+```
+
+Shop owners and staff are created inside the app (Shops → New shop, Settings → Staff accounts).
+
 ## Troubleshooting
 
 **Do not run `npm audit fix --force`.** It installs breaking major versions of packages and can stop the app from working. Versions are pinned and tested; production dependencies report 0 vulnerabilities (`npm audit --omit=dev`).
