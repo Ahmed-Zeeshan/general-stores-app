@@ -18,7 +18,8 @@ export const FBR_URLS = {
 };
 
 /** FBR payment modes: 1 Cash, 2 Card, 3 Gift voucher, 4 Loyalty card, 5 Mixed, 6 Cheque. */
-function paymentMode(method: string, creditAmount: number, amountPaid: number) {
+function paymentMode(method: string, creditAmount: number, amountPaid: number, payments?: { method: string }[] | null) {
+  if (new Set((payments ?? []).map((p) => p.method)).size > 1) return 5;
   if (creditAmount > 0 && amountPaid > 0) return 5;
   if (method === "card" || method === "jazzcash" || method === "easypaisa" || method === "bank") return 2;
   return 1;
@@ -36,6 +37,7 @@ type SaleLike = {
   paymentMethod: string;
   amountPaid: number;
   creditAmount: number;
+  payments?: { method: string; amount: number }[] | null;
   customerName?: string | null;
   fbrInvoiceNumber?: string | null;
 };
@@ -96,7 +98,7 @@ export function buildFbrInvoice(
     TotalTaxCharged: round2(sale.tax),
     Discount: round2(sale.discount),
     FurtherTax: 0,
-    PaymentMode: paymentMode(sale.paymentMethod, sale.creditAmount, sale.amountPaid),
+    PaymentMode: paymentMode(sale.paymentMethod, sale.creditAmount, sale.amountPaid, sale.payments),
     RefUSIN: opts.type === "return" ? opts.refFbrNumber ?? opts.refInvoiceNo ?? null : null,
     InvoiceType: opts.type === "sale" ? 1 : 3,
     Items: items,

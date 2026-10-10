@@ -666,6 +666,8 @@ function LooseQtyModal({ product, onClose, onAdd }: { product: Product | null; o
   );
 }
 
+const TENDERS = METHODS.filter((m) => m.value !== "credit");
+
 function PaymentModal({
   open,
   onClose,
@@ -686,28 +688,54 @@ function PaymentModal({
   onOffline: (bill: Omit<OutboxBill, "lines">) => void;
 }) {
   const toast = useToast();
+  const [mode, setMode] = useState<"single" | "split">("single");
   const [method, setMethod] = useState<string>("cash");
   const [received, setReceived] = useState("");
+  const [ref, setRef] = useState("");
+  const [split, setSplit] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   // One id per bill, reused if Confirm is pressed again, so a bill can never be saved twice.
   const clientId = useRef(newClientId());
 
   useEffect(() => {
     if (open) {
+      setMode("single");
       setMethod("cash");
       setReceived("");
+      setRef("");
+      setSplit({});
       clientId.current = newClientId();
     }
   }, [open]);
 
+  // --- single method
   const receivedNum = method === "credit" ? Number(received) || 0 : received === "" ? total : Number(received) || 0;
-  const change = round2(Math.max(0, receivedNum - total));
-  const remaining = round2(Math.max(0, total - receivedNum));
+  // --- split: only cash may be more than what is left (change); other methods must fit in the bill
+  const amt = (m: string) => Math.max(0, Number(split[m]) || 0);
+  const nonCash = round2(TENDERS.filter((m) => m.value !== "cash").reduce((a, m) => a + amt(m.value), 0));
+  const cashGiven = amt("cash");
+  const splitTooMuch = nonCash > total + 0.001;
+  const splitPaid = round2(Math.min(total, nonCash + cashGiven));
+
+  const paidNow = mode === "split" ? splitPaid : Math.min(total, receivedNum);
+  const change = mode === "split" ? round2(Math.max(0, cashGiven - Math.max(0, total - nonCash))) : round2(Math.max(0, receivedNum - total));
+  const remaining = round2(Math.max(0, total - paidNow));
   const quick = Array.from(new Set([total, ...[500, 1000, 5000].filter((n) => n > total), Math.ceil(total / 100) * 100])).sort((a, b) => a - b).slice(0, 4);
+  const usedMethods = TENDERS.filter((m) => amt(m.value) > 0);
+
+  function fillRest(m: string) {
+    const others = round2(TENDERS.filter((t) => t.value !== m).reduce((a, t) => a + amt(t.value), 0));
+    setSplit({ ...split, [m]: String(round2(Math.max(0, total - others))) });
+  }
 
   async function confirm() {
     setSaving(true);
-    const body = { ...payload, paymentMethod: method, amountPaid: receivedNum, clientId: clientId.current };
+    const body =
+      mode === "split"
+        ? usedMethods.length
+          ? { ...payload, payments: usedMethods.map((m) => ({ method: m.value, amount: amt(m.value) })), clientId: clientId.current }
+          : { ...payload, paymentMethod: "credit", amountPaid: 0, clientId: clientId.current }
+        : { ...payload, paymentMethod: method, amountPaid: receivedNum, ...(ref.trim() && method !== "cash" && method !== "credit" ? { paymentRef: ref.trim() } : {}), clientId: clientId.current };
     try {
       const sale = await api<{ _id: string; invoiceNo: string; total: number; change: number }>("/api/sales", { body });
       onDone(sale);
@@ -722,60 +750,109 @@ function PaymentModal({
 
   return (
     <Modal open={open} onClose={onClose} title="Take payment" size="md">
-      <div className="mb-5 rounded-2xl bg-slate-900 p-5 text-center text-white">
+      <div className="mb-4 rounded-2xl bg-slate-900 p-5 text-center text-white">
         <div className="text-sm text-slate-300">Total to pay</div>
         <div className="text-4xl font-extrabold tracking-tight">{formatPKR(total)}</div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
-        {METHODS.map((m) => (
-          <button
-            key={m.value}
-            onClick={() => {
-              setMethod(m.value);
-              setReceived("");
-            }}
-            className={cn(
-              "flex flex-col items-center gap-1.5 rounded-xl border-2 px-2 py-3 text-sm font-semibold transition",
-              method === m.value ? "border-brand-600 bg-brand-50 text-brand-800" : "border-slate-200 text-slate-600 hover:border-slate-300",
-            )}
-          >
-            <m.icon className="h-5 w-5" />
-            {m.label}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        value={mode}
+        onChange={setMode}
+        options={[
+          { value: "single", label: "One method" },
+          { value: "split", label: "Split payment" },
+        ]}
+      />
 
-      <div className="mt-5">
-        <Field label={method === "credit" ? "Paid now (optional)" : "Amount received"} hint={method === "cash" ? "Leave empty if customer gives exact amount" : undefined}>
-          <Input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            value={received}
-            onChange={(e) => setReceived(e.target.value)}
-            placeholder={method === "credit" ? "0" : String(total)}
-            className="h-14 text-2xl font-bold"
-          />
-        </Field>
-        {method === "cash" && (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {quick.map((n) => (
-              <button key={n} onClick={() => setReceived(String(n))} className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-200">
-                {formatPKR(n)}
+      {mode === "single" ? (
+        <>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {METHODS.map((m) => (
+              <button
+                key={m.value}
+                onClick={() => {
+                  setMethod(m.value);
+                  setReceived("");
+                }}
+                className={cn(
+                  "flex flex-col items-center gap-1.5 rounded-xl border-2 px-2 py-3 text-sm font-semibold transition",
+                  method === m.value ? "border-brand-600 bg-brand-50 text-brand-800" : "border-slate-200 text-slate-600 hover:border-slate-300",
+                )}
+              >
+                <m.icon className="h-5 w-5" />
+                {m.label}
               </button>
             ))}
           </div>
-        )}
-      </div>
 
-      {change > 0 && (
+          <div className="mt-5">
+            <Field label={method === "credit" ? "Paid now (optional)" : "Amount received"} hint={method === "cash" ? "Leave empty if customer gives exact amount" : undefined}>
+              <Input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                value={received}
+                onChange={(e) => setReceived(e.target.value)}
+                placeholder={method === "credit" ? "0" : String(total)}
+                className="h-14 text-2xl font-bold"
+              />
+            </Field>
+            {method === "cash" && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {quick.map((n) => (
+                  <button key={n} onClick={() => setReceived(String(n))} className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-200">
+                    {formatPKR(n)}
+                  </button>
+                ))}
+              </div>
+            )}
+            {method !== "cash" && method !== "credit" && (
+              <Field label="Transaction ID (optional)" className="mt-3" hint="From the customer's JazzCash / Easypaisa / bank message or card slip">
+                <Input value={ref} onChange={(e) => setRef(e.target.value)} maxLength={40} aria-label="Transaction ID" />
+              </Field>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="mt-4 space-y-2">
+          {TENDERS.map((m) => (
+            <div key={m.value} className={cn("flex items-center gap-2 rounded-xl border px-3 py-2", amt(m.value) > 0 ? "border-brand-300 bg-brand-50/50" : "border-slate-200")}>
+              <m.icon className="h-5 w-5 shrink-0 text-slate-500" />
+              <span className="w-24 shrink-0 text-sm font-semibold text-slate-700">{m.label}</span>
+              <Input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                value={split[m.value] ?? ""}
+                onChange={(e) => setSplit({ ...split, [m.value]: e.target.value })}
+                placeholder="0"
+                aria-label={`${m.label} amount`}
+                className="h-11 min-w-0 flex-1 text-lg font-bold"
+              />
+              <button type="button" onClick={() => fillRest(m.value)} className="shrink-0 rounded-lg bg-slate-100 px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200">
+                Rest
+              </button>
+            </div>
+          ))}
+          <div className="flex justify-between px-1 pt-1 text-sm">
+            <span className="text-slate-500">Paid</span>
+            <b className="text-slate-900">{formatPKR(nonCash + cashGiven)}</b>
+          </div>
+          {splitTooMuch && (
+            <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+              JazzCash / Easypaisa / card / bank add up to more than the bill. Only cash can be more (change is given back).
+            </p>
+          )}
+        </div>
+      )}
+
+      {change > 0 && !splitTooMuch && (
         <div className="mt-4 flex items-center justify-between rounded-xl bg-amber-50 px-4 py-3">
           <span className="font-semibold text-amber-800">Change to return</span>
           <span className="text-2xl font-extrabold text-amber-900">{formatPKR(change)}</span>
         </div>
       )}
-      {remaining > 0 && (
+      {remaining > 0 && !splitTooMuch && (
         <div className="mt-4 rounded-xl bg-sky-50 px-4 py-3">
           <div className="flex items-center justify-between">
             <span className="font-semibold text-sky-800">Goes to udhaar</span>
@@ -791,7 +868,14 @@ function PaymentModal({
         </div>
       )}
 
-      <Button size="xl" className="mt-6 w-full" loading={saving} disabled={remaining > 0 && !customer} onClick={confirm} icon={<CheckCircle2 className="h-6 w-6" />}>
+      <Button
+        size="xl"
+        className="mt-6 w-full"
+        loading={saving}
+        disabled={(remaining > 0 && !customer) || splitTooMuch || (mode === "split" && !usedMethods.length && !customer)}
+        onClick={confirm}
+        icon={<CheckCircle2 className="h-6 w-6" />}
+      >
         Confirm & Save Bill
       </Button>
     </Modal>

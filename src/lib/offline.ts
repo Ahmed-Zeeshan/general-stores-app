@@ -155,13 +155,20 @@ export function printOfflineReceipt(opts: { shopName: string; branchName?: strin
   const rows = bill.lines
     .map((l) => `<div>${esc(l.name)}</div><div class="row"><span>&nbsp;${l.qty} ${esc(l.unit)} × ${l.price}</span><span>${money(l.total)}</span></div>`)
     .join("");
+  const LABEL: Record<string, string> = { cash: "Cash", card: "Card", jazzcash: "JazzCash", easypaisa: "Easypaisa", bank: "Bank" };
+  const split = (bill.payload.payments as { method: string; amount: number }[] | undefined)?.filter((p) => p.amount > 0) ?? [];
+  const paid = split.reduce((a, p) => a + p.amount, 0) - bill.change;
+  const payRows = split.length
+    ? split.map((p) => `<div class="row"><span>${LABEL[p.method] ?? esc(p.method)}</span><span>${money(p.amount)}</span></div>`).join("") +
+      (bill.total - paid > 0.004 ? `<div class="row"><span>Udhaar</span><span>${money(bill.total - paid)}</span></div>` : "")
+    : "";
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Receipt</title>
 <style>@page{size:80mm auto;margin:4mm}body{font:12px/1.4 monospace;width:72mm;margin:0 auto}
 .c{text-align:center}.row{display:flex;justify-content:space-between}hr{border:0;border-top:1px dashed #000}</style></head>
 <body><div class="c"><b>${esc(opts.shopName.toUpperCase())}</b>${opts.branchName ? `<div>${esc(opts.branchName)}</div>` : ""}</div><hr>
 <div class="c"><b>OFFLINE BILL</b></div><div>Ref: ${esc(bill.clientId.slice(0, 8).toUpperCase())}</div>
 <div>${new Date(bill.soldAt).toLocaleString("en-PK")}</div>${bill.customerName ? `<div>Customer: ${esc(bill.customerName)}</div>` : ""}<hr>
-${rows}<hr><div class="row"><b>TOTAL</b><b>${money(bill.total)}</b></div>${bill.change > 0 ? `<div class="row"><span>Change</span><span>${money(bill.change)}</span></div>` : ""}<hr>
+${rows}<hr><div class="row"><b>TOTAL</b><b>${money(bill.total)}</b></div>${payRows}${bill.change > 0 ? `<div class="row"><span>Change</span><span>${money(bill.change)}</span></div>` : ""}<hr>
 <div class="c" style="font-size:10px">Saved offline. Final bill number is given when the shop computer is back online.</div>
 ${opts.footer ? `<div class="c">${esc(opts.footer)}</div>` : ""}<script>window.onload=function(){window.print()}</script></body></html>`;
   const w = window.open("", "_blank", "width=380,height=640");

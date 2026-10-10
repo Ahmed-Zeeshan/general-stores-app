@@ -1,9 +1,9 @@
 import { tenantScoped } from "./tenant-plugin";
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
 
-import { PAYMENT_METHODS } from "@/lib/constants";
+import { PAYMENT_METHODS, TENDER_METHODS } from "@/lib/constants";
 
-export { PAYMENT_METHODS };
+export { PAYMENT_METHODS, TENDER_METHODS };
 
 const SaleItemSchema = new Schema(
   {
@@ -17,6 +17,17 @@ const SaleItemSchema = new Schema(
     total: { type: Number, required: true },
     /** How many of this line have been returned so far. */
     returnedQty: { type: Number, default: 0 },
+  },
+  { _id: false },
+);
+
+/** Money taken for the bill by each method (amounts applied to the bill, change excluded). */
+const SalePaymentSchema = new Schema(
+  {
+    method: { type: String, enum: TENDER_METHODS, required: true },
+    amount: { type: Number, required: true },
+    /** Transaction ID / last digits for card, JazzCash, Easypaisa or bank payments. */
+    ref: { type: String, trim: true },
   },
   { _id: false },
 );
@@ -36,7 +47,9 @@ const SaleSchema = new Schema(
     taxRate: { type: Number, default: 0 },
     total: { type: Number, required: true },
     costTotal: { type: Number, default: 0 },
+    /** Main method (largest payment), or "credit" when nothing was paid now. */
     paymentMethod: { type: String, enum: PAYMENT_METHODS, default: "cash" },
+    payments: { type: [SalePaymentSchema], default: undefined },
     amountPaid: { type: Number, default: 0 },
     change: { type: Number, default: 0 },
     creditAmount: { type: Number, default: 0 },

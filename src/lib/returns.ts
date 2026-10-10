@@ -85,7 +85,10 @@ export async function createReturn(opts: {
         : sale.items.map((it, index) => ({ index, qty: round3(it.qty - (it.returnedQty ?? 0)) })).filter((l) => l.qty > 0);
     const priced = priceReturn(sale, lines);
 
-    let refundMethod: RefundMethod | "none" = opts.refundMethod ?? (["card", "jazzcash", "easypaisa", "bank"].includes(sale.paymentMethod) ? (sale.paymentMethod as RefundMethod) : "cash");
+    // Default: give it back the way it was paid (cash for split-payment bills).
+    const split = new Set((sale.payments ?? []).map((p) => p.method)).size > 1;
+    let refundMethod: RefundMethod | "none" =
+      opts.refundMethod ?? (!split && ["card", "jazzcash", "easypaisa", "bank"].includes(sale.paymentMethod) ? (sale.paymentMethod as RefundMethod) : "cash");
     if (refundMethod === "khata" && !sale.customer) throw new ApiError(400, "Only bills with a customer can be credited to a khata.");
     if (priced.refund <= 0) refundMethod = "none";
 

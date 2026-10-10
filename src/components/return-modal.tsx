@@ -14,6 +14,7 @@ export type ReturnableSale = {
   customer?: string;
   customerName?: string;
   paymentMethod: string;
+  payments?: { method: string; amount: number }[];
   items: { name: string; unit: string; qty: number; price: number; total: number; returnedQty?: number }[];
   subtotal: number;
   discount: number;
@@ -44,7 +45,8 @@ export function ReturnModal({ sale, onClose, onDone }: { sale: ReturnableSale | 
     setReason("");
     setNote("");
     setDone(null);
-    setMethod(["card", "jazzcash", "easypaisa", "bank"].includes(sale.paymentMethod) ? sale.paymentMethod : "cash");
+    const split = new Set((sale.payments ?? []).map((p) => p.method)).size > 1;
+    setMethod(!split && ["card", "jazzcash", "easypaisa", "bank"].includes(sale.paymentMethod) ? sale.paymentMethod : "cash");
   }, [sale]);
 
   const lines = useMemo(() => {

@@ -17,6 +17,7 @@ type Sale = {
   taxRate: number;
   total: number;
   paymentMethod: string;
+  payments?: { method: string; amount: number; ref?: string }[];
   amountPaid: number;
   change: number;
   creditAmount: number;
@@ -144,7 +145,14 @@ function Receipt({ id }: { id: string }) {
           <span>{formatPKR(sale.total)}</span>
         </div>
         <Divider />
-        <Line label={`Paid (${PAYMENT_LABELS[sale.paymentMethod]})`} value={sale.amountPaid + sale.change} />
+        {sale.payments?.length ? (
+          sale.payments.map((p) => (
+            // Cash shows what the customer handed over; the change is on the next line.
+            <Line key={p.method} label={`${PAYMENT_LABELS[p.method] ?? p.method}${p.ref ? ` #${p.ref}` : ""}`} value={p.method === "cash" ? p.amount + sale.change : p.amount} />
+          ))
+        ) : sale.amountPaid + sale.change > 0 ? (
+          <Line label={`Paid (${PAYMENT_LABELS[sale.paymentMethod]})`} value={sale.amountPaid + sale.change} />
+        ) : null}
         {sale.change > 0 && <Line label="Change" value={sale.change} />}
         {sale.creditAmount > 0 && <Line label="Udhaar" value={sale.creditAmount} />}
         {returns.length > 0 && (

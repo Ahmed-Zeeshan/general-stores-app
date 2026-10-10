@@ -5,7 +5,7 @@ import { syncSaleToFbr } from "@/lib/fbr";
 import { round2 } from "@/lib/money";
 import { optionalId } from "@/lib/schemas";
 import { moveStock, postLedger } from "@/lib/services";
-import { nextNumber, PAYMENT_METHODS, Party, Product, Sale, Tenant } from "@/models";
+import { nextNumber, PAYMENT_METHODS, Party, Product, Sale, TENDER_METHODS, Tenant } from "@/models";
 
 export const GET = handle(async (req) => {
   const ctx = await requireBranch();
@@ -20,7 +20,10 @@ export const GET = handle(async (req) => {
     query.$or = [{ invoiceNo: rx }, { customerName: rx }];
   }
   const method = url.searchParams.get("method");
-  if (method) query.paymentMethod = method;
+  if (method) {
+    const byMethod = method === "credit" ? { creditAmount: { $gt: 0 } } : { $or: [{ paymentMethod: method }, { "payments.method": method }] };
+    query.$and = [...((query.$and as unknown[]) ?? []), byMethod];
+  }
   const fbr = url.searchParams.get("fbr");
   if (fbr) query.fbrStatus = fbr;
   return Sale.find(query).sort({ createdAt: -1 }).limit(1000).lean();
@@ -38,9 +41,16 @@ const Body = z.object({
     )
     .min(1, "Add at least one item"),
   discount: z.coerce.number().min(0).default(0),
-  paymentMethod: z.enum(PAYMENT_METHODS),
-  /** Omitted = paid in full (or nothing paid for udhaar). */
+  /** Single payment: method and amount received (omitted = paid in full, or nothing for udhaar). */
+  paymentMethod: z.enum(PAYMENT_METHODS).optional(),
   amountPaid: z.coerce.number().min(0).optional(),
+  /** Transaction ID for a single card / JazzCash / Easypaisa / bank payment. */
+  paymentRef: z.string().trim().max(40).optional(),
+  /** Split payment: several methods for one bill. Cash may be more than needed (change is given). */
+  payments: z
+    .array(z.object({ method: z.enum(TENDER_METHODS), amount: z.coerce.number().min(0), ref: z.string().trim().max(40).optional() }))
+    .max(10)
+    .optional(),
   customerId: optionalId,
   note: z.string().trim().optional(),
   // Offline bills (made while the server was unreachable) are sent later with these:
@@ -113,10 +123,8 @@ export const POST = handle(async (req) => {
   }
   const costTotal = round2(items.reduce((s, i) => s + i.qty * i.cost, 0));
 
-  let amountPaid = body.amountPaid === undefined ? (body.paymentMethod === "credit" ? 0 : total) : round2(body.amountPaid);
-  // Card / wallet / bank payments are always for the exact amount.
-  if (body.paymentMethod !== "cash" && body.paymentMethod !== "credit" && amountPaid === 0) amountPaid = total;
-  const change = round2(Math.max(0, amountPaid - total));
+  const { payments, change, paymentMethod } = settlePayments(body, total);
+  const amountPaid = round2(payments.reduce((a, p) => a + p.amount, 0));
   const creditAmount = round2(Math.max(0, total - amountPaid));
 
   let customer = null;
@@ -148,8 +156,9 @@ export const POST = handle(async (req) => {
     taxRate,
     total,
     costTotal,
-    paymentMethod: creditAmount > 0 && amountPaid === 0 ? "credit" : body.paymentMethod,
-    amountPaid: Math.min(amountPaid, total),
+    paymentMethod,
+    payments,
+    amountPaid,
     change,
     creditAmount,
     customer: customer?._id,
@@ -179,3 +188,44 @@ export const POST = handle(async (req) => {
   if (settings?.fbrEnabled) await syncSaleToFbr(tid, sale._id);
   return Sale.findOne({ _id: sale._id, tenant: tid }).lean();
 });
+
+type Tender = (typeof TENDER_METHODS)[number];
+type PaymentLine = { method: Tender; amount: number; ref?: string };
+
+/**
+ * Works out what was paid by each method. Only cash can be more than the bill (the extra is given
+ * back as change); whatever is not paid goes to the customer's udhaar.
+ */
+function settlePayments(body: z.infer<typeof Body>, total: number): { payments: PaymentLine[]; change: number; paymentMethod: (typeof PAYMENT_METHODS)[number] } {
+  if (body.payments?.length) {
+    const merged = new Map<Tender, PaymentLine>();
+    for (const p of body.payments) {
+      const amount = round2(p.amount);
+      if (amount <= 0) continue;
+      const row = merged.get(p.method);
+      if (row) row.amount = round2(row.amount + amount);
+      else merged.set(p.method, { method: p.method, amount, ...(p.ref ? { ref: p.ref } : {}) });
+    }
+    const nonCash = [...merged.values()].filter((p) => p.method !== "cash");
+    const nonCashTotal = round2(nonCash.reduce((a, p) => a + p.amount, 0));
+    if (nonCashTotal > total + 0.001) {
+      throw new ApiError(400, "Card / JazzCash / Easypaisa / bank amounts are more than the bill. Only cash can be more (change is given back).");
+    }
+    const cashGiven = merged.get("cash")?.amount ?? 0;
+    const cashApplied = round2(Math.min(cashGiven, total - nonCashTotal));
+    const payments = [...nonCash, ...(cashApplied > 0 ? [{ method: "cash" as const, amount: cashApplied }] : [])];
+    const main = [...payments].sort((a, b) => b.amount - a.amount)[0];
+    return { payments, change: round2(cashGiven - cashApplied), paymentMethod: main?.method ?? "credit" };
+  }
+
+  if (!body.paymentMethod) throw new ApiError(400, "Choose how the customer is paying.");
+  const method = body.paymentMethod;
+  let given = body.amountPaid === undefined ? (method === "credit" ? 0 : total) : round2(body.amountPaid);
+  // Card / wallet / bank payments are always for the exact amount.
+  if (method !== "cash" && method !== "credit" && given === 0) given = total;
+  const applied = round2(Math.min(given, total));
+  // Money paid now on an udhaar bill is cash.
+  const tender: Tender = method === "credit" ? "cash" : method;
+  const payments = applied > 0 ? [{ method: tender, amount: applied, ...(body.paymentRef && tender !== "cash" ? { ref: body.paymentRef } : {}) }] : [];
+  return { payments, change: round2(Math.max(0, given - total)), paymentMethod: applied === 0 && total > 0 ? "credit" : method };
+}
