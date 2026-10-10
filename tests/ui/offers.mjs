@@ -1,0 +1,67 @@
+import { chromium } from "playwright";
+import { B } from "../lib/harness.mjs";
+const out = process.argv[2];
+const ok = (c, m) => { if (!c) { console.log("  ✗", m); process.exitCode = 1; } else console.log("  ✓", m); };
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, timezoneId: "Asia/Karachi" });
+const page = await ctx.newPage();
+const errors = []; page.on("pageerror", (e) => errors.push(e.message));
+const post = (path, body, method = "POST") => page.evaluate(async ([p, b, m]) => (await fetch(p, { method: m, headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) })).json(), [path, body, method]);
+await page.goto(B + "/setup");
+await post("/api/setup", { name: "Admin", username: "admin", password: "admin-pass-123" });
+await post("/api/auth/login", { username: "admin", password: "admin-pass-123" });
+await post("/api/admin/tenants", { shopName: "UI Mart", shopType: "general", maxUsers: 3, ownerName: "Sana", username: "sana", password: "secret1" });
+await post("/api/auth/logout", {});
+await page.goto(B + "/login");
+await page.fill('input[autocomplete="username"]', "sana");
+await page.fill('input[type="password"]', "secret1");
+await page.click('button[type="submit"]');
+await page.waitForURL(B + "/");
+const soap = await post("/api/products", { name: "Lux Soap", unit: "pcs", costPrice: 80, salePrice: 100, lowStockAlert: 1, openingStock: 100 });
+await post("/api/settings", { shopName: "UI Mart", shopType: "general", taxEnabled: false, taxRate: 0, pricesIncludeTax: true, loyaltyEnabled: true, loyaltyEarnPer: 100, loyaltyPointValue: 1, loyaltyMinRedeem: 10 }, "PUT");
+const cust = await post("/api/parties", { type: "customer", name: "Bilal" });
+await post("/api/sales", { items: [{ productId: soap._id, qty: 30 }], paymentMethod: "cash", customerId: cust._id }); // earns 30 points
+
+// Create an offer from the page
+await page.goto(B + "/promotions");
+await page.click("button:has-text('New offer')");
+await page.fill("input[aria-label='Offer name']", "Soap 2+1");
+await page.click("[role=dialog] button:has-text('Buy X get Y free')");
+await page.click("[role=dialog] button:has-text('Chosen items')");
+await page.click("[role=dialog] button:has-text('Lux Soap')");
+await page.screenshot({ path: `${out}/offer-form.png` });
+await page.click("[role=dialog] button:has-text('Save offer')");
+await page.waitForSelector("text=Offer saved");
+ok((await page.locator("tbody").innerText()).includes("Buy 2 get 1 free") && (await page.locator("tbody").innerText()).includes("Running"), "offer listed as running");
+
+// POS
+await page.goto(B + "/pos");
+await page.waitForSelector("button:has-text('Lux Soap')");
+for (let i = 0; i < 3; i++) await page.click("button:has-text('Lux Soap')");
+const cart = page.locator("aside:has-text('Bill items')");
+await page.waitForTimeout(300);
+let t = await cart.innerText();
+ok(t.includes("Soap 2+1 −Rs 100") && t.includes("Rs 200"), "offer shown on the line, total 200");
+await page.click("text=Walk-in customer");
+await page.click("[role=dialog] >> text=Bilal");
+await page.waitForTimeout(300);
+t = await cart.innerText();
+ok(t.includes("30 points") && t.includes("Use 30 points"), "customer points shown with option to use them");
+await cart.locator("input[aria-label='Use points']").check();
+await page.waitForTimeout(200);
+t = await cart.innerText();
+ok(t.includes("−Rs 30") && t.includes("Rs 170"), "points reduce the bill to 170");
+await page.screenshot({ path: `${out}/offer-pos.png` });
+await page.click("text=Take Payment");
+ok((await page.locator("[role=dialog]").innerText()).includes("Rs 170"), "payment screen total matches 170");
+await page.click("[role=dialog] button:has-text('Confirm & Save Bill')");
+await page.waitForSelector("text=Bill saved");
+const [rp] = await Promise.all([page.waitForEvent("popup"), page.click("[role=dialog] button:has-text('Print')")]);
+await rp.waitForSelector("text=TOTAL");
+const rt = await rp.innerText("body");
+ok(rt.includes("Soap 2+1") && rt.includes("Points used (30)") && /TOTAL\s+Rs 170/.test(rt), "receipt shows offer, points used and total 170");
+ok(rt.includes("Points earned on this bill: 1"), "receipt shows points earned");
+await rp.screenshot({ path: `${out}/offer-receipt.png`, fullPage: true });
+await rp.close();
+ok(errors.length === 0, "no page errors " + JSON.stringify(errors));
+await browser.close();

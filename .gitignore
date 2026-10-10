@@ -12,3 +12,4 @@ npm-debug.log*
 # Local HTTPS certificate and automatic backups
 /certs
 /backups
+/test-results

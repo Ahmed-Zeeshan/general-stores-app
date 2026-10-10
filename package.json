@@ -10,7 +10,10 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "reset-admin": "node --env-file=.env.local scripts/reset-admin.mjs",
-    "start:https": "node scripts/https-server.mjs"
+    "start:https": "node scripts/https-server.mjs",
+    "test": "node tests/run.mjs",
+    "test:api": "node tests/run.mjs api",
+    "test:ui": "node tests/run.mjs ui"
   },
   "dependencies": {
     "@zxing/browser": "0.2.1",
@@ -37,6 +40,7 @@
     "@types/react-dom": "19.1.11",
     "eslint": "9.39.5",
     "eslint-config-next": "15.5.27",
+    "playwright": "1.56.1",
     "postcss": "8.5.29",
     "tailwindcss": "4.3.3",
     "typescript": "5.9.3"

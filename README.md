@@ -183,6 +183,29 @@ npm run typecheck
 npm run build
 ```
 
+### Automated tests
+
+The `tests/` folder has end-to-end suites that drive the real app: `tests/api` calls the API the
+way the screens do (bills, returns, udhaar payments, split payments, day close, purchase returns,
+packs, expiry lots, activity log, offers, production settings), and `tests/ui` clicks through the
+screens in Chromium (Playwright).
+
+```bash
+npm test             # everything (builds first if there is no build yet)
+npm run test:api     # API suites only
+npm run test:ui      # browser suites only
+node tests/run.mjs 03 offline   # only suites whose file name contains "03" or "offline"
+```
+
+- The runner starts the app on port 3100 with a mock FBR server on 4646 and uses the database
+  `mongodb://127.0.0.1:27017/dukaan_test` (change with `TEST_MONGODB_URI`). **That database is wiped
+  before every suite** — the runner refuses any database whose name does not contain `test`, so your
+  shop data is never touched.
+- Run `npm run build` again after changing code; the suites test the last build.
+- Browser suites need Chromium once: `npx playwright install chromium` (or set `CHROMIUM_PATH`).
+- Screenshots are saved in `test-results/`. Set `TEST_VERBOSE=1` to see the app's log.
+- GitHub runs lint, typecheck, build and all suites on every push (`.github/workflows/ci.yml`).
+
 ## Project structure
 
 ```

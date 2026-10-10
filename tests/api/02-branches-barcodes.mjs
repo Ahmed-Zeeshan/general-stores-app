@@ -1,0 +1,218 @@
+import { Client, ok, eq, section, db, oid, restartServer, done } from "../lib/harness.mjs";
+
+const admin = new Client("admin"), owner = new Client("owner"), other = new Client("other");
+await admin.call("/api/setup", { body: { name: "Admin", username: "admin", password: "admin-pass-123" } });
+const shop = await admin.call("/api/admin/tenants", { body: { shopName: "City Mart", shopType: "general", maxUsers: 4, maxBranches: 2, ownerName: "Usman", username: "usman", password: "secret1", phone: "0300-5550000" } });
+const shop2 = await admin.call("/api/admin/tenants", { body: { shopName: "Other Shop", shopType: "general", maxUsers: 2, ownerName: "Zara", username: "zara", password: "secret1" } });
+await owner.login("usman", "secret1");
+await other.login("zara", "secret1");
+
+section("Branches");
+let br = await owner.call("/api/branches");
+eq(br.branches.length, 1, "new shop has a main branch");
+eq(br.maxBranches, 2, "branch limit from admin");
+const main = br.branches[0];
+ok(main.isMain && main.name === "Main Branch", "main branch named");
+const b2 = await owner.call("/api/branches", { body: { name: "Gulberg Branch", address: "Main Blvd Gulberg", phone: "042-111" } });
+await owner.call("/api/branches", { body: { name: "Third" }, expect: 400 }).then((r) => ok(/allows 2 branches/.test(r.error), "3rd branch blocked: " + r.error));
+await admin.call(`/api/admin/tenants/${shop._id}`, { method: "PUT", body: { maxBranches: 3 } });
+const b3 = await owner.call("/api/branches", { body: { name: "Third" } });
+ok(!!b3._id, "admin raised limit → 3rd branch allowed");
+const list = await admin.call("/api/admin/tenants");
+eq(list.find((t) => t._id === shop._id).branches, 3, "admin list shows 3 branches");
+await owner.call(`/api/branches/${main._id}`, { method: "PUT", body: { active: false }, expect: 400 });
+ok(true, "main branch cannot be closed");
+await owner.call(`/api/branches/${b3._id}`, { method: "PUT", body: { active: false } });
+eq((await owner.call("/api/branches")).activeBranches, 2, "empty branch closed");
+await other.call(`/api/branches/${b2._id}`, { method: "PUT", body: { name: "hack" }, expect: 404 });
+await other.call("/api/branches/switch", { body: { branchId: b2._id }, expect: 404 });
+ok(true, "other shop cannot touch or switch to these branches");
+
+const tea = await owner.call("/api/products", { body: { name: "Tapal Tea 950g", unit: "pcs", barcode: "8964000000011", costPrice: 1500, salePrice: 1650, lowStockAlert: 5, openingStock: 30 } });
+const rice = await owner.call("/api/products", { body: { name: "Basmati Rice", unit: "kg", costPrice: 300, salePrice: 360, lowStockAlert: 10, openingStock: 100 } });
+let p = await owner.call(`/api/products/${tea._id}`);
+eq(p.product.stock, 30, "opening stock in main branch");
+eq(p.byBranch.find((x) => x.name === "Gulberg Branch").qty, 0, "Gulberg has 0");
+
+await owner.call("/api/transfers", { body: { toBranch: b2._id, items: [{ productId: tea._id, qty: 12 }, { productId: rice._id, qty: 40 }], note: "Weekly stock" } });
+await owner.call("/api/transfers", { body: { toBranch: b2._id, items: [{ productId: tea._id, qty: 500 }] }, expect: 400 }).then((r) => ok(/Not enough/.test(r.error), "cannot transfer more than stock"));
+await owner.call("/api/transfers", { body: { toBranch: main._id, items: [{ productId: tea._id, qty: 1 }] }, expect: 400 });
+ok(true, "cannot transfer to the same branch");
+p = await owner.call(`/api/products/${tea._id}`);
+eq(p.product.stock, 18, "main tea after transfer");
+eq(p.product.totalStock, 30, "shop total unchanged");
+eq(p.byBranch.find((x) => x.name === "Gulberg Branch").qty, 12, "Gulberg tea 12");
+
+await owner.call("/api/branches/switch", { body: { branchId: b2._id } });
+let me = await owner.call("/api/auth/me");
+eq(me.branch.name, "Gulberg Branch", "owner switched to Gulberg");
+let prods = await owner.call("/api/products");
+eq(prods.find((x) => x._id === tea._id).stock, 12, "product list shows Gulberg stock");
+const sG = await owner.call("/api/sales", { body: { items: [{ productId: tea._id, qty: 2 }], paymentMethod: "cash" } });
+eq(sG.branchName, "Gulberg Branch", "sale tagged with branch");
+eq((await owner.call(`/api/products/${tea._id}`)).product.stock, 10, "Gulberg stock reduced");
+const allStock = await owner.call("/api/products?branch=all");
+eq(allStock.find((x) => x._id === tea._id).stock, 28, "all-branches view = total 28");
+await owner.call(`/api/branches/${b2._id}`, { method: "PUT", body: { active: false }, expect: 400 }).then((r) => ok(/still has stock/.test(r.error), "branch with stock cannot be closed"));
+
+await owner.call("/api/branches/switch", { body: { branchId: main._id } });
+const sM = await owner.call("/api/sales", { body: { items: [{ productId: rice._id, qty: 5 }], paymentMethod: "cash" } });
+eq(sM.branchName, "Main Branch", "main sale tagged");
+let rep = await owner.call("/api/reports");
+eq(rep.summary.netSales, 1800, "report: main branch only (1800)");
+rep = await owner.call("/api/reports?branch=all");
+eq(rep.summary.netSales, 1800 + 3300, "report: all branches (5100)");
+eq(rep.byBranch.length, 2, "report: per-branch breakdown");
+rep = await owner.call(`/api/reports?branch=${b2._id}`);
+eq(rep.summary.netSales, 3300, "report: Gulberg only");
+eq((await owner.call("/api/dashboard")).today.sales, 1800, "dashboard shows current branch");
+eq((await owner.call("/api/sales?branch=all")).length, 2, "sales history all branches");
+
+// cashier locked to Gulberg
+const cashier = await owner.call("/api/users", { body: { name: "Gul Cashier", username: "gulcash", password: "secret2", role: "cashier", branch: b2._id } });
+const cash = new Client("cashier");
+await cash.login("gulcash", "secret2");
+me = await cash.call("/api/auth/me");
+ok(me.branch.name === "Gulberg Branch" && me.branchLocked, "cashier locked to Gulberg");
+await cash.call("/api/branches/switch", { body: { branchId: main._id }, expect: 403 });
+ok(true, "locked cashier cannot switch");
+const sC = await cash.call("/api/sales", { body: { items: [{ productId: tea._id, qty: 1 }], paymentMethod: "cash", branchId: main._id }, expect: 403 });
+ok(/cannot make bills/.test(sC.error), "locked cashier cannot bill another branch");
+const sC2 = await cash.call("/api/sales", { body: { items: [{ productId: tea._id, qty: 1 }], paymentMethod: "cash" } });
+eq(sC2.branchName, "Gulberg Branch", "cashier bill goes to Gulberg");
+eq((await cash.call("/api/sales?branch=all")).every((s) => s.branchName === "Gulberg Branch"), true, "cashier only sees own branch sales");
+await owner.call(`/api/users/${cashier._id}`, { method: "PUT", body: { branch: "" } });
+me = await cash.call("/api/auth/me");
+ok(!me.branchLocked, "unassigning branch takes effect immediately");
+await owner.call(`/api/users/${cashier._id}`, { method: "PUT", body: { branch: b2._id } });
+
+section("Legacy shop upgrade (data from before branches)");
+const zTea = await other.call("/api/products", { body: { name: "Legacy Item", unit: "pcs", costPrice: 10, salePrice: 12, lowStockAlert: 1, openingStock: 7 } });
+await other.call("/api/sales", { body: { items: [{ productId: zTea._id, qty: 2 }], paymentMethod: "cash" } });
+// Simulate an old database: no branches, no per-branch stock, records without branch.
+{
+  // Make shop 2 look like it was created before branches existed.
+  const d = await db();
+  const t = oid(shop2._id);
+  await d.collection("branches").deleteMany({ tenant: t });
+  await d.collection("stocklevels").deleteMany({ tenant: t });
+  await d.collection("sales").updateMany({ tenant: t }, { $unset: { branch: 1, branchName: 1 } });
+  await d.collection("stockmovements").updateMany({ tenant: t }, { $unset: { branch: 1 } });
+}
+await restartServer();
+await other.login("zara", "secret1");
+const legacy = await other.call("/api/products");
+eq(legacy[0].stock, 5, "old stock moved into the new main branch");
+const legacySales = await other.call("/api/sales");
+eq(legacySales[0].branchName, "Main Branch", "old bills tagged with main branch");
+await owner.login("usman", "secret1");
+
+section("Offline bill rules (API)");
+const soldAt = new Date(Date.now() - 3 * 864e5).toISOString();
+const off1 = await owner.call("/api/sales", { body: { items: [{ productId: rice._id, qty: 1 }], paymentMethod: "cash", clientId: "offline-abc-001", soldAt, branchId: b2._id } });
+ok(off1.offline && off1.createdAt === soldAt, "offline bill keeps its real time");
+eq(off1.branchName, "Gulberg Branch", "offline bill keeps the branch it was made in");
+const off1b = await owner.call("/api/sales", { body: { items: [{ productId: rice._id, qty: 9 }], paymentMethod: "cash", clientId: "offline-abc-001", soldAt } });
+eq(off1b._id, off1._id, "duplicate send returns the same bill");
+await owner.call("/api/sales", { body: { items: [{ productId: rice._id, qty: 1 }], paymentMethod: "cash", clientId: "offline-abc-002", soldAt: new Date(Date.now() - 60 * 864e5).toISOString() }, expect: 400 });
+ok(true, "offline bill older than 30 days rejected (wrong device date)");
+const cust = await owner.call("/api/parties", { body: { type: "customer", name: "Limit Test", phone: "0301-2223334", creditLimit: 100 } });
+await owner.login("usman", "secret1");
+await owner.call("/api/users", { body: { name: "Mgr", username: "mgr1", password: "secret2", role: "manager" } });
+const m = new Client("mgr"); await m.login("mgr1", "secret2");
+await m.call("/api/sales", { body: { items: [{ productId: tea._id, qty: 1 }], paymentMethod: "credit", customerId: cust._id }, expect: 400 });
+ok(true, "online udhaar above credit limit blocked for manager");
+const offCredit = await m.call("/api/sales", { body: { items: [{ productId: tea._id, qty: 1 }], paymentMethod: "credit", customerId: cust._id, clientId: "offline-credit-1", soldAt: new Date().toISOString() } });
+eq(offCredit.creditAmount, 1650, "offline udhaar bill (already handed over) is recorded");
+
+section("Udhaar report, WhatsApp log, statement");
+const ali = await owner.call("/api/parties", { body: { type: "customer", name: "Ali Raza", phone: "0300-1112223", openingBalance: 1000 } });
+await owner.call("/api/parties", { body: { type: "customer", name: "Sara", openingBalance: 500 } });
+await owner.call("/api/sales", { body: { items: [{ productId: rice._id, qty: 2 }], paymentMethod: "credit", customerId: ali._id } });
+await owner.call(`/api/parties/${ali._id}/payment`, { body: { type: "payment", amount: 600 } });
+// Make Ali's opening balance 100 days old.
+await (await db()).collection("ledgerentries").updateOne({ party: oid(ali._id), kind: "opening" }, { $set: { createdAt: new Date(Date.now() - 100 * 864e5) } });
+let ur = await owner.call("/api/reminders/report");
+const aliRow = ur.rows.find((r) => r.name === "Ali Raza");
+eq(aliRow.balance, 1120, "Ali balance 1000+720−600");
+eq(aliRow.buckets.d90, 400, "FIFO: payment cleared oldest first, 400 is 90+ days");
+eq(aliRow.buckets.d0_30, 720, "recent bill 720 in 0–30");
+ok(aliRow.daysOverdue >= 99, "oldest due ~100 days");
+ok(aliRow.lastPaymentAt && !aliRow.lastRemindedAt, "last payment known, never reminded");
+eq(ur.totals.withoutPhone, 1, "Sara has no phone");
+ok(ur.rows[0].name === "Ali Raza", "most overdue first");
+await owner.call("/api/reminders", { body: { partyId: ali._id } });
+await owner.call("/api/reminders", { body: { partyId: ali._id, kind: "statement" } });
+ur = await owner.call("/api/reminders/report");
+eq(ur.rows.find((r) => r.name === "Ali Raza").reminders, 2, "reminders logged");
+await cash.call("/api/reminders/report", { expect: 403 });
+await other.call("/api/reminders", { body: { partyId: ali._id }, expect: 404 });
+ok(true, "other shop cannot log reminders for this customer");
+const st = await owner.call(`/api/parties/${ali._id}/statement`);
+eq(st.opening, 1000, "statement opening (entry older than 90 days)");
+eq(st.closing, 1120, "statement closing");
+eq(st.charges, 720, "statement charges"); eq(st.payments, 600, "statement payments");
+const st2 = await owner.call(`/api/parties/${ali._id}/statement?from=2020-01-01`);
+eq(st2.opening, 0, "statement from 2020 opens at 0"); eq(st2.rows.length, 3, "3 entries");
+await owner.call("/api/settings", { method: "PUT", body: { shopName: "City Mart", shopType: "general", taxEnabled: false, taxRate: 18, pricesIncludeTax: true, waTemplate: "Hi {name}, please pay {amount} to {shop}." } });
+eq((await owner.call("/api/auth/me")).settings.waTemplate, "Hi {name}, please pay {amount} to {shop}.", "WhatsApp template saved");
+
+section("Barcodes");
+const gs1 = (code) => { const d = code.slice(0, 12).split("").reverse(); const s = d.reduce((a, x, i) => a + Number(x) * (i % 2 === 0 ? 3 : 1), 0); return String((10 - (s % 10)) % 10) === code[12]; };
+const n1 = await owner.call("/api/barcodes/next", { method: "POST" });
+ok(/^20\d{11}$/.test(n1.barcode) && gs1(n1.barcode), "generated in-store EAN-13 with valid check digit: " + n1.barcode);
+const n2 = await owner.call("/api/barcodes/next", { method: "POST" });
+ok(n2.barcode !== n1.barcode, "next barcode is different");
+await owner.call("/api/products", { body: { name: "Loose Daal", unit: "kg", costPrice: 200, salePrice: 250, lowStockAlert: 5 } });
+await owner.call("/api/products", { body: { name: "Biscuit", unit: "pcs", costPrice: 20, salePrice: 30, lowStockAlert: 5 } });
+const asg = await owner.call("/api/barcodes/assign", { body: {} });
+eq(asg.assigned, 3, "3 products without barcode got one (incl. rice)");
+const after = await owner.call("/api/products");
+ok(after.find((x) => x._id === tea._id).barcode === "8964000000011", "existing barcode not changed");
+ok(after.every((x) => x.barcode && (x.barcode.startsWith("20") ? gs1(x.barcode) : true)), "every product now has a valid barcode");
+eq(new Set(after.map((x) => x.barcode)).size, after.length, "all barcodes unique");
+eq((await owner.call("/api/barcodes/assign", { body: {} })).assigned, 0, "running again changes nothing");
+await cash.call("/api/barcodes/next", { method: "POST", expect: 403 });
+ok(true, "cashier cannot create barcodes");
+const zCode = await other.call("/api/barcodes/next", { method: "POST" });
+ok(/^20/.test(zCode.barcode), "each shop has its own barcode numbering");
+
+section("Backup & restore");
+const backup = await owner.call("/api/backup");
+eq(backup.version, 2, "backup format v2");
+ok(backup.data.branches.length === 3 && backup.data.stockLevels.length > 0 && backup.data.transfers.length === 1 && backup.data.reminders.length === 2, "backup has branches, stock levels, transfers, reminders");
+const beforeSales = (await owner.call("/api/sales?branch=all&from=2020-01-01")).length;
+const teaStockBefore = (await owner.call(`/api/products/${tea._id}`)).byBranch;
+// Change data after the backup
+await owner.call("/api/products", { body: { name: "After Backup Item", unit: "pcs", costPrice: 1, salePrice: 2, lowStockAlert: 1, openingStock: 3 } });
+await owner.call("/api/sales", { body: { items: [{ productId: tea._id, qty: 3 }], paymentMethod: "cash" } });
+await owner.call("/api/restore", { body: { backup, confirm: "wrong name" }, expect: 400 });
+ok(true, "restore needs the shop name typed");
+const zBackup = await other.call("/api/backup");
+await owner.call("/api/restore", { body: { backup: zBackup, confirm: "City Mart" }, expect: 400 }).then((r) => ok(/another shop/.test(r.error), "another shop's backup rejected"));
+const damaged = JSON.parse(JSON.stringify(backup));
+damaged.data.products.push({ name: "Bad", salePrice: "not a number" });
+await owner.call("/api/restore", { body: { backup: damaged, confirm: "City Mart" }, expect: 400 }).then((r) => ok(/Nothing was changed/.test(r.error), "damaged backup rejected: " + r.error));
+ok((await owner.call("/api/products")).some((x) => x.name === "After Backup Item"), "data untouched after rejected restore");
+await cash.call("/api/restore", { body: { backup, confirm: "City Mart" }, expect: 403 });
+const res = await owner.call("/api/restore", { body: { backup, confirm: "city mart" } });
+ok(res.restored > 20, `restored ${res.restored} records`);
+ok(!(await owner.call("/api/products")).some((x) => x.name === "After Backup Item"), "item added after backup is gone");
+eq((await owner.call("/api/sales?branch=all&from=2020-01-01")).length, beforeSales, "sales back to backup state");
+eq(JSON.stringify((await owner.call(`/api/products/${tea._id}`)).byBranch), JSON.stringify(teaStockBefore), "per-branch stock restored");
+const s1 = (await owner.call("/api/sales?branch=all&from=2020-01-01")).find((s) => s.clientId === "offline-abc-001");
+eq(s1.createdAt, soldAt, "original bill dates kept");
+const nextSale = await owner.call("/api/sales", { body: { items: [{ productId: tea._id, qty: 1 }], paymentMethod: "cash" } });
+const maxNo = Math.max(...backup.data.sales.map((s) => Number(s.invoiceNo.split("-")[1])));
+eq(Number(nextSale.invoiceNo.split("-")[1]), maxNo + 1, "invoice numbering continues after restore");
+await cash.login("gulcash", "secret2");
+eq((await cash.call("/api/auth/me")).branch.name, "Gulberg Branch", "staff logins and branch assignment kept");
+const aBack = await admin.call(`/api/admin/tenants/${shop._id}/backup`);
+const ar = await admin.call(`/api/admin/tenants/${shop._id}/restore`, { body: { backup: aBack, confirm: "City Mart" } });
+ok(ar.restored > 20, "super admin can restore a shop");
+await admin.call(`/api/admin/tenants/${shop2._id}/restore`, { body: { backup: aBack, confirm: "Other Shop" }, expect: 400 });
+ok(true, "super admin cannot restore one shop's backup into another");
+
+section("Pages");
+for (const path of ["/udhaar", "/labels", "/transfers", `/statement/${ali._id}`, "/settings", "/products", "/pos"]) ok((await owner.raw(path)).status === 200, `page ${path}`);
+await done();
