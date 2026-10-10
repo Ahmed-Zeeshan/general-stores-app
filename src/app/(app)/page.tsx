@@ -77,7 +77,7 @@ export default function DashboardPage() {
           <Link
             key={q.href}
             href={q.href}
-            className={`group relative overflow-hidden rounded-2xl bg-gradient-to-br ${q.cls} p-5 text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl`}
+            className={`group relative overflow-hidden rounded-2xl bg-linear-to-br ${q.cls} p-5 text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl`}
           >
             <q.icon className="h-8 w-8 opacity-90" />
             <div className="mt-4 text-lg font-bold">{q.label}</div>

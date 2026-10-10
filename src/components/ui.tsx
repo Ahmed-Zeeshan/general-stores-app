@@ -19,9 +19,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   ref,
 ) {
   const variants = {
-    primary: "bg-brand-600 text-white hover:bg-brand-700 shadow-sm focus-visible:ring-brand-500",
+    primary: "bg-brand-600 text-white hover:bg-brand-700 shadow-xs focus-visible:ring-brand-500",
     secondary: "bg-slate-100 text-slate-800 hover:bg-slate-200 focus-visible:ring-slate-400",
-    danger: "bg-rose-600 text-white hover:bg-rose-700 shadow-sm focus-visible:ring-rose-500",
+    danger: "bg-rose-600 text-white hover:bg-rose-700 shadow-xs focus-visible:ring-rose-500",
     ghost: "text-slate-600 hover:bg-slate-100 focus-visible:ring-slate-400",
     outline: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 focus-visible:ring-slate-400",
   };
@@ -36,7 +36,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       disabled={disabled || loading}
       className={cn(
-        "inline-flex items-center justify-center rounded-xl font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex items-center justify-center rounded-xl font-semibold transition focus:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
         variants[variant],
         sizes[size],
         className,
@@ -73,7 +73,7 @@ export function Field({
 }
 
 const inputStyle =
-  "rounded-xl border border-slate-300 bg-white px-3.5 text-slate-900 placeholder:text-slate-400 shadow-sm transition focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-100 disabled:bg-slate-100";
+  "rounded-xl border border-slate-300 bg-white px-3.5 text-slate-900 placeholder:text-slate-400 shadow-xs transition focus:border-brand-500 focus:outline-hidden focus:ring-4 focus:ring-brand-100 disabled:bg-slate-100";
 
 /** Full width by default, unless the caller passes its own width (e.g. "w-28") or flex sizing. */
 function inputBase(className?: string) {
@@ -176,7 +176,7 @@ export function Modal({
   const sizes = { sm: "max-w-md", md: "max-w-lg", lg: "max-w-2xl", xl: "max-w-4xl" };
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
-      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-xs" onClick={onClose} />
       <div
         role="dialog"
         aria-modal="true"
@@ -301,7 +301,7 @@ export function Segmented<T extends string>({
           onClick={() => onChange(o.value)}
           className={cn(
             "rounded-lg px-3.5 py-1.5 text-sm font-semibold transition",
-            value === o.value ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700",
+            value === o.value ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-700",
           )}
         >
           {o.label}

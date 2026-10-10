@@ -109,7 +109,7 @@ export function PartiesList({ type }: { type: PartyType }) {
             {list.map((p) => (
               <li key={p._id}>
                 <Link href={`${t.base}/${p._id}`} className="flex items-center gap-4 px-4 py-3.5 transition hover:bg-slate-50">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-100 to-brand-200 font-bold text-brand-800">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-brand-100 to-brand-200 font-bold text-brand-800">
                     {p.name.slice(0, 1).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -248,7 +248,7 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
       </Link>
 
       <Card className="overflow-hidden">
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 text-white">
+        <div className="bg-linear-to-br from-slate-800 to-slate-900 p-6 text-white">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10">

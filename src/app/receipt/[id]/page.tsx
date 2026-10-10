@@ -81,10 +81,10 @@ function Receipt({ id }: { id: string }) {
     <div className="min-h-screen bg-slate-100 py-8 print:bg-white print:py-0">
       <style>{`@page { size: 80mm auto; margin: 4mm; }`}</style>
       <div className="no-print mx-auto mb-4 flex max-w-[320px] justify-center gap-2">
-        <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 font-semibold text-white shadow hover:bg-brand-700">
+        <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 font-semibold text-white shadow-sm hover:bg-brand-700">
           <Printer className="h-4 w-4" /> Print receipt
         </button>
-        <button onClick={() => window.close()} className="rounded-xl bg-white px-5 py-2.5 font-semibold text-slate-700 shadow">
+        <button onClick={() => window.close()} className="rounded-xl bg-white px-5 py-2.5 font-semibold text-slate-700 shadow-sm">
           Close
         </button>
       </div>

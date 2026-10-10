@@ -13,7 +13,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <ToastProvider>
       <div className="grid min-h-screen lg:grid-cols-2">
-        <div className="relative hidden overflow-hidden bg-gradient-to-br from-brand-700 via-brand-800 to-slate-900 p-12 lg:flex lg:flex-col lg:justify-between">
+        <div className="relative hidden overflow-hidden bg-linear-to-br from-brand-700 via-brand-800 to-slate-900 p-12 lg:flex lg:flex-col lg:justify-between">
           <div className="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-brand-500/20 blur-3xl" />
           <div className="absolute -bottom-32 -left-16 h-96 w-96 rounded-full bg-emerald-300/10 blur-3xl" />
           <div className="relative">
@@ -28,7 +28,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             <p className="urdu mt-2 text-xl text-brand-100">اپنی دکان کا مکمل حساب، ایک جگہ</p>
             <div className="mt-10 grid grid-cols-2 gap-5">
               {features.map((f) => (
-                <div key={f.title} className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 backdrop-blur">
+                <div key={f.title} className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 backdrop-blur-sm">
                   <f.icon className="h-6 w-6 text-brand-300" />
                   <div className="mt-3 font-semibold text-white">{f.title}</div>
                   <div className="mt-1 text-sm text-brand-100/80">{f.text}</div>

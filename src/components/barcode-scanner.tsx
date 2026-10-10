@@ -176,7 +176,7 @@ export function CameraScanner({
       ) : (
         <div>
           <div className="relative overflow-hidden rounded-2xl bg-black">
-            <video ref={videoRef} className="aspect-[4/3] w-full object-cover" muted playsInline />
+            <video ref={videoRef} className="aspect-4/3 w-full object-cover" muted playsInline />
             <div className="pointer-events-none absolute inset-x-8 top-1/2 h-0.5 -translate-y-1/2 animate-pulse bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,.9)]" />
             <div className="pointer-events-none absolute inset-6 rounded-xl border-2 border-white/60" />
           </div>
@@ -205,7 +205,7 @@ export function CameraButton({ onClick, label = "Scan with camera" }: { onClick:
       onClick={onClick}
       title={label}
       aria-label={label}
-      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-600 shadow-sm hover:bg-slate-50 hover:text-brand-700"
+      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-600 shadow-xs hover:bg-slate-50 hover:text-brand-700"
     >
       <Camera className="h-5 w-5" />
     </button>

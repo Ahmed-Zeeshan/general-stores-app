@@ -160,7 +160,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           )}
 
-          <header className="no-print sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden">
+          <header className="no-print sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur-sm lg:hidden">
             <button onClick={() => setOpen(true)} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100" aria-label="Open menu">
               <Menu className="h-6 w-6" />
             </button>
@@ -253,7 +253,7 @@ function BranchSwitcher({ data }: { data: SessionData }) {
         value={data.branch?._id}
         disabled={busy}
         onChange={(e) => change(e.target.value)}
-        className="w-full bg-transparent text-xs font-semibold text-brand-900 focus:outline-none"
+        className="w-full bg-transparent text-xs font-semibold text-brand-900 focus:outline-hidden"
       >
         {data.branches.map((b) => (
           <option key={b._id} value={b._id}>

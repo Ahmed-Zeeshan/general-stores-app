@@ -289,7 +289,7 @@ export default function PosPage() {
                     key={p._id}
                     onClick={() => onPick(p)}
                     className={cn(
-                      "relative flex flex-col rounded-2xl border bg-white p-3.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-brand-400 hover:shadow-md active:translate-y-0",
+                      "relative flex flex-col rounded-2xl border bg-white p-3.5 text-left shadow-xs transition hover:-translate-y-0.5 hover:border-brand-400 hover:shadow-md active:translate-y-0",
                       inCart ? "border-brand-500 ring-2 ring-brand-100" : "border-slate-200",
                     )}
                   >
@@ -298,7 +298,7 @@ export default function PosPage() {
                         {formatQty(inCart.qty)}
                       </span>
                     )}
-                    <span className="line-clamp-2 min-h-[2.5rem] font-semibold leading-tight text-slate-800">{p.name}</span>
+                    <span className="line-clamp-2 min-h-10 font-semibold leading-tight text-slate-800">{p.name}</span>
                     {p.nameUrdu && <span className="urdu truncate text-xs text-slate-400">{p.nameUrdu}</span>}
                     <span className="mt-2 text-lg font-bold text-brand-700">
                       {formatPKR(p.salePrice)}
@@ -396,7 +396,7 @@ export default function PosPage() {
                           min="0"
                           value={item.qty}
                           onChange={(e) => updateItem(item.product._id, { qty: Math.max(0, Number(e.target.value)) })}
-                          className="h-9 w-16 border-x border-slate-200 text-center font-semibold focus:outline-none"
+                          className="h-9 w-16 border-x border-slate-200 text-center font-semibold focus:outline-hidden"
                         />
                         <button
                           className="flex h-9 w-9 items-center justify-center text-slate-600 hover:text-brand-700"
@@ -414,7 +414,7 @@ export default function PosPage() {
                           value={item.price}
                           onChange={(e) => updateItem(item.product._id, { price: Math.max(0, Number(e.target.value)) })}
                           title="Price (owner/manager can change)"
-                          className="h-9 w-20 rounded-xl border border-slate-200 px-2 text-right text-sm focus:border-brand-500 focus:outline-none"
+                          className="h-9 w-20 rounded-xl border border-slate-200 px-2 text-right text-sm focus:border-brand-500 focus:outline-hidden"
                         />
                       )}
                       <span className="min-w-[80px] text-right font-bold text-slate-900">{formatPKR(line)}</span>
@@ -438,7 +438,7 @@ export default function PosPage() {
                 value={billDiscount}
                 onChange={(e) => setBillDiscount(e.target.value)}
                 placeholder="0"
-                className="h-8 w-24 rounded-lg border border-slate-200 px-2 text-right focus:border-brand-500 focus:outline-none"
+                className="h-8 w-24 rounded-lg border border-slate-200 px-2 text-right focus:border-brand-500 focus:outline-hidden"
               />
             </div>
             {taxRate > 0 && <Row label={`Sales tax ${taxRate}%${inclusive ? " (included)" : ""}`} value={formatPKR(tax)} />}

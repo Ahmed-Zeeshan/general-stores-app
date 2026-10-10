@@ -83,11 +83,11 @@ export default function StatementPage({ params }: { params: Promise<{ id: string
             onClick={share}
             disabled={!phone}
             title={phone ? "" : "No valid mobile number"}
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-4 font-semibold text-white shadow hover:bg-emerald-700 disabled:opacity-50"
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-4 font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
           >
             <MessageCircle className="h-4 w-4" /> Send on WhatsApp
           </button>
-          <button onClick={() => window.print()} className="inline-flex h-10 items-center gap-2 rounded-xl bg-white px-4 font-semibold text-slate-700 shadow">
+          <button onClick={() => window.print()} className="inline-flex h-10 items-center gap-2 rounded-xl bg-white px-4 font-semibold text-slate-700 shadow-sm">
             <Printer className="h-4 w-4" /> Print / Save PDF
           </button>
         </div>

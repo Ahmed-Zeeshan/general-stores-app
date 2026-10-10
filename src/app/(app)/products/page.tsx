@@ -413,7 +413,7 @@ function ProductForm({
                 disabled={generating}
                 title="Create a new barcode"
                 aria-label="Create a new barcode"
-                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-600 shadow-sm hover:bg-slate-50 hover:text-brand-700 disabled:opacity-50"
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-600 shadow-xs hover:bg-slate-50 hover:text-brand-700 disabled:opacity-50"
               >
                 <Wand2 className="h-5 w-5" />
               </button>

@@ -22,7 +22,7 @@ export function DateRange({ from, to, onChange }: { from: string; to: string; on
             <button
               key={p.label}
               onClick={() => onChange({ from: f, to: t })}
-              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${active ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${active ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-700"}`}
             >
               {p.label}
             </button>
