@@ -32,8 +32,10 @@ await page.goto(`${B}/customers/${bilal._id}`);
 await page.click("button:has-text('Receive payment')");
 const dlg = page.locator("[role=dialog]");
 await dlg.waitFor();
+// The dialog animates in; give slower machines a moment before reading it.
+await page.waitForFunction(() => /Full payment[\s\S]*Half/.test(document.querySelector("[role=dialog]")?.innerText ?? ""), null, { timeout: 10000 }).catch(() => {});
 let t = await dlg.innerText();
-ok(t.includes("Full payment") && t.includes("Rs 2,500") && t.includes("Half"), "quick amounts: full and half");
+ok(t.includes("Full payment") && t.includes("Rs 2,500") && t.includes("Half"), "quick amounts: full and half" + (t.includes("Rs 2,500") ? "" : ` — dialog showed: ${JSON.stringify(t.slice(0, 300))}`));
 await dlg.locator("input[aria-label=Amount]").fill("1000");
 t = (await dlg.innerText()).replace(/\n/g, " ");
 ok(/Remaining\s*Rs 1,500/.test(t) && t.includes("Part payment"), "shows remaining 1,500 and 'Part payment'");
