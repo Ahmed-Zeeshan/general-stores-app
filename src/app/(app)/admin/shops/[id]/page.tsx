@@ -7,6 +7,7 @@ import { Badge, Button, Card, Field, Input, Modal, Select, Spinner, Table, Td, T
 import { SHOP_TYPES, shopState } from "@/components/admin";
 import { RestoreButton } from "@/components/restore";
 import { useToast } from "@/components/toast";
+import { useConfirm } from "@/components/confirm";
 import { api, formatDate } from "@/lib/client";
 
 type Tenant = {
@@ -32,6 +33,7 @@ const ROLE_COLOR = { owner: "violet", manager: "blue", cashier: "slate" } as con
 export default function AdminShopPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const toast = useToast();
+  const confirm = useConfirm();
   const [data, setData] = useState<{ tenant: Tenant; users: ShopUser[]; branches: ShopBranch[] } | null>(null);
   const [form, setForm] = useState({ shopName: "", maxUsers: "", maxBranches: "", plan: "", expiresAt: "", adminNotes: "" });
   const [saving, setSaving] = useState(false);
@@ -77,7 +79,20 @@ export default function AdminShopPage({ params }: { params: Promise<{ id: string
   }
 
   async function setStatus(status: "active" | "suspended") {
-    if (status === "suspended" && !confirm(`Suspend ${tenant.shopName}? All its users will be logged out and cannot use the shop until you activate it again. No data is deleted.`)) return;
+    if (
+      status === "suspended" &&
+      !(await confirm({
+        title: `Suspend ${tenant.shopName}?`,
+        tone: "danger",
+        details: [
+          { label: "Owner", value: tenant.ownerName ?? "—" },
+          { label: "Active users", value: activeUsers },
+        ],
+        points: ["All its users are logged out within seconds and cannot log in.", "No data is deleted. Activate the shop again any time."],
+        confirmLabel: "Suspend shop",
+      }))
+    )
+      return;
     try {
       await api(`/api/admin/tenants/${id}`, { method: "PUT", body: { status, expiresAt: form.expiresAt || null } });
       toast.success(status === "active" ? "Shop activated" : "Shop suspended");

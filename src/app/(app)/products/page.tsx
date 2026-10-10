@@ -9,6 +9,7 @@ import { CameraButton, CameraScanner, useBarcodeScanner } from "@/components/bar
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Spinner, Table, Td, Th, Textarea } from "@/components/ui";
 import { useCan, useSession } from "@/components/session";
 import { useToast } from "@/components/toast";
+import { useConfirm } from "@/components/confirm";
 import { api, formatDate, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty } from "@/lib/money";
 
@@ -66,6 +67,7 @@ function ProductsPage() {
   const [catsOpen, setCatsOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [assigning, setAssigning] = useState(false);
+  const confirm = useConfirm();
   const { branch, branches, branchLocked } = useSession();
   const multiBranch = (branches?.length ?? 0) > 1;
   const [allBranches, setAllBranches] = useState(false);
@@ -94,7 +96,16 @@ function ProductsPage() {
 
   async function assignMissing() {
     const missing = products?.filter((p) => !p.barcode).length ?? 0;
-    if (!confirm(`Create barcodes for all products that do not have one${missing ? ` (${missing} in this list)` : ""}? Existing barcodes are not changed.`)) return;
+    const ok = await confirm({
+      title: "Create barcodes?",
+      message: "Every product without a barcode gets its own in-store barcode, ready to print on labels.",
+      tone: "info",
+      icon: "info",
+      details: missing ? [{ label: "Products without a barcode (this list)", value: missing, strong: true }] : undefined,
+      points: ["Products that already have a barcode are not changed.", "Barcodes start with 20 (reserved for shops), so they never clash with company barcodes."],
+      confirmLabel: "Create barcodes",
+    });
+    if (!ok) return;
     setAssigning(true);
     try {
       const r = await api<{ assigned: number }>("/api/barcodes/assign", { body: {} });
@@ -110,7 +121,19 @@ function ProductsPage() {
   const stockValue = products?.reduce((s, p) => s + Math.max(0, p.stock) * p.costPrice, 0) ?? 0;
 
   async function remove(p: Product) {
-    if (!confirm(`Remove "${p.name}"? Old bills will still show it.`)) return;
+    const ok = await confirm({
+      title: `Remove "${p.name}"?`,
+      message: "It will no longer appear in New Bill, Products or Purchases.",
+      tone: "danger",
+      icon: "delete",
+      details: [
+        { label: "Barcode", value: p.barcode || "—" },
+        { label: "Stock now", value: `${formatQty(p.stock)} ${UNIT_LABELS[p.unit]}` },
+      ],
+      points: ["Old bills, reports and stock history still show this item."],
+      confirmLabel: "Remove product",
+    });
+    if (!ok) return;
     try {
       await api(`/api/products/${p._id}`, { method: "DELETE" });
       toast.success("Product removed");
@@ -330,8 +353,19 @@ function ProductForm({
   const set = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm({ ...form, [k]: e.target.value });
   const [scanOpen, setScanOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const confirm = useConfirm();
   async function generate() {
-    if (form.barcode && !confirm("Replace the current barcode with a new one?")) return;
+    if (
+      form.barcode &&
+      !(await confirm({
+        title: "Replace the barcode?",
+        message: "Labels already stuck on this item will stop working with the new barcode.",
+        tone: "warning",
+        details: [{ label: "Current barcode", value: form.barcode }],
+        confirmLabel: "Create new barcode",
+      }))
+    )
+      return;
     setGenerating(true);
     try {
       const r = await api<{ barcode: string }>("/api/barcodes/next", { method: "POST" });
@@ -546,6 +580,7 @@ function StockModal({ product, onClose, onSaved }: { product: Product | null; on
 
 function CategoriesModal({ open, onClose, categories, onChanged }: { open: boolean; onClose: () => void; categories: Category[]; onChanged: () => void }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const [name, setName] = useState("");
 
   async function add(e: React.FormEvent) {
@@ -559,7 +594,14 @@ function CategoriesModal({ open, onClose, categories, onChanged }: { open: boole
     }
   }
   async function remove(c: Category) {
-    if (!confirm(`Delete category "${c.name}"? Products will stay, just without a category.`)) return;
+    const ok = await confirm({
+      title: `Delete category "${c.name}"?`,
+      message: "Products in this category are kept; they will just have no category.",
+      tone: "danger",
+      icon: "delete",
+      confirmLabel: "Delete category",
+    });
+    if (!ok) return;
     try {
       await api(`/api/categories/${c._id}`, { method: "DELETE" });
       onChanged();

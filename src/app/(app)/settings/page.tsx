@@ -5,6 +5,7 @@ import { Database, Download, FileUp, KeyRound, MapPin, MessageCircle, Pencil, Pl
 import { Badge, Button, Card, Field, Input, Modal, PageHeader, Select, Spinner, Table, Td, Th, Textarea } from "@/components/ui";
 import { useSession, type ShopSettings } from "@/components/session";
 import { useToast } from "@/components/toast";
+import { useConfirm } from "@/components/confirm";
 import { api } from "@/lib/client";
 import { RestoreButton } from "@/components/restore";
 import { WaModePicker } from "@/components/wa-mode";
@@ -473,6 +474,7 @@ function UserModal({
 
 function BranchesCard({ data, onChanged }: { data: BranchData; onChanged: () => void }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const [editing, setEditing] = useState<BranchRow | "new" | null>(null);
   const [form, setForm] = useState({ name: "", address: "", phone: "" });
   const [saving, setSaving] = useState(false);
@@ -500,7 +502,17 @@ function BranchesCard({ data, onChanged }: { data: BranchData; onChanged: () => 
   }
 
   async function setActive(b: BranchRow, active: boolean) {
-    if (!active && !confirm(`Close ${b.name}? It must have no stock and no staff assigned. Its old bills stay in reports.`)) return;
+    if (
+      !active &&
+      !(await confirm({
+        title: `Close ${b.name}?`,
+        message: "Staff can no longer choose this branch. You can re-open it later.",
+        tone: "danger",
+        points: ["The branch must have no stock left (transfer it first) and no staff assigned.", "Its old bills stay in Sales History and Reports."],
+        confirmLabel: "Close branch",
+      }))
+    )
+      return;
     try {
       await api(`/api/branches/${b._id}`, { method: "PUT", body: { active } });
       toast.success(active ? "Branch re-opened" : "Branch closed");

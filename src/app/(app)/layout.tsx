@@ -26,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import { ToastProvider, useToast } from "@/components/toast";
+import { useConfirm } from "@/components/confirm";
 import { SessionContext, type SessionData } from "@/components/session";
 import { Logo } from "@/components/logo";
 import { Button, Field, Input, Modal, Spinner, cn } from "@/components/ui";
@@ -62,6 +63,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [pwOpen, setPwOpen] = useState(false);
 
   const [offline, setOffline] = useState(false);
+  const confirm = useConfirm();
   const load = useCallback(() => {
     api<SessionData>("/api/auth/me")
       .then((d) => {
@@ -85,7 +87,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   async function logout() {
     const waiting = data?.user.tenantId ? getOutbox(data.user.tenantId).length : 0;
-    if (waiting && !confirm(`${waiting} offline bill(s) are not yet sent to the server. They stay on this device and are sent after the next login. Log out?`)) return;
+    if (
+      waiting &&
+      !(await confirm({
+        title: "Offline bills not sent yet",
+        message: `${waiting} bill(s) made offline are still on this device.`,
+        tone: "warning",
+        points: ["They stay safely on this device.", "They are sent automatically after the next login on this device."],
+        confirmLabel: "Log out anyway",
+        cancelLabel: "Stay logged in",
+      }))
+    )
+      return;
     await api("/api/auth/logout", { method: "POST" }).catch(() => {});
     clearOfflineCache(data?.user.tenantId);
     router.replace("/login");

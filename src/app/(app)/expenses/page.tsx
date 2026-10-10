@@ -6,6 +6,7 @@ import { Button, Card, EmptyState, Field, Input, Modal, PageHeader, Spinner, Sta
 import { DateRange } from "@/components/date-range";
 import { useCan } from "@/components/session";
 import { useToast } from "@/components/toast";
+import { useConfirm } from "@/components/confirm";
 import { api, formatDate, todayISO } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
 import { EXPENSE_CATEGORIES } from "@/lib/constants";
@@ -15,6 +16,7 @@ type Expense = { _id: string; category: string; amount: number; note?: string; d
 export default function ExpensesPage() {
   const toast = useToast();
   const can = useCan();
+  const confirm = useConfirm();
   const [range, setRange] = useState({ from: todayISO(-29), to: todayISO() });
   const [list, setList] = useState<Expense[] | null>(null);
   const [open, setOpen] = useState(false);
@@ -43,7 +45,20 @@ export default function ExpensesPage() {
   }
 
   async function remove(x: Expense) {
-    if (!confirm(`Delete this ${x.category} expense of ${formatPKR(x.amount)}?`)) return;
+    const ok = await confirm({
+      title: "Delete this expense?",
+      tone: "danger",
+      icon: "delete",
+      details: [
+        { label: "Category", value: x.category },
+        { label: "Date", value: formatDate(x.date) },
+        ...(x.note ? [{ label: "Note", value: x.note }] : []),
+        { label: "Amount", value: formatPKR(x.amount), strong: true },
+      ],
+      message: "Reports and profit will be recalculated without it.",
+      confirmLabel: "Delete expense",
+    });
+    if (!ok) return;
     try {
       await api(`/api/expenses/${x._id}`, { method: "DELETE" });
       load();

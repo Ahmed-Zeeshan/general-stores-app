@@ -8,6 +8,7 @@ import { DateRange } from "@/components/date-range";
 import { BranchFilter } from "@/components/branch-filter";
 import { useCan } from "@/components/session";
 import { useToast } from "@/components/toast";
+import { useConfirm } from "@/components/confirm";
 import { api, formatDate, PAYMENT_LABELS, todayISO } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
 
@@ -32,6 +33,7 @@ type Sale = {
 export default function SalesPage() {
   const toast = useToast();
   const can = useCan();
+  const confirm = useConfirm();
   const [range, setRange] = useState({ from: todayISO(), to: todayISO() });
   const [q, setQ] = useState("");
   const [branch, setBranch] = useState("");
@@ -47,7 +49,28 @@ export default function SalesPage() {
   }, [load]);
 
   async function returnSale(s: Sale) {
-    if (!confirm(`Return full bill ${s.invoiceNo}? Stock will be added back${s.creditAmount ? " and udhaar removed" : ""}. Give ${formatPKR(s.total - s.creditAmount)} back to the customer.`)) return;
+    const refund = s.total - s.creditAmount;
+    const ok = await confirm({
+      title: `Return bill ${s.invoiceNo}?`,
+      message: "The whole bill will be cancelled. This cannot be undone.",
+      tone: "danger",
+      icon: "warning",
+      details: [
+        { label: "Customer", value: s.customerName ?? "Walk-in" },
+        { label: "Items", value: s.items.length },
+        { label: "Bill total", value: formatPKR(s.total) },
+        ...(s.creditAmount > 0 ? [{ label: "Udhaar removed from khata", value: formatPKR(s.creditAmount) }] : []),
+        ...(refund > 0 ? [{ label: `Refund to customer (${PAYMENT_LABELS[s.paymentMethod] ?? s.paymentMethod})`, value: formatPKR(refund), strong: true }] : []),
+      ],
+      points: [
+        "All items go back into stock.",
+        ...(s.fbrStatus && s.fbrStatus !== "none" ? ["A return (credit note) is sent to FBR."] : []),
+        "The bill stays in Sales History marked as Returned.",
+      ],
+      confirmLabel: refund > 0 ? `Return & refund ${formatPKR(refund)}` : "Return bill",
+      cancelLabel: "Keep bill",
+    });
+    if (!ok) return;
     try {
       await api(`/api/sales/${s._id}/return`, { method: "POST" });
       toast.success("Bill returned");

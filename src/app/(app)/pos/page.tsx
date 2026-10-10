@@ -26,6 +26,7 @@ import { CustomerPicker, type PartyLite } from "@/components/customer-picker";
 import { CameraButton, CameraScanner, beep, useBarcodeScanner } from "@/components/barcode-scanner";
 import { useCan, useSession } from "@/components/session";
 import { useToast } from "@/components/toast";
+import { useConfirm } from "@/components/confirm";
 import { api, LOOSE_UNITS, NetworkError, UNIT_LABELS } from "@/lib/client";
 import {
   addToOutbox,
@@ -786,6 +787,7 @@ function PaymentModal({
 
 function OutboxModal({ open, onClose, tenantId, bills, onSynced }: { open: boolean; onClose: () => void; tenantId: string; bills: OutboxBill[]; onSynced: () => void }) {
   const toast = useToast();
+  const ask = useConfirm();
   const [busy, setBusy] = useState(false);
   async function sendNow() {
     setBusy(true);
@@ -824,7 +826,21 @@ function OutboxModal({ open, onClose, tenantId, bills, onSynced }: { open: boole
                         size="sm"
                         variant="ghost"
                         className="hover:text-rose-600"
-                        onClick={() => confirm("Remove this bill from the device? It will not be saved.") && removeFromOutbox(tenantId, b.clientId)}
+                        onClick={async () => {
+                          const ok = await ask({
+                            title: "Discard this offline bill?",
+                            message: "It was never saved on the server and will be lost.",
+                            tone: "danger",
+                            icon: "delete",
+                            details: [
+                              { label: "Made at", value: new Date(b.soldAt).toLocaleString("en-PK") },
+                              { label: "Reason not saved", value: b.error ?? "—" },
+                              { label: "Amount", value: formatPKR(b.total), strong: true },
+                            ],
+                            confirmLabel: "Discard bill",
+                          });
+                          if (ok) removeFromOutbox(tenantId, b.clientId);
+                        }}
                       >
                         Discard
                       </Button>

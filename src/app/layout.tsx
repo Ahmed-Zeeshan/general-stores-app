@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/sw-register";
+import { ConfirmProvider } from "@/components/confirm";
 
 export const metadata: Metadata = {
   title: "Dukaan Manager",
@@ -24,7 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="min-h-screen font-sans">
-        {children}
+        <ConfirmProvider>{children}</ConfirmProvider>
         <ServiceWorkerRegister />
       </body>
     </html>

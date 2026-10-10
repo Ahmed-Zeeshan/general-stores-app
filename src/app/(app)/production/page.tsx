@@ -5,6 +5,7 @@ import { AlertTriangle, ChefHat, History, Pencil, Plus, Trash2, Wheat } from "lu
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Spinner, StatCard, Table, Td, Th, Textarea } from "@/components/ui";
 import { DateRange } from "@/components/date-range";
 import { useToast } from "@/components/toast";
+import { useConfirm } from "@/components/confirm";
 import { useSession } from "@/components/session";
 import { api, formatDate, todayISO, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty, round2 } from "@/lib/money";
@@ -115,6 +116,7 @@ export default function ProductionPage() {
 
 function MakeItems({ recipes, onDone }: { recipes: Recipe[]; onDone: () => void }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const { settings } = useSession();
   // Sale price without the sales tax part, so profit is not overstated.
   const netPrice = (price: number) =>
@@ -139,7 +141,16 @@ function MakeItems({ recipes, onDone }: { recipes: Recipe[]; onDone: () => void 
   async function save(allowShortage = false) {
     if (!recipe || n <= 0) return;
     if (short.length && !allowShortage) {
-      if (!confirm(`Some ingredients show less stock than needed (${short.map((s) => s.name).join(", ")}). Their stock will go below zero. Continue?`)) return;
+      const ok = await confirm({
+        title: "Not enough ingredients in stock",
+        message: "Continue only if the stock count in the app is wrong (the ingredients are really there).",
+        tone: "warning",
+        details: short.map((x) => ({ label: x.name, value: `need ${formatQty(x.need)}, have ${formatQty(x.stock)} ${UNIT_LABELS[x.unit] ?? x.unit}` })),
+        points: ["Their stock will go below zero until you record a purchase or correct the count."],
+        confirmLabel: "Make anyway",
+        cancelLabel: "Go back",
+      });
+      if (!ok) return;
       return save(true);
     }
     setSaving(true);
@@ -241,8 +252,16 @@ function MakeItems({ recipes, onDone }: { recipes: Recipe[]; onDone: () => void 
 
 function RecipeList({ recipes, onEdit, onChanged }: { recipes: Recipe[]; onEdit: (r: Recipe) => void; onChanged: () => void }) {
   const toast = useToast();
+  const confirm = useConfirm();
   async function remove(r: Recipe) {
-    if (!confirm(`Delete recipe "${r.name}"? Past production records are kept.`)) return;
+    const ok = await confirm({
+      title: `Delete recipe "${r.name}"?`,
+      message: "Past production records stay in History.",
+      tone: "danger",
+      icon: "delete",
+      confirmLabel: "Delete recipe",
+    });
+    if (!ok) return;
     try {
       await api(`/api/recipes/${r._id}`, { method: "DELETE" });
       onChanged();
