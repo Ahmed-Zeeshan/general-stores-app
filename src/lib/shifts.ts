@@ -1,7 +1,7 @@
 import type { Types } from "mongoose";
 import { round2 } from "./money";
 import { khataPaymentsPipeline, PAYMENTS_EXPR } from "./report-agg";
-import { Expense, LedgerEntry, Purchase, PurchaseReturn, Repair, Sale, SaleReturn, UsedPurchase } from "@/models";
+import { Expense, LedgerEntry, Purchase, PurchaseReturn, Repair, Sale, SaleReturn, UsedPurchase, WalletTxn } from "@/models";
 
 type Money = { method: string; total: number; count: number };
 
@@ -26,6 +26,8 @@ export type ShiftSummary = {
   usedPhonesByMethod: Money[];
   /** Repair money taken (advances and payments, less money given back), by method. */
   repairsByMethod: Money[];
+  /** Easyload / packages / wallet entries: cash into (+) or out of (−) the drawer, and profit. */
+  walletCash: { cashIn: number; cashOut: number; profit: number; count: number };
   expensesCash: number;
   expensesOther: number;
   cashIn: number;
@@ -48,7 +50,7 @@ export async function shiftSummary(
   to: Date,
 ): Promise<ShiftSummary> {
   const match = { tenant: tid, branch: shift.branch, createdAt: { $gte: shift.openedAt, $lte: to } };
-  const [sales, salesByMethod, returns, refunds, collected, supplierKhata, purchases, expenses, cashBack, usedBuys, repairPays] = await Promise.all([
+  const [sales, salesByMethod, returns, refunds, collected, supplierKhata, purchases, expenses, cashBack, usedBuys, repairPays, walletAgg] = await Promise.all([
     Sale.aggregate([{ $match: match }, { $group: { _id: null, bills: { $sum: 1 }, total: { $sum: "$total" }, discount: { $sum: "$discount" }, tax: { $sum: "$tax" } } }]),
     Sale.aggregate([
       { $match: match },
@@ -72,6 +74,18 @@ export async function shiftSummary(
       { $match: { "payments.at": { $gte: shift.openedAt, $lte: to } } },
       { $group: { _id: "$payments.method", total: { $sum: "$payments.amount" }, count: { $sum: 1 } } },
     ]),
+    WalletTxn.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: null,
+          cashIn: { $sum: { $cond: [{ $gt: ["$cashEffect", 0] }, "$cashEffect", 0] } },
+          cashOut: { $sum: { $cond: [{ $lt: ["$cashEffect", 0] }, "$cashEffect", 0] } },
+          profit: { $sum: { $add: [{ $ifNull: ["$fee", 0] }, { $ifNull: ["$commission", 0] }] } },
+          count: { $sum: { $cond: [{ $in: ["$type", ["reversal", "adjust"]] }, 0, 1] } },
+        },
+      },
+    ]),
   ]);
 
   const s = sales[0] ?? { bills: 0, total: 0, discount: 0, tax: 0 };
@@ -83,6 +97,8 @@ export async function shiftSummary(
   const supplierCashBack = round2(cashBack[0]?.total ?? 0);
   const usedPhonesByMethod = tidy(usedBuys);
   const repairsByMethod = tidy(repairPays);
+  const w = walletAgg[0];
+  const walletCash = { cashIn: round2(w?.cashIn ?? 0), cashOut: round2(w?.cashOut ?? 0), profit: round2(w?.profit ?? 0), count: w?.count ?? 0 };
   const expensesCash = round2(expenses.find((e) => e._id === "cash")?.total ?? 0);
   const expensesOther = round2(expenses.filter((e) => e._id !== "cash").reduce((a, e) => a + e.total, 0));
   const moves = shift.movements ?? [];
@@ -94,6 +110,8 @@ export async function shiftSummary(
     { label: "Cash sales", amount: pick(byMethod, "cash") },
     { label: "Udhaar collected in cash", amount: pick(udhaar, "cash") },
     { label: "Repairs (cash, after refunds)", amount: pick(repairsByMethod, "cash") },
+    { label: "Easyload & wallets: cash received", amount: walletCash.cashIn },
+    { label: "Wallet cash-outs & top-ups paid", amount: walletCash.cashOut },
     { label: "Cash put in drawer", amount: cashIn },
     { label: "Cash back from suppliers", amount: supplierCashBack },
     { label: "Cash refunds", amount: -pick(refundsByMethod, "cash") },
@@ -123,6 +141,7 @@ export async function shiftSummary(
     supplierCashBack,
     usedPhonesByMethod,
     repairsByMethod,
+    walletCash,
     expensesCash,
     expensesOther,
     cashIn,

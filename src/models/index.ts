@@ -25,3 +25,4 @@ export * from "./PointsEntry";
 export * from "./Device";
 export * from "./UsedPurchase";
 export * from "./Repair";
+export * from "./Wallet";

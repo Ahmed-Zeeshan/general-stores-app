@@ -23,6 +23,8 @@ const LABELS: Record<string, string> = {
   devices: "Phones (IMEI)",
   usedPurchases: "Used phones bought",
   repairs: "Repair jobs",
+  wallets: "Easyload SIMs & wallets",
+  walletTxns: "Easyload & wallet entries",
 };
 
 /**

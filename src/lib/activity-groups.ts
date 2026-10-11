@@ -1,7 +1,7 @@
 /** Activity log actions grouped for filtering, with plain labels (shared by the API and the page). */
 export const ACTIVITY_GROUPS: Record<string, string[]> = {
   sales: ["sale.price", "sale.discount", "sale.return", "repair.create", "repair.deliver", "repair.cancel", "repair.refund", "repair.discount"],
-  money: ["payment.receive", "payment.supplier", "payment.cancel", "khata.charge", "khata.opening", "party.update", "expense.add", "expense.delete"],
+  money: ["payment.receive", "payment.supplier", "payment.cancel", "khata.charge", "khata.opening", "party.update", "expense.add", "expense.delete", "wallet.create", "wallet.update", "wallet.reconcile", "wallet.float_in", "wallet.float_out", "wallet.commission", "wallet.reverse"],
   stock: ["stock.adjust", "stock.wastage", "stock.writeoff", "stock.transfer", "product.price", "product.remove", "product.import", "purchase.create", "purchase.return", "purchase.cancel", "device.add", "device.update", "device.remove", "used.buy", "used.cancel"],
   drawer: ["drawer.open", "drawer.in", "drawer.out", "drawer.close"],
   staff: ["login", "login.failed", "user.create", "user.update"],
@@ -34,6 +34,13 @@ export const ACTION_LABELS: Record<string, string> = {
   "party.update": "Customer changed",
   "expense.add": "Expense",
   "expense.delete": "Expense deleted",
+  "wallet.create": "Wallet / SIM added",
+  "wallet.update": "Wallet / SIM changed",
+  "wallet.reconcile": "Wallet balance corrected",
+  "wallet.float_in": "Wallet topped up",
+  "wallet.float_out": "Wallet balance withdrawn",
+  "wallet.commission": "Commission received",
+  "wallet.reverse": "Wallet entry cancelled",
   "stock.adjust": "Stock adjusted",
   "stock.wastage": "Wastage",
   "stock.writeoff": "Lot written off",

@@ -64,3 +64,36 @@ export const REPAIR_STATUS_LABELS: Record<RepairStatus, string> = {
   cancelled: "Cancelled",
 };
 export const REPAIR_ACCESSORIES = ["SIM", "Memory card", "Back cover", "Charger", "Battery", "Box"];
+
+/** Mobile networks (Easyload and packages) and wallet / bank providers. */
+export const OPERATORS = ["jazz", "zong", "telenor", "ufone", "onic"] as const;
+export const OPERATOR_LABELS: Record<string, string> = { jazz: "Jazz", zong: "Zong", telenor: "Telenor", ufone: "Ufone", onic: "Onic" };
+export const WALLET_PROVIDERS = ["jazz", "zong", "telenor", "ufone", "onic", "jazzcash", "easypaisa", "upaisa", "sadapay", "nayapay", "bank", "other"] as const;
+export const PROVIDER_LABELS: Record<string, string> = {
+  ...OPERATOR_LABELS,
+  jazzcash: "JazzCash",
+  easypaisa: "Easypaisa",
+  upaisa: "UPaisa",
+  sadapay: "SadaPay",
+  nayapay: "NayaPay",
+  bank: "Bank",
+  other: "Other",
+};
+/** load = Easyload / packages SIM; wallet = JazzCash, Easypaisa… agent account; bank = bank account. */
+export const WALLET_KINDS = ["load", "wallet", "bank"] as const;
+export const WALLET_TXN_TYPES = ["load", "package", "cash_in", "cash_out", "bill", "float_in", "float_out", "commission", "adjust", "reversal"] as const;
+export type WalletTxnType = (typeof WALLET_TXN_TYPES)[number];
+export const WALLET_TXN_LABELS: Record<WalletTxnType, string> = {
+  load: "Easyload",
+  package: "Package",
+  cash_in: "Cash in / send money",
+  cash_out: "Cash out / withdraw",
+  bill: "Bill payment",
+  float_in: "Balance top-up",
+  float_out: "Balance withdrawn",
+  commission: "Commission received",
+  adjust: "Balance correction",
+  reversal: "Cancelled entry",
+};
+export const PACKAGE_KINDS = ["internet", "call", "sms", "hybrid"] as const;
+export const PACKAGE_KIND_LABELS: Record<string, string> = { internet: "Internet", call: "Calls", sms: "SMS", hybrid: "All-in-one" };

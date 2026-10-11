@@ -29,6 +29,7 @@ import {
   Truck,
   Wallet,
   Wrench,
+  Zap,
   PackagePlus,
   X,
 } from "lucide-react";
@@ -54,6 +55,7 @@ const NAV: { href: string; label: string; urdu: string; icon: typeof Package; ro
   { href: "/phones", label: "Phones (IMEI)", urdu: "موبائل فون", icon: Smartphone, roles: SHOP, module: "phones" },
   { href: "/used-phones", label: "Used Phones Bought", urdu: "پرانے فون", icon: Repeat, roles: ["owner", "manager"], module: "phones" },
   { href: "/repairs", label: "Repairs", urdu: "مرمت", icon: Wrench, roles: SHOP, module: "repairs" },
+  { href: "/wallets", label: "Easyload & Wallets", urdu: "ایزی لوڈ", icon: Zap, roles: SHOP, module: "wallets" },
   { href: "/drawer", label: "Cash Drawer", urdu: "کیش دراز", icon: Banknote, roles: SHOP },
   { href: "/udhaar", label: "Udhaar Report", urdu: "ادھار رپورٹ", icon: BellRing, roles: ["owner", "manager"] },
   { href: "/promotions", label: "Offers", urdu: "آفرز", icon: BadgePercent, roles: ["owner", "manager"] },
