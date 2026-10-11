@@ -10,6 +10,7 @@ import { useToast } from "@/components/toast";
 import { api, formatDate, PAYMENT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty, round2 } from "@/lib/money";
 import { REPAIR_STATUS_LABELS, type RepairStatus } from "@/lib/constants";
+import { productMatches } from "@/lib/product-search";
 
 type Part = { _id: string; name: string; salePrice: number; stock: number; trackSerial?: boolean; barcode?: string };
 const STEPS: RepairStatus[] = ["received", "checking", "waiting_parts", "repairing", "ready"];
@@ -407,7 +408,7 @@ function PartsCard({ job, open, canPrice, onChange }: { job: RepairJob; open: bo
   const matches = useMemo(() => {
     const t = q.trim().toLowerCase();
     if (!t) return [];
-    return parts.filter((p) => p.name.toLowerCase().includes(t) || p.barcode === t).slice(0, 8);
+    return parts.filter((p) => productMatches(p, q)).slice(0, 8);
   }, [q, parts]);
 
   async function add() {

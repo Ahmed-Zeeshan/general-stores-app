@@ -20,6 +20,8 @@ type Product = {
   nameUrdu?: string;
   barcode?: string;
   sku?: string;
+  brand?: string;
+  fits?: string;
   unit: string;
   costPrice: number;
   salePrice: number;
@@ -41,6 +43,8 @@ const EMPTY = {
   nameUrdu: "",
   barcode: "",
   sku: "",
+  brand: "",
+  fits: "",
   category: "",
   unit: "pcs",
   costPrice: "",
@@ -187,7 +191,7 @@ function ProductsPage() {
           <div className="flex flex-1 gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or scan barcode" className="pl-10" />
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, brand, phone model or scan barcode" className="pl-10" />
             </div>
             <CameraButton onClick={() => setCameraOpen(true)} />
           </div>
@@ -250,6 +254,9 @@ function ProductsPage() {
                   <tr key={p._id} className="hover:bg-slate-50/60">
                     <Td>
                       <div className="font-semibold text-slate-800">{p.name}</div>
+                      {(p.brand || p.fits) && (
+                        <div className="text-xs text-slate-500">{[p.brand, p.fits && `Fits ${p.fits}`].filter(Boolean).join(" · ")}</div>
+                      )}
                       <div className="text-xs text-slate-400">
                         {p.nameUrdu && <span className="urdu mr-2">{p.nameUrdu}</span>}
                         {p.barcode}
@@ -358,6 +365,8 @@ function ProductForm({
             nameUrdu: product.nameUrdu ?? "",
             barcode: product.barcode ?? "",
             sku: product.sku ?? "",
+            brand: product.brand ?? "",
+            fits: product.fits ?? "",
             category: product.category?._id ?? "",
             unit: product.unit,
             costPrice: String(product.costPrice),
@@ -466,6 +475,14 @@ function ProductForm({
             ))}
           </Select>
         </Field>
+        <Field label="Brand (optional)">
+          <Input value={form.brand} onChange={set("brand")} placeholder={phonesOn ? "e.g. Samsung, Anker, Faster, Audionic" : "e.g. Nestlé, Shan"} maxLength={60} aria-label="Brand" />
+        </Field>
+        {phonesOn && (
+          <Field label="Fits phone models (accessories)" hint="Covers, protectors, batteries, chargers: searching a model finds this item">
+            <Input value={form.fits} onChange={set("fits")} placeholder="e.g. Samsung A54, A55 · iPhone 13, 14" maxLength={300} aria-label="Fits phone models" />
+          </Field>
+        )}
         <Field label="Sold by" hint="Kg / Litre items let you sell by weight or by rupees">
           <Select value={form.unit} onChange={set("unit")}>
             {Object.entries(UNIT_LABELS).map(([v, l]) => (

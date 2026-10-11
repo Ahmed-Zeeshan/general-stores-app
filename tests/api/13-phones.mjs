@@ -199,4 +199,14 @@ ok(allDevices.length === 8 && backup.data.devices.length === 8 && backup.data.de
 const acts = await owner.call("/api/activity");
 const rows = acts.rows ?? acts;
 ok(["device.add", "device.update", "device.remove"].every((a) => rows.some((r) => r.action === a)), "activity log records phones added, changed, removed");
+section("Accessories: brand and phone models they fit");
+const glass = await owner.call("/api/products", { body: { name: "Tempered Glass 9D", brand: "Remax", fits: "Samsung A54, A55 · Galaxy S23 FE", unit: "pcs", costPrice: 80, salePrice: 300, lowStockAlert: 5, openingStock: 30 } });
+ok(glass.brand === "Remax" && glass.fits.includes("A55"), "brand and fits saved");
+const find = async (q) => (await cashier.call(`/api/products?q=${encodeURIComponent(q)}`)).map((p) => p.name);
+ok((await find("a55")).includes("Tempered Glass 9D"), "searching the phone model finds the accessory");
+ok((await find("glass a54")).includes("Tempered Glass 9D") && !(await find("glass a15")).length, "every word must match (glass + A54 yes, glass + A15 no)");
+ok((await find("remax")).includes("Tempered Glass 9D"), "search by brand");
+await owner.call(`/api/products/${glass._id}`, { method: "PUT", body: { name: "Tempered Glass 9D", brand: "", fits: "", unit: "pcs", costPrice: 80, salePrice: 300, lowStockAlert: 5 } });
+const g2 = (await owner.call(`/api/products?q=Tempered`))[0];
+ok(!g2.brand && !g2.fits, "brand and fits can be cleared");
 await done();

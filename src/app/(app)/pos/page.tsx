@@ -36,6 +36,7 @@ import { ReceivePaymentModal } from "@/components/receive-payment";
 import { DevicePicker, DeviceTags, type DeviceRow } from "@/components/devices";
 import { InstallmentSaleModal } from "@/components/installments";
 import { cleanImei } from "@/lib/imei";
+import { productMatches } from "@/lib/product-search";
 import { api, formatDate, LOOSE_UNITS, NetworkError, UNIT_LABELS } from "@/lib/client";
 import {
   addToOutbox,
@@ -65,6 +66,8 @@ type Product = {
   nameUrdu?: string;
   barcode?: string;
   sku?: string;
+  brand?: string;
+  fits?: string;
   unit: string;
   salePrice: number;
   wholesalePrice?: number;
@@ -220,7 +223,7 @@ export default function PosPage() {
     return products.filter((p) => {
       if (cat && p.category?._id !== cat) return false;
       if (!term) return true;
-      return p.name.toLowerCase().includes(term) || p.nameUrdu?.includes(term) || p.barcode === term || p.sku?.toLowerCase() === term || !!p.packs?.some((k) => k.barcode === term);
+      return productMatches(p, q);
     });
   }, [products, q, cat]);
 
@@ -563,6 +566,11 @@ export default function PosPage() {
                     )}
                     <span className="line-clamp-2 min-h-10 font-semibold leading-tight text-slate-800">{p.name}</span>
                     {p.nameUrdu && <span className="urdu truncate text-xs text-slate-400">{p.nameUrdu}</span>}
+                    {(p.brand || p.fits) && (
+                      <span className="truncate text-xs text-slate-500" title={p.fits ? `Fits ${p.fits}` : undefined}>
+                        {[p.brand, p.fits && `Fits ${p.fits}`].filter(Boolean).join(" · ")}
+                      </span>
+                    )}
                     <span className="mt-2 text-lg font-bold text-brand-700">
                       {formatPKR(p.salePrice)}
                       <span className="text-xs font-medium text-slate-400">/{UNIT_LABELS[p.unit]}</span>

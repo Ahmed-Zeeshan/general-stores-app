@@ -24,6 +24,10 @@ const ProductSchema = new Schema(
     nameUrdu: { type: String, trim: true },
     barcode: { type: String, trim: true },
     sku: { type: String, trim: true },
+    /** Maker, e.g. Samsung, Anker, Faster (accessories and phones). */
+    brand: { type: String, trim: true },
+    /** Phone models an accessory fits, e.g. "Samsung A54, A55" — found when searching a model. */
+    fits: { type: String, trim: true },
     category: { type: Schema.Types.ObjectId, ref: "Category" },
     unit: { type: String, enum: UNITS, default: "pcs" },
     costPrice: { type: Number, default: 0, min: 0 },

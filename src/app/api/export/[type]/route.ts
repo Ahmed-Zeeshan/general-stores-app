@@ -24,8 +24,8 @@ export const GET = handle<Ctx>(async (req, { params }) => {
     return csvResponse(
       `products-${day()}.csv`,
       toCsv(
-        ["name", "nameUrdu", "barcode", "category", "unit", "costPrice", "salePrice", "stock", "lowStockAlert", "expiryDate", "pctCode"],
-        products.map((p) => [p.name, p.nameUrdu, p.barcode, p.category?.name, p.unit, p.costPrice, p.salePrice, p.stock, p.lowStockAlert, p.expiryDate ? new Date(p.expiryDate).toISOString().slice(0, 10) : "", p.pctCode]),
+        ["name", "nameUrdu", "barcode", "category", "unit", "costPrice", "salePrice", "stock", "lowStockAlert", "expiryDate", "pctCode", "brand", "fits"],
+        products.map((p) => [p.name, p.nameUrdu, p.barcode, p.category?.name, p.unit, p.costPrice, p.salePrice, p.stock, p.lowStockAlert, p.expiryDate ? new Date(p.expiryDate).toISOString().slice(0, 10) : "", p.pctCode, p.brand, p.fits]),
       ),
     );
   }

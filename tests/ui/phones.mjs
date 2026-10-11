@@ -36,6 +36,7 @@ await page.waitForURL(B + "/");
 const cats = await get("/api/categories");
 const phone = await post("/api/products", { name: "Infinix Hot 40", unit: "pcs", costPrice: 30000, salePrice: 34000, lowStockAlert: 1, trackSerial: true, warrantyMonths: 12, category: cats.find((c) => c.name === "Mobile Phones")._id });
 await post("/api/products", { name: "Fast Charger 33W", unit: "pcs", costPrice: 600, salePrice: 1200, lowStockAlert: 2, openingStock: 10 });
+await post("/api/products", { name: "Silicone Back Cover", brand: "Baseus", fits: "Infinix Hot 40, Hot 40i", unit: "pcs", costPrice: 150, salePrice: 450, lowStockAlert: 2, openingStock: 12 });
 const I = Array.from({ length: 10 }, (_, i) => imei(i * 11 + 3));
 await post("/api/devices", { productId: phone._id, cost: 30000, units: [{ imei: I[0], color: "Black", storage: "8/256GB", pta: "approved" }, { imei: I[1], color: "Gold", storage: "8/256GB", pta: "approved" }] });
 
@@ -91,6 +92,12 @@ await dlg.locator("button:has-text('Cancel')").click();
 // ---- Billing: choose the phone by IMEI
 const cust = await post("/api/parties", { type: "customer", name: "Usman", phone: "03001234567" });
 await page.goto(B + "/pos");
+await page.waitForSelector("text=Infinix Hot 40");
+await page.fill('input[placeholder^="Scan barcode"]', "cover hot 40i");
+await page.waitForFunction(() => document.querySelectorAll("main .grid > button").length === 1);
+t = await page.locator("main .grid > button").innerText().then(norm);
+ok(t.includes("Silicone Back Cover") && t.includes("Baseus · Fits Infinix Hot 40, Hot 40i"), "typing \"cover hot 40i\" finds the cover that fits that phone (brand and models shown)");
+await page.fill('input[placeholder^="Scan barcode"]', "");
 await page.waitForSelector("text=Infinix Hot 40");
 await page.locator("main button:has-text('Infinix Hot 40')").first().click();
 await dlg.waitFor();

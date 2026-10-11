@@ -24,8 +24,9 @@ export const GET = handle(async (req) => {
 
   const query: Record<string, unknown> = { tenant: tid, active: filter === "inactive" ? false : true };
   if (q) {
-    const rx = new RegExp(escapeRegex(q), "i");
-    query.$or = [{ name: rx }, { nameUrdu: rx }, { barcode: q }, { "packs.barcode": q }, { sku: rx }];
+    // Every word must be in the name, brand or "fits" models ("cover a54"); barcodes match exactly.
+    const words = q.split(/\s+/).map((w) => new RegExp(escapeRegex(w), "i"));
+    query.$or = [{ barcode: q }, { "packs.barcode": q }, { $and: words.map((rx) => ({ $or: [{ name: rx }, { nameUrdu: rx }, { brand: rx }, { fits: rx }, { sku: rx }] })) }];
   }
   if (category) query.category = category;
   if (filter === "expiring") {

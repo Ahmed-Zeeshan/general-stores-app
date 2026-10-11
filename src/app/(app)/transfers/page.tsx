@@ -10,6 +10,7 @@ import { useToast } from "@/components/toast";
 import { CameraButton, CameraScanner, beep, useBarcodeScanner } from "@/components/barcode-scanner";
 import { api, formatDate, todayISO, UNIT_LABELS } from "@/lib/client";
 import { formatQty } from "@/lib/money";
+import { productMatches } from "@/lib/product-search";
 
 type Product = { _id: string; name: string; barcode?: string; unit: string; stock: number; trackSerial?: boolean };
 type Transfer = {
@@ -50,7 +51,7 @@ export default function TransfersPage() {
   const matches = useMemo(() => {
     const t = q.trim().toLowerCase();
     if (!t) return [];
-    return products.filter((p) => p.name.toLowerCase().includes(t) || p.barcode === t).slice(0, 8);
+    return products.filter((p) => productMatches(p, q)).slice(0, 8);
   }, [q, products]);
 
   function add(p: Product) {

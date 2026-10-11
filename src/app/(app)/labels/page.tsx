@@ -10,6 +10,7 @@ import { useSession } from "@/components/session";
 import { useToast } from "@/components/toast";
 import { api, UNIT_LABELS } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
+import { productMatches } from "@/lib/product-search";
 
 type Product = { _id: string; name: string; nameUrdu?: string; barcode?: string; unit: string; salePrice: number; stock: number };
 type Line = { product: Product; copies: number };
@@ -64,7 +65,7 @@ function LabelsPage() {
   const matches = useMemo(() => {
     const t = q.trim().toLowerCase();
     if (!t || !products) return [];
-    return products.filter((p) => p.name.toLowerCase().includes(t) || p.barcode === q.trim()).slice(0, 8);
+    return products.filter((p) => productMatches(p, q)).slice(0, 8);
   }, [q, products]);
 
   function add(p: Product, copies = 1) {

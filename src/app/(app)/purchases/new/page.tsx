@@ -13,6 +13,7 @@ import { useToast } from "@/components/toast";
 import { CameraButton, CameraScanner, beep, useBarcodeScanner } from "@/components/barcode-scanner";
 import { api, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, round2 } from "@/lib/money";
+import { productMatches } from "@/lib/product-search";
 
 type Pack = { name: string; size: number; barcode?: string };
 type Product = { _id: string; name: string; barcode?: string; unit: string; costPrice: number; salePrice: number; stock: number; packs?: Pack[]; trackExpiry?: boolean; shelfLifeDays?: number; trackSerial?: boolean };
@@ -51,7 +52,7 @@ export default function NewPurchasePage() {
   const matches = useMemo(() => {
     const t = q.trim().toLowerCase();
     if (!t) return [];
-    return products.filter((p) => p.name.toLowerCase().includes(t) || p.barcode === t).slice(0, 8);
+    return products.filter((p) => productMatches(p, q)).slice(0, 8);
   }, [q, products]);
 
   const packCost = (p: Product, pack?: Pack) => (pack ? round2(p.costPrice * pack.size) : p.costPrice);

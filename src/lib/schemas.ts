@@ -13,6 +13,8 @@ export const ProductInput = z.object({
   nameUrdu: z.string().trim().optional(),
   barcode: z.string().trim().optional(),
   sku: z.string().trim().optional(),
+  brand: z.string().trim().max(60).optional(),
+  fits: z.string().trim().max(300).optional(),
   category: optionalId,
   unit: z.enum(UNITS),
   costPrice: z.coerce.number().min(0, "Cost price cannot be negative"),

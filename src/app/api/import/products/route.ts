@@ -90,6 +90,9 @@ export const POST = handle(async (req) => {
       active: true,
     };
     if (barcode) data.barcode = barcode;
+    // Accessories: brand and the phone models they fit (left as they are when the column is empty).
+    if (get("brand")) data.brand = get("brand").slice(0, 60);
+    if (get("fits")) data.fits = get("fits").slice(0, 300);
 
     try {
       const existing =

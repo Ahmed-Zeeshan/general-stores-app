@@ -34,7 +34,7 @@ export const PUT = handle<Ctx>(async (req, { params }) => {
   await assertBarcodesFree(tid, body, id);
   const update: Record<string, unknown> = { ...body };
   const unset: Record<string, 1> = {};
-  for (const key of ["barcode", "category", "pctCode", "wholesalePrice"] as const) {
+  for (const key of ["barcode", "category", "pctCode", "wholesalePrice", "brand", "fits"] as const) {
     if (!body[key]) {
       delete update[key];
       unset[key] = 1;
