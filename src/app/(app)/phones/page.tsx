@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Boxes, History, PackageSearch, Pencil, Plus, ScanBarcode, Search, ShieldCheck, Smartphone, Trash2, Wallet } from "lucide-react";
+import { Boxes, History, PackageSearch, Pencil, Plus, Repeat, ScanBarcode, Search, ShieldCheck, Smartphone, Trash2, Wallet } from "lucide-react";
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Spinner, StatCard, Table, Td, Textarea, Th } from "@/components/ui";
 import { CheckDigit, DeviceTags, Imei, ImeiInput, type DeviceRow } from "@/components/devices";
 import { CameraButton, CameraScanner, useBarcodeScanner } from "@/components/barcode-scanner";
@@ -81,6 +81,9 @@ function PhonesPage() {
             <>
               <Link href="/products">
                 <Button variant="outline" icon={<Boxes className="h-4 w-4" />}>Phone models</Button>
+              </Link>
+              <Link href="/used-phones/new">
+                <Button variant="outline" icon={<Repeat className="h-4 w-4" />}>Buy used phone</Button>
               </Link>
               <Button icon={<Plus className="h-4 w-4" />} onClick={() => setAdding(true)}>
                 Add phones

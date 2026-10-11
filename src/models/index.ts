@@ -23,3 +23,4 @@ export * from "./ActivityLog";
 export * from "./Promotion";
 export * from "./PointsEntry";
 export * from "./Device";
+export * from "./UsedPurchase";

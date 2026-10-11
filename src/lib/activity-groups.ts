@@ -2,7 +2,7 @@
 export const ACTIVITY_GROUPS: Record<string, string[]> = {
   sales: ["sale.price", "sale.discount", "sale.return"],
   money: ["payment.receive", "payment.supplier", "payment.cancel", "khata.charge", "khata.opening", "party.update", "expense.add", "expense.delete"],
-  stock: ["stock.adjust", "stock.wastage", "stock.writeoff", "stock.transfer", "product.price", "product.remove", "product.import", "purchase.create", "purchase.return", "purchase.cancel", "device.add", "device.update", "device.remove"],
+  stock: ["stock.adjust", "stock.wastage", "stock.writeoff", "stock.transfer", "product.price", "product.remove", "product.import", "purchase.create", "purchase.return", "purchase.cancel", "device.add", "device.update", "device.remove", "used.buy", "used.cancel"],
   drawer: ["drawer.open", "drawer.in", "drawer.out", "drawer.close"],
   staff: ["login", "login.failed", "user.create", "user.update"],
   shop: ["settings.update", "branch.create", "branch.update", "backup.download", "backup.restore", "admin.update", "promo.create", "promo.update", "promo.delete"],
@@ -42,6 +42,8 @@ export const ACTION_LABELS: Record<string, string> = {
   "device.add": "Phones added (IMEI)",
   "device.update": "Phone details changed",
   "device.remove": "Phone removed from stock",
+  "used.buy": "Used phone bought",
+  "used.cancel": "Used phone purchase cancelled",
   "drawer.open": "Drawer opened",
   "drawer.in": "Cash in",
   "drawer.out": "Cash out",

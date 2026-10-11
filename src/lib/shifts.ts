@@ -1,7 +1,7 @@
 import type { Types } from "mongoose";
 import { round2 } from "./money";
 import { khataPaymentsPipeline, PAYMENTS_EXPR } from "./report-agg";
-import { Expense, LedgerEntry, Purchase, PurchaseReturn, Sale, SaleReturn } from "@/models";
+import { Expense, LedgerEntry, Purchase, PurchaseReturn, Sale, SaleReturn, UsedPurchase } from "@/models";
 
 type Money = { method: string; total: number; count: number };
 
@@ -22,6 +22,8 @@ export type ShiftSummary = {
   purchasesPaid: number;
   /** Cash suppliers gave back for returned goods. */
   supplierCashBack: number;
+  /** Used phones bought from customers, by how they were paid. */
+  usedPhonesByMethod: Money[];
   expensesCash: number;
   expensesOther: number;
   cashIn: number;
@@ -44,7 +46,7 @@ export async function shiftSummary(
   to: Date,
 ): Promise<ShiftSummary> {
   const match = { tenant: tid, branch: shift.branch, createdAt: { $gte: shift.openedAt, $lte: to } };
-  const [sales, salesByMethod, returns, refunds, collected, supplierKhata, purchases, expenses, cashBack] = await Promise.all([
+  const [sales, salesByMethod, returns, refunds, collected, supplierKhata, purchases, expenses, cashBack, usedBuys] = await Promise.all([
     Sale.aggregate([{ $match: match }, { $group: { _id: null, bills: { $sum: 1 }, total: { $sum: "$total" }, discount: { $sum: "$discount" }, tax: { $sum: "$tax" } } }]),
     Sale.aggregate([
       { $match: match },
@@ -61,6 +63,7 @@ export async function shiftSummary(
     Purchase.aggregate([{ $match: { ...match, status: { $ne: "void" } } }, { $group: { _id: null, paid: { $sum: "$amountPaid" } } }]),
     Expense.aggregate([{ $match: match }, { $group: { _id: { $ifNull: ["$method", "cash"] }, total: { $sum: "$amount" } } }]),
     PurchaseReturn.aggregate([{ $match: { ...match, settlement: "cash" } }, { $group: { _id: null, total: { $sum: "$total" } } }]),
+    UsedPurchase.aggregate([{ $match: { ...match, status: "completed" } }, { $group: { _id: "$method", total: { $sum: "$price" }, count: { $sum: 1 } } }]),
   ]);
 
   const s = sales[0] ?? { bills: 0, total: 0, discount: 0, tax: 0 };
@@ -70,6 +73,7 @@ export async function shiftSummary(
   const supplier = tidy(supplierKhata);
   const purchasesPaid = round2(purchases[0]?.paid ?? 0);
   const supplierCashBack = round2(cashBack[0]?.total ?? 0);
+  const usedPhonesByMethod = tidy(usedBuys);
   const expensesCash = round2(expenses.find((e) => e._id === "cash")?.total ?? 0);
   const expensesOther = round2(expenses.filter((e) => e._id !== "cash").reduce((a, e) => a + e.total, 0));
   const moves = shift.movements ?? [];
@@ -87,6 +91,7 @@ export async function shiftSummary(
     // Purchases record what was paid; it is taken as cash from the drawer.
     { label: "Purchases paid", amount: -purchasesPaid },
     { label: "Expenses paid in cash", amount: -expensesCash },
+    { label: "Used phones bought (cash)", amount: -pick(usedPhonesByMethod, "cash") },
     { label: "Cash taken out", amount: -cashOut },
   ].map((x) => ({ ...x, amount: round2(x.amount) }));
   const expectedCash = round2(cashFlow.reduce((a, x) => a + x.amount, 0));
@@ -106,6 +111,7 @@ export async function shiftSummary(
     supplierPaymentsByMethod: supplier,
     purchasesPaid,
     supplierCashBack,
+    usedPhonesByMethod,
     expensesCash,
     expensesOther,
     cashIn,
