@@ -20,6 +20,11 @@ export default function InstallmentsPage() {
   const [q, setQ] = useState("");
   const [data, setData] = useState<{ rows: PlanRow[]; summary: Summary } | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
+  // Opened from the dashboard's "late" link.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get("tab");
+    if (t && ["active", "late", "today", "completed", "cancelled", "all"].includes(t)) setTab(t as Tab);
+  }, []);
 
   const load = useCallback(() => {
     const p = new URLSearchParams();

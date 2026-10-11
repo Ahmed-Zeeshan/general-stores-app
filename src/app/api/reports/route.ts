@@ -2,7 +2,8 @@ import { dateRange, handle, TIMEZONE } from "@/lib/api";
 import { reportBranchFilter, requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
 import { khataPaymentsPipeline, PAYMENTS_EXPR } from "@/lib/report-agg";
-import { Expense, LedgerEntry, Purchase, PurchaseReturn, Sale, SaleReturn } from "@/models";
+import { mobileReport } from "@/lib/mobile-report";
+import { Expense, LedgerEntry, Purchase, PurchaseReturn, Sale, SaleReturn, Tenant } from "@/models";
 
 /**
  * Profit & loss for a period. Bills count on their own date; returns are subtracted on the date
@@ -132,6 +133,11 @@ export const GET = handle(async (req) => {
   const cost = round2(s.cost - r.cost);
   const grossProfit = round2(netSales - tax - cost);
   const expenseTotal = round2(expenses.reduce((a, e) => a + e.total, 0));
+  // Mobile shop services earn outside the bills: repair profit and Easyload / wallet commission and fees.
+  const modules = ((await Tenant.findById(tid).select("modules").lean()) as { modules?: Record<string, boolean> } | null)?.modules ?? {};
+  const mobile = Object.values(modules).some(Boolean) ? await mobileReport(tid, branch ?? null, from, to, modules) : null;
+  const repairProfit = mobile?.repairs?.profit ?? 0;
+  const walletProfit = mobile?.wallets?.profit ?? 0;
 
   const days = new Map<string, { date: string; total: number; profit: number; bills: number }>();
   for (const d of byDay) days.set(d._id, { date: d._id, total: d.total, profit: d.profit, bills: d.bills });
@@ -166,7 +172,9 @@ export const GET = handle(async (req) => {
       cost,
       grossProfit,
       expenses: expenseTotal,
-      netProfit: round2(grossProfit - expenseTotal),
+      repairProfit,
+      walletProfit,
+      netProfit: round2(grossProfit + repairProfit + walletProfit - expenseTotal),
       credit: round2(s.credit - r.credit),
       avgBill: s.bills ? round2(s.total / s.bills) : 0,
       purchases: round2((purchases[0]?.total ?? 0) - (purchaseReturns[0]?.total ?? 0)),
@@ -174,6 +182,7 @@ export const GET = handle(async (req) => {
       udhaarCollected: round2(collected.reduce((a, x) => a + x.total, 0)),
       paidToSuppliers: round2(paidOut.reduce((a, x) => a + x.total, 0)),
     },
+    mobile,
     collectedByMethod: collected.map((x) => ({ ...x, total: round2(x.total) })),
     byMethod,
     refundsByMethod,

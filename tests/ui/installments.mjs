@@ -157,6 +157,12 @@ ok(t.includes("Closed.") && t.includes("Rs 27,500 not collected") && t.includes(
 const dev = await get(`/api/devices?q=${I[0]}`);
 ok(dev[0].status === "in_stock", "phone back in stock");
 
+// ---- Dashboard shows the mobile shop's day
+await page.goto(B + "/");
+await page.waitForSelector("text=Mobile shop today");
+t = await page.locator("main").innerText().then(norm);
+ok(t.includes("Installments") && t.includes("Rs 5,500 collected today") && t.includes("Easyload & wallets") && t.includes("Repairs") && t.includes("Used phones bought"), "dashboard: mobile shop today (installments collected, Easyload, repairs, used phones)");
+
 // ---- Phone screen
 await page.setViewportSize({ width: 390, height: 844 });
 await page.goto(B + "/installments?x=1");

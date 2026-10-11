@@ -2,10 +2,11 @@ import { addDays, endOfDay, handle, startOfDay, TIMEZONE } from "@/lib/api";
 import { branchStock, requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
 import { khataPaymentsPipeline, PAYMENTS_EXPR } from "@/lib/report-agg";
-import { Expense, LedgerEntry, Party, Product, Sale, SaleReturn, StockBatch } from "@/models";
+import { mobileReport } from "@/lib/mobile-report";
+import { Expense, LedgerEntry, Party, Product, Sale, SaleReturn, StockBatch, Tenant } from "@/models";
 
 export const GET = handle(async () => {
-  const { tid, branchId } = await requireBranch();
+  const { tid, branchId, user } = await requireBranch();
   const now = new Date();
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
@@ -123,7 +124,18 @@ export const GET = handle(async () => {
     .filter((p) => p.stock <= p.lowStockAlert)
     .sort((x, y) => x.stock - y.stock);
   const lowStockCount = low.length;
+  // Mobile shop: repairs, Easyload / wallets, used phones and installments (only the features in use).
+  const modules = ((await Tenant.findById(tid).select("modules").lean()) as { modules?: Record<string, boolean> } | null)?.modules ?? {};
+  const anyMobile = Object.values(modules).some(Boolean);
+  const mobile = anyMobile ? await mobileReport(tid, branchId, todayStart, todayEnd, modules, now) : null;
+  if (mobile && user.role === "cashier") {
+    // Cashiers see the work to do, not the shop's profit.
+    if (mobile.repairs) Object.assign(mobile.repairs, { profit: undefined, partsCost: undefined });
+    if (mobile.wallets) Object.assign(mobile.wallets, { profit: undefined, byType: mobile.wallets.byType.map((t) => ({ ...t, profit: undefined })) });
+    if (mobile.installments) Object.assign(mobile.installments, { markup: undefined });
+  }
   return {
+    mobile,
     today: {
       sales: round2(t.total),
       bills: t.count,

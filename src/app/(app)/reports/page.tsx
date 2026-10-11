@@ -9,6 +9,8 @@ import { SalesBarChart } from "@/components/charts";
 import { useToast } from "@/components/toast";
 import { api, PAYMENT_LABELS, todayISO, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty } from "@/lib/money";
+import { WALLET_TXN_LABELS, type WalletTxnType } from "@/lib/constants";
+import type { MobileReport } from "@/lib/mobile-report";
 
 type Report = {
   summary: {
@@ -31,7 +33,10 @@ type Report = {
     returnCount: number;
     udhaarCollected: number;
     paidToSuppliers: number;
+    repairProfit: number;
+    walletProfit: number;
   };
+  mobile: MobileReport | null;
   collectedByMethod: { _id: string; total: number; count: number }[];
   byMethod: { _id: string; total: number; count: number }[];
   refundsByMethod: { _id: string; total: number; count: number }[];
@@ -78,7 +83,7 @@ export default function ReportsPage() {
               value={<span className={s.netProfit < 0 ? "text-rose-600" : "text-emerald-700"}>{formatPKR(s.netProfit)}</span>}
               icon={s.netProfit < 0 ? <TrendingDown className="h-5 w-5" /> : <TrendingUp className="h-5 w-5" />}
               tone={s.netProfit < 0 ? "rose" : "green"}
-              hint="Gross profit − expenses"
+              hint={s.repairProfit || s.walletProfit ? "Gross profit + repairs + Easyload/wallets − expenses" : "Gross profit − expenses"}
             />
           </div>
 
@@ -97,6 +102,8 @@ export default function ReportsPage() {
                 <PL label="= Sales excl. tax" value={s.netSales - s.tax} bold />
                 <PL label="− Cost of goods sold" value={-s.cost} />
                 <PL label="= Gross profit" value={s.grossProfit} bold />
+                {data.mobile?.repairs && <PL label="+ Repairs profit" value={s.repairProfit} />}
+                {data.mobile?.wallets && <PL label="+ Easyload & wallet earnings" value={s.walletProfit} />}
                 <PL label="− Expenses" value={-s.expenses} />
                 <div className="border-t border-dashed border-slate-200 pt-2.5">
                   <PL label="Net profit" value={s.netProfit} bold big />
@@ -113,6 +120,8 @@ export default function ReportsPage() {
               </div>
             </Card>
           </div>
+
+          {data.mobile && <MobileSection m={data.mobile} />}
 
           {data.byBranch.length > 1 && (
             <Card className="mt-6">
@@ -246,6 +255,66 @@ function PL({ label, value, bold, big }: { label: string; value: number; bold?: 
     <div className="flex justify-between">
       <dt className={bold ? "font-semibold text-slate-800" : "text-slate-500"}>{label}</dt>
       <dd className={`${bold ? "font-bold" : "font-medium"} ${big ? "text-lg" : ""} ${value < 0 && big ? "text-rose-600" : "text-slate-900"}`}>{formatPKR(value)}</dd>
+    </div>
+  );
+}
+
+/** Repairs, Easyload / wallets, used phones and installments for the period. */
+function MobileSection({ m }: { m: MobileReport }) {
+  const line = (label: string, value: React.ReactNode, tone?: string) => (
+    <div className="flex justify-between gap-3">
+      <span className="text-slate-600">{label}</span>
+      <b className={tone}>{value}</b>
+    </div>
+  );
+  return (
+    <div className="mt-6 grid gap-6 sm:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0">
+      {m.repairs && (
+        <Card className="p-5">
+          <h2 className="mb-3 font-bold text-slate-900">Repairs</h2>
+          <div className="space-y-2 text-sm">
+            {line("Delivered", m.repairs.delivered)}
+            {line("Repair bills", formatPKR(m.repairs.income))}
+            {line("− Parts cost", formatPKR(m.repairs.partsCost))}
+            {line("Profit", formatPKR(m.repairs.profit), "text-emerald-700")}
+            {line("Money received", formatPKR(m.repairs.collected))}
+            {line("In the shop now", `${m.repairs.inShop}${m.repairs.ready ? ` (${m.repairs.ready} ready)` : ""}`)}
+          </div>
+        </Card>
+      )}
+      {m.wallets && (
+        <Card className="p-5">
+          <h2 className="mb-3 font-bold text-slate-900">Easyload & wallets</h2>
+          <div className="space-y-2 text-sm">
+            {m.wallets.byType.length === 0 && <p className="text-slate-500">No entries.</p>}
+            {m.wallets.byType.map((t) => line(`${WALLET_TXN_LABELS[t.type as WalletTxnType] ?? t.type} (${t.count})`, formatPKR(t.amount)))}
+            <div className="border-t border-dashed border-slate-200 pt-2">{line("Earned (commission + fees)", formatPKR(m.wallets.profit), "text-emerald-700")}</div>
+            {line("Balance in all SIMs / accounts", formatPKR(m.wallets.balance))}
+          </div>
+        </Card>
+      )}
+      {m.installments && (
+        <Card className="p-5">
+          <h2 className="mb-3 font-bold text-slate-900">Installments</h2>
+          <div className="space-y-2 text-sm">
+            {line("Sold on installments", `${m.installments.sold} · ${formatPKR(m.installments.soldValue)}`)}
+            {line("Markup on these", formatPKR(m.installments.markup ?? 0))}
+            {line("Installments collected", formatPKR(m.installments.collected), "text-emerald-700")}
+            <div className="border-t border-dashed border-slate-200 pt-2">{line("Still to collect (all plans)", formatPKR(m.installments.outstanding))}</div>
+            {line("Late now", `${formatPKR(m.installments.overdue)} · ${m.installments.latePlans} plans`, m.installments.latePlans ? "text-rose-600" : undefined)}
+          </div>
+        </Card>
+      )}
+      {m.usedPhones && (
+        <Card className="p-5">
+          <h2 className="mb-3 font-bold text-slate-900">Used phones bought</h2>
+          <div className="space-y-2 text-sm">
+            {line("Phones bought", m.usedPhones.count)}
+            {line("Paid to sellers", formatPKR(m.usedPhones.spent))}
+            <p className="text-xs text-slate-500">They are in stock now; the profit shows when they are sold.</p>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

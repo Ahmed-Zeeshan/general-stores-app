@@ -20,7 +20,7 @@ const shop = await admin.call("/api/admin/tenants", {
   body: { shopName: "Ashraf General Store & Bakers", shopType: "general", maxUsers: 5, maxBranches: 2, ownerName: "Ashraf", username: "ashraf", password: "secret1", phone: "0335-3514100" },
 });
 await owner.login("ashraf", "secret1");
-await owner.call("/api/settings", { method: "PUT", body: { address: "Mohallah Chah Trang, Near Gujjar Colony, Gujrat", phone: "03353514100" } }).catch(() => {});
+await owner.call("/api/settings", { method: "PUT", body: { shopName: "Ashraf General Store & Bakers", shopType: "general", taxEnabled: false, taxRate: 0, pricesIncludeTax: true, address: "Mohallah Chah Trang, Near Gujjar Colony, Gujrat", phone: "03353514100" } });
 const cat = await owner.call("/api/categories", { body: { name: "Cooking Oil & Ghee" } }).catch(() => null);
 const ghee = await owner.call("/api/products", {
   body: { name: "Dalda Banaspati Ghee 5kg Tin (Special Offer Pack)", unit: "pcs", barcode: "8964000123457", costPrice: 2850, salePrice: 3100, lowStockAlert: 5, openingStock: 400, ...(cat ? { categoryId: cat._id } : {}), packs: [{ name: "Carton", size: 4, price: 12000 }] },
@@ -42,6 +42,31 @@ const ret = await owner.call(`/api/sales/${bill._id}/return`, { body: { items: [
 await owner.call("/api/purchases", { body: { supplierId: sup._id, supplierInvoice: "INV-2026-000123", amountPaid: 300000, items: [{ productId: ghee._id, qty: 200, cost: 2850 }, { productId: milk._id, qty: 24, cost: 280, expiryDate: today() }] } });
 await owner.call("/api/expenses", { body: { category: "Electricity", amount: 48500, note: "LESCO bill for September including fuel adjustment" } });
 await owner.call("/api/promotions", { body: { name: "Ramzan Bachat Offer — 5% off on all bills over Rs 5,000", kind: "bill", value: 5, minAmount: 5000, maxDiscount: 1500 } });
+// Mobile shop features switched on, with long names and big amounts too.
+await owner.call("/api/settings", { method: "PUT", body: { shopName: "Ashraf General Store & Bakers", shopType: "general", taxEnabled: false, taxRate: 0, pricesIncludeTax: true, address: "Mohallah Chah Trang, Near Gujjar Colony, Gujrat", phone: "03353514100", modules: { phones: true, repairs: true, wallets: true, installments: true } } });
+const luhn = (body) => {
+  let sum = 0;
+  for (let i = 0; i < 14; i++) {
+    let d = Number(body[i]);
+    if (i % 2 === 1) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    sum += d;
+  }
+  return body + ((10 - (sum % 10)) % 10);
+};
+const phoneP = await owner.call("/api/products", { body: { name: "Samsung Galaxy A55 5G 8GB/256GB Awesome Iceblue (PTA Approved)", unit: "pcs", costPrice: 112000, salePrice: 129999, lowStockAlert: 1, trackSerial: true, warrantyMonths: 12 } });
+const units = await owner.call("/api/devices", { body: { productId: phoneP._id, cost: 112000, units: [{ imei: luhn("35800000000001"), color: "Awesome Iceblue", storage: "8/256GB", pta: "approved" }, { imei: luhn("35800000000002"), color: "Awesome Navy", storage: "8/256GB", pta: "approved" }] } });
+await owner.call("/api/products", { body: { name: "Silicone Back Cover with Camera Protection", brand: "Baseus", fits: "Samsung Galaxy A55 5G, A35 5G, A54 5G", unit: "pcs", costPrice: 350, salePrice: 950, lowStockAlert: 5, openingStock: 40 } });
+const job = await owner.call("/api/repairs", { body: { customerId: cust._id, customerName: cust.name, customerPhone: "0300-7868889", deviceName: "Samsung Galaxy S23 Ultra 12GB/512GB Phantom Black", imei: luhn("35800000000003"), problem: "Screen broken after a fall, touch not working on the left side, back glass cracked", estimate: 85000, promisedAt: today(), advance: 15000, advanceMethod: "cash" } });
+const sim = await owner.call("/api/wallets", { body: { name: "Jazz Easyload Retailer SIM (Main Counter)", kind: "load", provider: "jazz", number: "0300-1112223", lowAlert: 5000, commissionPct: 2.8, openingBalance: 250000 } });
+await owner.call("/api/packages", { body: { operator: "jazz", name: "Jazz Monthly Super Duper Plus Bundle", kind: "hybrid", data: "100 GB", minutes: "5000 mins", sms: "5000 SMS", validityDays: 30, price: 2499 } });
+const load = await owner.call("/api/wallet-txns", { body: { walletId: sim._id, type: "load", amount: 1500, customerNumber: "03012345678" } });
+const used = await owner.call("/api/used-phones", { body: { seller: { name: "Muhammad Imran Khan s/o Abdul Rasheed", cnic: "3520212345671", phone: "0300-1112223", address: "House 221-B, Street 14, Gujjar Colony, Gujrat" }, productId: phoneP._id, imei: luhn("35800000000004"), pta: "approved", price: 85000, method: "cash", declaration: true } });
+const qist = await owner.call("/api/installments", { body: { sale: { items: [{ productId: phoneP._id, qty: 1, serials: [units[0]._id] }], paymentMethod: "cash", amountPaid: 30000, customerId: cust._id }, plan: { months: 12, markupType: "percent", markupValue: 15, firstDue: today(), customerCnic: "3410112345673", customerAddress: "Gujjar Colony Mohallah Chah Traing, Street No. 14, House 221-B", guarantor: { name: "Tariq Mehmood Chaudhry", cnic: "3410176543211", phone: "03001112223", relation: "Brother" } } } });
+const qPay = await owner.call(`/api/installments/${qist.plan._id}/pay`, { body: { amount: 9583, method: "jazzcash", ref: "JC-1234567890" } });
+
 const shifts = await owner.call("/api/shifts");
 const shiftId = (Array.isArray(shifts) ? shifts : shifts.shifts ?? shifts.items ?? [])[0]?._id;
 
@@ -74,6 +99,20 @@ const PAGES = [
   ["receipt-return", `/receipt/return/${ret.return._id}`],
   ...(shiftId ? [["receipt-shift", `/receipt/shift/${shiftId}`]] : []),
   ["receipt-test", "/receipt/test"],
+  ["phones", "/phones"],
+  ["used-phones", "/used-phones"],
+  ["used-phone-new", "/used-phones/new"],
+  ["repairs", "/repairs"],
+  ["repair", `/repairs/${job._id}`],
+  ["wallets", "/wallets"],
+  ["packages", "/wallets/packages"],
+  ["installments", "/installments"],
+  ["installment", `/installments/${qist.plan._id}`],
+  ["receipt-used", `/receipt/used/${used._id}`],
+  ["receipt-repair", `/receipt/repair/${job._id}`],
+  ["receipt-wallet", `/receipt/wallet/${load._id}`],
+  ["receipt-installment", `/receipt/installment/${qist.plan._id}`],
+  ["receipt-installment-pay", `/receipt/installment/${qist.plan._id}?receipt=${qPay.receiptNo}`],
 ];
 const ADMIN_PAGES = [
   ["admin", "/admin"],

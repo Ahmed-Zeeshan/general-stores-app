@@ -7,6 +7,10 @@ import {
   ArrowRight,
   BookOpen,
   CalendarClock,
+  CalendarRange,
+  Repeat,
+  Wrench,
+  Zap,
   ChefHat,
   PackagePlus,
   Receipt,
@@ -21,8 +25,11 @@ import { SalesBarChart } from "@/components/charts";
 import { useCan, useSession } from "@/components/session";
 import { api, formatDate, PAYMENT_LABELS, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty } from "@/lib/money";
+import { WALLET_TXN_LABELS, type WalletTxnType } from "@/lib/constants";
+import type { MobileReport } from "@/lib/mobile-report";
 
 type Dashboard = {
+  mobile: MobileReport | null;
   today: { sales: number; bills: number; profit: number; cash: number; credit: number; expenses: number; returns: number; returnCount: number; collected: number; collectedCash: number };
   receivable: { total: number; count: number };
   payable: { total: number; count: number };
@@ -136,6 +143,8 @@ export default function DashboardPage() {
             )}
           </div>
 
+          {data.mobile && <MobileToday m={data.mobile} />}
+
           <div className="mt-6 grid gap-6 lg:grid-cols-3">
             <Card className="p-5 lg:col-span-2">
               <div className="mb-4 flex items-center justify-between">
@@ -237,5 +246,81 @@ export default function DashboardPage() {
         </>
       )}
     </div>
+  );
+}
+
+/** Today's mobile-shop work: repairs, Easyload / wallets, installments and used phones. */
+function MobileToday({ m }: { m: MobileReport }) {
+  const tiles: React.ReactNode[] = [];
+  if (m.repairs) {
+    const r = m.repairs;
+    tiles.push(
+      <Tile key="repairs" href="/repairs" icon={<Wrench className="h-5 w-5" />} title="Repairs" value={`${r.inShop} in shop`}>
+        {r.ready > 0 && <Badge color="green">{r.ready} ready to collect</Badge>}
+        {r.late > 0 && <Badge color="red">{r.late} late</Badge>}
+        <div>
+          {r.delivered} delivered today{r.profit !== undefined && r.delivered > 0 ? ` · profit ${formatPKR(r.profit)}` : ""}
+        </div>
+      </Tile>,
+    );
+  }
+  if (m.wallets) {
+    const w = m.wallets;
+    tiles.push(
+      <Tile key="wallets" href="/wallets" icon={<Zap className="h-5 w-5" />} title="Easyload & wallets" value={w.profit !== undefined ? `${formatPKR(w.profit)} earned` : `${w.count} entries`}>
+        {w.low.length > 0 && <Badge color="amber">Low balance: {w.low.map((x) => x.name).join(", ")}</Badge>}
+        <div>
+          {w.byType.length
+            ? w.byType
+                .filter((t) => t.count > 0)
+                .slice(0, 3)
+                .map((t) => `${WALLET_TXN_LABELS[t.type as WalletTxnType] ?? t.type} ${t.count}`)
+                .join(" · ")
+            : "Nothing yet today"}
+        </div>
+      </Tile>,
+    );
+  }
+  if (m.installments) {
+    const q = m.installments;
+    tiles.push(
+      <Tile key="installments" href={q.latePlans ? "/installments?tab=late" : "/installments"} icon={<CalendarRange className="h-5 w-5" />} title="Installments" value={`${formatPKR(q.outstanding)} to collect`}>
+        {q.latePlans > 0 && (
+          <Badge color="red">
+            {q.latePlans} late · {formatPKR(q.overdue)}
+          </Badge>
+        )}
+        <div>
+          {formatPKR(q.collected)} collected today{q.sold ? ` · ${q.sold} sold` : ""}
+        </div>
+      </Tile>,
+    );
+  }
+  if (m.usedPhones) {
+    tiles.push(
+      <Tile key="used" href="/used-phones" icon={<Repeat className="h-5 w-5" />} title="Used phones bought" value={`${m.usedPhones.count} today`}>
+        <div>{formatPKR(m.usedPhones.spent)} paid</div>
+      </Tile>,
+    );
+  }
+  if (!tiles.length) return null;
+  return (
+    <div className="mt-6">
+      <h2 className="mb-3 font-bold text-slate-900">Mobile shop today</h2>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">{tiles}</div>
+    </div>
+  );
+}
+
+function Tile({ href, icon, title, value, children }: { href: string; icon: React.ReactNode; title: string; value: string; children: React.ReactNode }) {
+  return (
+    <Link href={href} className="block rounded-2xl border border-slate-200 bg-white p-4 shadow-xs transition hover:border-brand-300 hover:shadow-md">
+      <div className="flex items-center gap-2 text-sm font-semibold text-slate-500">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-brand-700">{icon}</span>
+        {title}
+      </div>
+      <div className="mt-2 text-xl font-extrabold text-slate-900">{value}</div>
+      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">{children}</div>
+    </Link>
   );
 }

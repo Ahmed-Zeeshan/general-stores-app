@@ -132,7 +132,7 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
         <Money label="Left to pay" value={plan.status === "active" ? plan.balance : 0} tone={plan.status === "active" && plan.balance > 0 ? "amber" : undefined} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+      <div className="grid gap-6 lg:grid-cols-[1fr_360px] [&>*]:min-w-0">
         <div className="space-y-6">
           <Card>
             <div className="border-b border-slate-100 p-4">

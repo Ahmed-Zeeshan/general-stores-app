@@ -172,24 +172,27 @@ function Agreement({ plan, settings }: { plan: PlanRow; settings: Settings }) {
         {row("In words", rupeesInWords(plan.financed))}
         {row("Installments", `${plan.months} monthly × ${formatPKR(perMonth)}`)}
 
-        <table className="mt-4 w-full border-collapse text-[12px]">
+        <table className="mt-4 w-full border-collapse text-[11px] sm:text-[12px]">
           <thead>
             <tr className="bg-slate-100 text-left">
               <th className="border border-slate-300 px-2 py-1">No.</th>
-              <th className="border border-slate-300 px-2 py-1">Due date</th>
+              <th className="whitespace-nowrap border border-slate-300 px-2 py-1">Due date</th>
               <th className="border border-slate-300 px-2 py-1 text-right">Amount</th>
               <th className="border border-slate-300 px-2 py-1 text-right">Paid</th>
-              <th className="border border-slate-300 px-2 py-1">Signature</th>
+              <th className="border border-slate-300 px-2 py-1">
+                <span className="sm:hidden print:hidden">Sign</span>
+                <span className="hidden sm:inline print:inline">Signature</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {(plan.rows ?? []).map((r) => (
               <tr key={r.no}>
                 <td className="border border-slate-300 px-2 py-1">{r.no}</td>
-                <td className="border border-slate-300 px-2 py-1">{formatDate(r.dueDate)}</td>
-                <td className="border border-slate-300 px-2 py-1 text-right">{formatPKR(r.amount)}</td>
-                <td className="border border-slate-300 px-2 py-1 text-right">{r.paid ? formatPKR(r.paid) : ""}</td>
-                <td className="w-28 border border-slate-300 px-2 py-1" />
+                <td className="whitespace-nowrap border border-slate-300 px-2 py-1">{formatDate(r.dueDate)}</td>
+                <td className="whitespace-nowrap border border-slate-300 px-2 py-1 text-right">{formatPKR(r.amount)}</td>
+                <td className="whitespace-nowrap border border-slate-300 px-2 py-1 text-right">{r.paid ? formatPKR(r.paid) : ""}</td>
+                <td className="w-10 border border-slate-300 px-2 py-1 sm:w-28" />
               </tr>
             ))}
           </tbody>

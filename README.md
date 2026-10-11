@@ -1,6 +1,6 @@
 # Dukaan Manager
 
-Multi-shop management system for **karyana stores, general stores and bakeries** in Pakistan.
+Multi-shop management system for **karyana stores, general stores, bakeries and mobile phone shops** in Pakistan.
 Built with **Next.js 15 (App Router) + MongoDB (Mongoose) + Tailwind CSS**.
 
 Designed for non-technical shopkeepers: big buttons, plain language, English with Urdu labels, works on PC, tablet and phone (installable as an app).
@@ -48,9 +48,10 @@ Data isolation is enforced in the database layer: every shop record carries a `t
 | **Cash Drawer & Day Close (Z report)** | Open the day with the cash in the drawer, record cash put in / taken out (bank deposit, change), and close by counting notes (5000…10 and coins) or entering the total. The app works out the cash that should be there — cash sales, udhaar collected in cash, refunds, cash expenses, purchases and supplier payments — and shows *Exact / Short / Over*. Cashiers count blind (they see the expected amount only after closing). Printable 80 mm **Z report**, live **X report** for the owner, history of every day close per branch. |
 | **Suppliers & Purchases** | Incoming stock updates stock, cost and sale prices; supplier payable khata. **Return goods to the supplier** (damaged, expired, wrong items — any quantity, any number of times), settled by reducing the supplier's khata or as cash back; each return gets its own number (PRN-…). **Cancel a purchase** entered by mistake: stock, khata and payment are reversed and it stays in the list marked *Cancelled*. Stock already sold can't be sent back. |
 | **Expenses, Sales history, Returns** | Return **some or all items** of a bill, as many times as needed (e.g. 2 of 5 soaps today, the rest next week). Each return keeps its fair share of the bill discount and tax, reduces the bill's udhaar first, and gives the rest back in cash / the original method or as credit in the customer's khata. Every return has its own number (RTN-…), receipt and FBR credit note; stock goes back to the branch that sold it. |
-| **Reports & Dashboard** | Sales, profit & loss **net of returns**, best sellers, payment methods, refunds, **udhaar collected**, payments to suppliers, expenses; 7-day chart. |
+| **Reports & Dashboard** | Sales, profit & loss **net of returns**, best sellers, payment methods, refunds, **udhaar collected**, payments to suppliers, expenses; 7-day chart. Mobile shops also see repairs (in shop / ready / late, profit after parts), Easyload & wallet earnings and low-balance SIMs, used phones bought, and installments sold / collected / still to collect / late — and repair and Easyload profit are part of net profit. |
 | **Activity Log** (owner) | Who did what and when: price changes and discounts at the counter, returns, payments and cancelled payments, udhaar added by hand, stock adjustments, wastage and write-offs, product price changes, purchases, drawer open/close (short/over), logins and wrong passwords, staff and settings changes, backups/restores and administrator changes. Risky actions are highlighted; filter by type, person or bill number; export to Excel. Kept for about 13 months and never replaced by a restore. |
 | **FBR POS integration** | Bills are sent to FBR; FBR invoice number + QR code printed on the receipt; returns sent as credit notes; if internet/FBR is down bills are saved as *pending* and re-sent with one click. |
+| **Mobile phone shop** | Choose shop type *Mobile shop* (or switch the features on in **Settings → Features**). **Phones by IMEI**: every handset is bought, sold, returned and moved between branches by its IMEI (check digit verified, PTA status, colour, storage, condition); IMEI and warranty print on the bill; look up any IMEI to see its full history. **Accessories**: brand and *fits phone models* (e.g. "Samsung A54, A55"), so typing "cover a54" at the counter finds the right cover. **Used phones bought** from customers with the seller's CNIC, photos, condition checks and a printable purchase agreement (cash or trade-in to khata). **Repairs**: job cards with lock code, accessories received, technician, promised date, parts from stock, labour, advance and payments, WhatsApp "ready" messages, warranty re-repairs and a printed slip / bill. **Easyload, packages & wallets**: load SIMs and JazzCash / Easypaisa / bank accounts with their own balance, Easyload with commission, internet / call / SMS packages per operator, cash in / cash out / bill payments with fees, balance checks, low-balance warnings and printed slips; all of it flows into the cash drawer. **Installments (qist)**: sell any bill on monthly installments (advance, % or fixed markup, 2–24 months, customer CNIC and guarantor), printed agreement with the schedule, collect any amount (oldest month first) with receipts, late list, WhatsApp reminders, and closing a plan with the goods taken back into stock. |
 | **Data** | Export products / customers / suppliers / sales / expenses to Excel (CSV), **import products from CSV**, full JSON backup and **restore** (same shop only, validated first, safety copy downloaded before replacing). |
 | **Installable app (PWA)** | "Install" / "Add to Home Screen" on Chrome, Edge and Android. |
 | **Security** | bcrypt passwords, signed httpOnly session cookies, role checks on every API, login lockout after 10 wrong attempts, security headers, CSV formula-injection protection, FBR token never sent to the browser. |
@@ -187,7 +188,8 @@ npm run build
 
 The `tests/` folder has end-to-end suites that drive the real app: `tests/api` calls the API the
 way the screens do (bills, returns, udhaar payments, split payments, day close, purchase returns,
-packs, expiry lots, activity log, offers, production settings), and `tests/ui` clicks through the
+packs, expiry lots, activity log, offers, production settings, phones by IMEI, used phones, repairs,
+Easyload and wallets, installments, mobile-shop reports), and `tests/ui` clicks through the
 screens in Chromium (Playwright).
 
 ```bash
@@ -217,7 +219,9 @@ src/
       page.tsx                   Shop dashboard
       pos/ products/ customers/ suppliers/ purchases/ sales/ udhaar/ labels/
       transfers/ production/ expenses/ reports/ settings/
+      phones/ used-phones/ repairs/ wallets/ installments/   Mobile shop
     receipt/[id]                 Printable 80 mm receipt (with FBR QR)
+    receipt/repair|wallet|used|installment/[id]   Repair slip, Easyload slip, used-phone and installment agreements
     statement/[id]               Printable A4 khata statement
     offline/                     Offline page (PWA)
     api/                         REST API route handlers
