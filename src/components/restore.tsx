@@ -25,6 +25,7 @@ const LABELS: Record<string, string> = {
   repairs: "Repair jobs",
   wallets: "Easyload SIMs & wallets",
   walletTxns: "Easyload & wallet entries",
+  installments: "Installment plans",
 };
 
 /**

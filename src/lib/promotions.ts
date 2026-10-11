@@ -46,13 +46,14 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 
 export function isRunning(p: PromoLike, now = new Date()) {
   if (p.active === false) return false;
-  if (p.startsAt && new Date(p.startsAt) > now) return false;
-  // An end date means "until the end of that day".
-  if (p.endsAt) {
-    const end = new Date(p.endsAt);
-    if (end.getUTCHours() === 0 && end.getUTCMinutes() === 0) end.setUTCHours(23, 59, 59, 999);
-    if (end < now) return false;
-  }
+  // A date without a time (saved as UTC midnight) is a calendar day in the shop's own time zone:
+  // a start date runs from the start of that day, an end date until the end of that day.
+  const localDay = (d: Date, end: boolean) =>
+    d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0
+      ? new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), end ? 23 : 0, end ? 59 : 0, end ? 59 : 0, end ? 999 : 0)
+      : d;
+  if (p.startsAt && localDay(new Date(p.startsAt), false) > now) return false;
+  if (p.endsAt && localDay(new Date(p.endsAt), true) < now) return false;
   return true;
 }
 

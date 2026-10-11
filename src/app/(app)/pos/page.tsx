@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Banknote,
   BookOpen,
+  CalendarRange,
   CheckCircle2,
   CloudOff,
   RefreshCw,
@@ -33,8 +34,9 @@ import { useConfirm } from "@/components/confirm";
 import { useLang, useT } from "@/lib/i18n";
 import { ReceivePaymentModal } from "@/components/receive-payment";
 import { DevicePicker, DeviceTags, type DeviceRow } from "@/components/devices";
+import { InstallmentSaleModal } from "@/components/installments";
 import { cleanImei } from "@/lib/imei";
-import { api, LOOSE_UNITS, NetworkError, UNIT_LABELS } from "@/lib/client";
+import { api, formatDate, LOOSE_UNITS, NetworkError, UNIT_LABELS } from "@/lib/client";
 import {
   addToOutbox,
   cache,
@@ -118,6 +120,8 @@ export default function PosPage() {
   const [looseFor, setLooseFor] = useState<Product | null>(null);
   const [phoneFor, setPhoneFor] = useState<Product | null>(null);
   const [payOpen, setPayOpen] = useState(false);
+  const [qistOpen, setQistOpen] = useState(false);
+  const [qistDone, setQistDone] = useState<{ planId: string; planNo: string; invoiceNo: string; financed: number; months: number; perMonth: number; firstDue: string } | null>(null);
   const [done, setDone] = useState<{ _id: string; invoiceNo: string; total: number; change: number; creditAmount?: number; printed?: boolean } | null>(null);
   const [autoPrint, setAutoPrint] = useState(false);
   useEffect(() => setAutoPrint(getPrintPrefs().auto), []);
@@ -371,6 +375,20 @@ export default function PosPage() {
   const tax = taxRate ? round2(inclusive ? (afterDiscount * taxRate) / (100 + taxRate) : (afterDiscount * taxRate) / 100) : 0;
   const total = inclusive ? afterDiscount : round2(afterDiscount + tax);
   const itemCount = cart.length;
+
+  const billPayload = {
+    items: cart.map((i) => ({
+      productId: i.product._id,
+      qty: i.qty,
+      ...(i.custom ? { price: i.price } : {}),
+      discount: i.discount,
+      ...(i.pack ? { pack: i.pack.name } : {}),
+      ...(i.device ? { serials: [i.device._id] } : {}),
+    })),
+    discount: manualDiscount,
+    customerId: customer?._id,
+    ...(redeemPoints > 0 ? { redeemPoints } : {}),
+  };
 
   function resetBill() {
     setCart([]);
@@ -784,19 +802,15 @@ export default function PosPage() {
         total={total}
         customer={customer}
         onChooseCustomer={() => setPickCustomer(true)}
-        payload={{
-          items: cart.map((i) => ({
-            productId: i.product._id,
-            qty: i.qty,
-            ...(i.custom ? { price: i.price } : {}),
-            discount: i.discount,
-            ...(i.pack ? { pack: i.pack.name } : {}),
-            ...(i.device ? { serials: [i.device._id] } : {}),
-          })),
-          discount: manualDiscount,
-          customerId: customer?._id,
-          ...(redeemPoints > 0 ? { redeemPoints } : {}),
-        }}
+        payload={billPayload}
+        onInstallments={
+          settings?.modules?.installments
+            ? () => {
+                setPayOpen(false);
+                setQistOpen(true);
+              }
+            : undefined
+        }
         onDone={(sale) => {
           setPayOpen(false);
           // Receipt prints straight away on this computer if "print automatically" is on.
@@ -827,6 +841,48 @@ export default function PosPage() {
           resetBill();
         }}
       />
+
+      <InstallmentSaleModal
+        open={qistOpen}
+        onClose={() => setQistOpen(false)}
+        total={total}
+        customer={customer}
+        onChooseCustomer={() => setPickCustomer(true)}
+        payload={billPayload}
+        onDone={({ plan }) => {
+          setQistOpen(false);
+          setQistDone({ planId: plan._id, planNo: plan.planNo, invoiceNo: plan.invoiceNo, financed: plan.financed, months: plan.months, perMonth: plan.schedule[0]?.amount ?? 0, firstDue: plan.schedule[0]?.dueDate ?? "" });
+          window.open(`/receipt/installment/${plan._id}?print=1`, "_blank");
+          resetBill();
+          loadProducts();
+        }}
+      />
+
+      <Modal open={!!qistDone} onClose={() => setQistDone(null)} title="Sold on installments" size="sm">
+        {qistDone && (
+          <div className="text-center">
+            <CalendarRange className="mx-auto h-14 w-14 text-brand-500" />
+            <p className="mt-3 text-sm text-slate-500">
+              {qistDone.planNo} · {qistDone.invoiceNo}
+            </p>
+            <p className="text-3xl font-extrabold text-slate-900">{formatPKR(qistDone.financed)}</p>
+            <p className="mt-1 text-sm text-slate-600">
+              {qistDone.months} × {formatPKR(qistDone.perMonth)} — first due {qistDone.firstDue ? formatDate(qistDone.firstDue) : "—"}
+            </p>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <Button variant="outline" size="lg" icon={<Printer className="h-5 w-5" />} onClick={() => window.open(`/receipt/installment/${qistDone.planId}?print=1`, "_blank")}>
+                {t("Print")}
+              </Button>
+              <Button size="lg" onClick={() => setQistDone(null)}>
+                {t("Next bill")}
+              </Button>
+            </div>
+            <Link href={`/installments/${qistDone.planId}`} className="mt-4 inline-block text-sm font-semibold text-brand-700 underline">
+              Open the installment plan
+            </Link>
+          </div>
+        )}
+      </Modal>
 
       <CustomerPicker
         open={pickCustomer}
@@ -1032,6 +1088,7 @@ function PaymentModal({
   payload,
   onDone,
   onOffline,
+  onInstallments,
 }: {
   open: boolean;
   onClose: () => void;
@@ -1041,6 +1098,8 @@ function PaymentModal({
   payload: { items: unknown[]; discount: number; customerId?: string; redeemPoints?: number };
   onDone: (sale: { _id: string; invoiceNo: string; total: number; change: number; creditAmount?: number }) => void;
   onOffline: (bill: Omit<OutboxBill, "lines">) => void;
+  /** Shown when the installments feature is on: sell this bill on monthly installments instead. */
+  onInstallments?: () => void;
 }) {
   const toast = useToast();
   const t = useT();
@@ -1237,6 +1296,11 @@ function PaymentModal({
       >
         {t("Confirm & Save Bill")}
       </Button>
+      {onInstallments && (
+        <Button variant="outline" size="lg" className="mt-3 w-full" onClick={onInstallments} icon={<CalendarRange className="h-5 w-5" />}>
+          Sell on installments (qist)
+        </Button>
+      )}
     </Modal>
   );
 }

@@ -60,7 +60,8 @@ await page.fill('input[aria-label="Customer number"]', "03012345678");
 await page.click("button:has-text('Weekly Super Plus')");
 await page.click("button:has-text('Save Package')");
 await page.waitForSelector("text=Package Rs 300 saved");
-ok((await page.locator("main").innerText().then(norm)).includes("Low balance: Jazz Easyload SIM (Rs 4,200)"), "low balance warning once the SIM is below Rs 4,500");
+// The list reloads after saving; wait for it rather than reading the page at once.
+ok(await page.waitForFunction(() => document.querySelector("main").innerText.replace(/\u00a0/g, " ").includes("Low balance: Jazz Easyload SIM (Rs 4,200)"), null, { timeout: 10000 }).then(() => true, () => false), "low balance warning once the SIM is below Rs 4,500");
 
 // JazzCash cash in with the usual fee filled in
 await page.click("button:has-text('Cash in / send')");

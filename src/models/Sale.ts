@@ -92,6 +92,8 @@ const SaleSchema = new Schema(
     pointsEarned: { type: Number },
     pointsReversed: { type: Number, default: 0 },
     note: { type: String },
+    /** Sold on installments: the unpaid part is in an installment plan, not the khata. */
+    installment: { type: Boolean },
     // FBR POS integration
     fbrStatus: { type: String, enum: ["none", "synced", "pending", "failed"], default: "none" },
     fbrInvoiceNumber: { type: String },

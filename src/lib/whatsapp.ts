@@ -169,3 +169,27 @@ export function repairMessage(
           ];
   return [...lines.filter(Boolean), "", `${v.shop}${v.shopPhone ? ` ${v.shopPhone}` : ""}`].join("\n");
 }
+
+/** WhatsApp messages for installments: reminder (due / late) and payment received. */
+export function installmentMessage(
+  kind: "reminder" | "paid",
+  v: { name: string; planNo: string; items?: string; amount: number; dueDate?: string | Date | null; overdue?: number; balance: number; receiptNo?: string; shop: string; shopPhone?: string },
+) {
+  const d = (s?: string | Date | null) => (s ? new Date(s).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "");
+  const lines =
+    kind === "reminder"
+      ? [
+          `Assalam o Alaikum ${v.name},`,
+          `${v.shop} ki taraf se qist ki yaad-dehani (plan *${v.planNo}*${v.items ? `, ${v.items}` : ""}).`,
+          v.overdue && v.overdue > 0 ? `*Pichli baqaya qist: ${formatPKR(v.overdue)}*` : `Agli qist: ${formatPKR(v.amount)}${v.dueDate ? `, tareekh ${d(v.dueDate)}` : ""}`,
+          `Kul baqaya: ${formatPKR(v.balance)}`,
+          "Meharbani farma kar waqt par ada karein. Shukriya!",
+        ]
+      : [
+          `Assalam o Alaikum ${v.name},`,
+          `Aap ki qist ${formatPKR(v.amount)} wusool ho gayi (plan *${v.planNo}*${v.receiptNo ? `, raseed ${v.receiptNo}` : ""}). ✅`,
+          v.balance > 0 ? `Baqaya: ${formatPKR(v.balance)}` : "Mubarak ho! Tamam qistein mukammal ho gayi hain. 🎉",
+          "Shukriya!",
+        ];
+  return [...lines, "", `${v.shop}${v.shopPhone ? ` ${v.shopPhone}` : ""}`].join("\n");
+}

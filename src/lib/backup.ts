@@ -31,6 +31,7 @@ import {
   Wallet,
   MobilePackage,
   WalletTxn,
+  InstallmentPlan,
 } from "@/models";
 
 export const BACKUP_FORMAT = "dukaan-manager-backup";
@@ -65,6 +66,7 @@ const SHOP_DATA: [string, Model<any>][] = [
   ["wallets", Wallet],
   ["mobilePackages", MobilePackage],
   ["walletTxns", WalletTxn],
+  ["installments", InstallmentPlan],
 ];
 
 /** Shop settings restored from a backup. Admin limits, status and secrets are never taken from a file. */
@@ -199,6 +201,7 @@ export async function restoreTenant(tid: Types.ObjectId, file: unknown) {
     ["usedBuy", maxNo(find(UsedPurchase as Model<unknown>), "buyNo")],
     ["repair", maxNo(find(Repair as Model<unknown>), "jobNo")],
     ["walletTxn", maxNo(find(WalletTxn as Model<unknown>), "txnNo")],
+    ["installment", maxNo(find(InstallmentPlan as Model<unknown>), "planNo")],
     ["receipt", maxNo(find(LedgerEntry as Model<unknown>).filter((e) => /^RCP-/.test(String(e.refNo ?? ""))), "refNo")],
     ["payout", maxNo(find(LedgerEntry as Model<unknown>).filter((e) => /^PAY-/.test(String(e.refNo ?? ""))), "refNo")],
   ];

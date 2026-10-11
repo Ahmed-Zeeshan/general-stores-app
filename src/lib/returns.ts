@@ -93,12 +93,17 @@ export async function createReturn(opts: {
   user: { id: string; name: string };
   fallbackBranch: Types.ObjectId;
   at?: Date;
+  /** Goods taken back on an installment plan: nothing is refunded and no khata entry is made. */
+  installmentPlan?: string;
 }) {
   const { tid } = opts;
   for (let attempt = 0; attempt < 3; attempt++) {
     const sale = await loadSale(tid, opts.saleId);
     if (!sale) throw new ApiError(404, "Bill not found.");
     if (sale.status === "returned") throw new ApiError(400, "This bill has already been fully returned.");
+    if (sale.installment && !opts.installmentPlan) {
+      throw new ApiError(400, "This bill is on installments. To take the goods back, close the installment plan (Installments → plan → Take goods back).");
+    }
     const lines =
       opts.lines && opts.lines.length
         ? opts.lines
@@ -110,6 +115,11 @@ export async function createReturn(opts: {
             }))
             .filter((l) => l.qty > 0);
     const priced = priceReturn(sale, lines);
+    if (opts.installmentPlan) {
+      // The plan keeps what was paid; the return only puts the goods back.
+      priced.creditReduced = priced.total;
+      priced.refund = 0;
+    }
 
     // Default: give it back the way it was paid (cash for split-payment bills).
     const split = new Set((sale.payments ?? []).map((p) => p.method)).size > 1;
@@ -172,7 +182,7 @@ export async function createReturn(opts: {
       creditReduced: priced.creditReduced,
       refund: priced.refund,
       refundMethod,
-      reason: opts.reason,
+      reason: opts.installmentPlan ? `Taken back on installment plan ${opts.installmentPlan}${opts.reason ? ` — ${opts.reason}` : ""}` : opts.reason,
       user: opts.user.id,
       userName: opts.user.name,
       fbrStatus: sale.fbrInvoiceNumber || sale.fbrStatus === "pending" ? "pending" : "none",
@@ -199,7 +209,7 @@ export async function createReturn(opts: {
       }
     }
     if (pointsBack > 0 && sale.customer) await reversePoints(tid, sale.customer, { points: pointsBack, returnId: ret._id, returnNo, userId: opts.user.id });
-    const khataCredit = round2(priced.creditReduced + (refundMethod === "khata" ? priced.refund : 0));
+    const khataCredit = opts.installmentPlan ? 0 : round2(priced.creditReduced + (refundMethod === "khata" ? priced.refund : 0));
     if (sale.customer && khataCredit > 0) {
       await postLedger({
         tid,

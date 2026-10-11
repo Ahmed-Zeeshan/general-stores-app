@@ -1,7 +1,7 @@
 /** Activity log actions grouped for filtering, with plain labels (shared by the API and the page). */
 export const ACTIVITY_GROUPS: Record<string, string[]> = {
   sales: ["sale.price", "sale.discount", "sale.return", "repair.create", "repair.deliver", "repair.cancel", "repair.refund", "repair.discount"],
-  money: ["payment.receive", "payment.supplier", "payment.cancel", "khata.charge", "khata.opening", "party.update", "expense.add", "expense.delete", "wallet.create", "wallet.update", "wallet.reconcile", "wallet.float_in", "wallet.float_out", "wallet.commission", "wallet.reverse"],
+  money: ["payment.receive", "payment.supplier", "payment.cancel", "khata.charge", "khata.opening", "party.update", "expense.add", "expense.delete", "wallet.create", "wallet.update", "wallet.reconcile", "wallet.float_in", "wallet.float_out", "wallet.commission", "wallet.reverse", "installment.create", "installment.reverse", "installment.cancel"],
   stock: ["stock.adjust", "stock.wastage", "stock.writeoff", "stock.transfer", "product.price", "product.remove", "product.import", "purchase.create", "purchase.return", "purchase.cancel", "device.add", "device.update", "device.remove", "used.buy", "used.cancel"],
   drawer: ["drawer.open", "drawer.in", "drawer.out", "drawer.close"],
   staff: ["login", "login.failed", "user.create", "user.update"],
@@ -41,6 +41,9 @@ export const ACTION_LABELS: Record<string, string> = {
   "wallet.float_out": "Wallet balance withdrawn",
   "wallet.commission": "Commission received",
   "wallet.reverse": "Wallet entry cancelled",
+  "installment.create": "Sold on installments",
+  "installment.reverse": "Installment payment cancelled",
+  "installment.cancel": "Installment plan closed",
   "stock.adjust": "Stock adjusted",
   "stock.wastage": "Wastage",
   "stock.writeoff": "Lot written off",
