@@ -330,7 +330,9 @@ function WorkCard({ job, open, busy, onSave, canDiscount }: { job: RepairJob; op
       technicianId: job.technician ?? "",
       promisedAt: job.promisedAt ? job.promisedAt.slice(0, 10) : "",
     });
-  }, [job]);
+    // Only when these saved values change: adding a part or changing the status must not wipe
+    // what is being typed here.
+  }, [job.diagnosis, job.labour, job.discount, job.warrantyDays, job.technician, job.promisedAt]);
   useEffect(() => {
     api<{ _id: string; name: string }[]>("/api/repairs/technicians")
       .then(setTechs)
