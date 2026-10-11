@@ -38,6 +38,10 @@ const ProductSchema = new Schema(
     trackExpiry: { type: Boolean, default: false },
     /** Days a fresh batch lasts (bakery items); fills the expiry date when none is entered. */
     shelfLifeDays: { type: Number, min: 0 },
+    /** Every piece has its own IMEI / serial number (mobile phones): stock is the list of pieces. */
+    trackSerial: { type: Boolean, default: false },
+    /** Warranty printed on the receipt when sold (months); 0/empty = none. */
+    warrantyMonths: { type: Number, min: 0, max: 120 },
     /** FBR Pakistan Customs Tariff code; falls back to the shop default. */
     pctCode: { type: String, trim: true },
     active: { type: Boolean, default: true },

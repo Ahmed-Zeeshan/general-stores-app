@@ -2,7 +2,7 @@ import { chromium } from "playwright";
 import { B, norm } from "../lib/harness.mjs";
 const out = process.argv[2];
 const ok = (c, m) => { if (!c) { console.log("  ✗", m); process.exitCode = 1; } else console.log("  ✓", m); };
-const day = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+const day = (n) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi" }).format(new Date(Date.now() + n * 864e5));
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, timezoneId: "Asia/Karachi" });
 const page = await ctx.newPage();

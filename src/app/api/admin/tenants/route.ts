@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SHOP_TYPES } from "@/lib/constants";
 import { addDays, handle, requireSuperAdmin } from "@/lib/api";
 import { round2 } from "@/lib/money";
 import { createTenantWithOwner, USERNAME_RE } from "@/lib/tenants";
@@ -56,7 +57,7 @@ export const GET = handle(async () => {
 
 const Body = z.object({
   shopName: z.string().trim().min(2, "Shop name is required"),
-  shopType: z.enum(["karyana", "general", "bakery", "other"]),
+  shopType: z.enum(SHOP_TYPES),
   phone: z.string().trim().optional(),
   address: z.string().trim().optional(),
   maxUsers: z.coerce.number().int().min(1, "At least 1 user").max(1000),

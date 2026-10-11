@@ -44,7 +44,23 @@ export const PUT = handle<Ctx>(async (req, { params }) => {
     delete update.shelfLifeDays;
     unset.shelfLifeDays = 1;
   }
-  const before = await Product.findOne({ _id: id, tenant: tid }).select("trackExpiry name salePrice costPrice wholesalePrice").lean();
+  if (!body.warrantyMonths) {
+    delete update.warrantyMonths;
+    unset.warrantyMonths = 1;
+  }
+  const before = await Product.findOne({ _id: id, tenant: tid }).select("trackExpiry trackSerial stock name salePrice costPrice wholesalePrice").lean();
+  if (!before) throw new ApiError(404, "Product not found.");
+  // IMEI tracking can only be switched while the shop has none of it in stock (stock = the list of phones).
+  if (!!body.trackSerial !== !!before.trackSerial) {
+    if (body.trackSerial === undefined) delete update.trackSerial;
+    else if (Math.abs(before.stock ?? 0) > 0.0005) {
+      throw new ApiError(400, body.trackSerial ? `${before.name} has stock (${before.stock}) without IMEIs. Bring its stock to 0 first, then switch on IMEI tracking and add each phone with its IMEI.` : `${before.name} still has phones in stock. Sell, return or remove them before switching off IMEI tracking.`);
+    }
+  }
+  if (body.trackSerial) {
+    if (body.packs?.length) throw new ApiError(400, "Phones tracked by IMEI are sold one piece at a time, so they cannot have pack sizes.");
+    if (body.unit !== "pcs") throw new ApiError(400, "Phones tracked by IMEI must use the unit Piece.");
+  }
   const product = await Product.findOneAndUpdate({ _id: id, tenant: tid }, { $set: update, $unset: unset }, { new: true, runValidators: true }).lean();
   if (!product) throw new ApiError(404, "Product not found.");
   if (product.trackExpiry && !before?.trackExpiry) await startBatches(tid, product);

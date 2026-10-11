@@ -74,7 +74,7 @@ export const norm = (t) => String(t).replace(/\u00a0/g, " ");
 export const section = (t) => console.log(`\n== ${t}`);
 export const r2 = (n) => Math.round(n * 100) / 100;
 export const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi" }).format(new Date());
-export const day = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+export const day = (n) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi" }).format(new Date(Date.now() + n * 864e5));
 
 /** Direct database access for tests that simulate old data (same test database as the app). */
 export async function db() {

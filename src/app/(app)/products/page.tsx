@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Barcode, Boxes, Package, Pencil, Plus, Printer, Search, SlidersHorizontal, Tags, Trash2, Wand2 } from "lucide-react";
+import { Barcode, Boxes, Package, Pencil, Plus, Printer, Search, SlidersHorizontal, Smartphone, Tags, Trash2, Wand2 } from "lucide-react";
 import { BarcodeSvg } from "@/components/barcode";
 import { CameraButton, CameraScanner, useBarcodeScanner } from "@/components/barcode-scanner";
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Spinner, Table, Td, Th, Textarea } from "@/components/ui";
@@ -30,6 +30,8 @@ type Product = {
   expiryDate?: string;
   trackExpiry?: boolean;
   shelfLifeDays?: number;
+  trackSerial?: boolean;
+  warrantyMonths?: number;
   pctCode?: string;
   category?: Category | null;
 };
@@ -48,6 +50,7 @@ const EMPTY = {
   expiryDate: "",
   openingStock: "",
   shelfLifeDays: "",
+  warrantyMonths: "",
   pctCode: "",
 };
 
@@ -267,9 +270,17 @@ function ProductsPage() {
                     {can.manage && (
                       <Td className="text-right">
                         <div className="flex justify-end gap-1">
-                          <Button size="sm" variant="ghost" icon={<SlidersHorizontal className="h-4 w-4" />} onClick={() => setAdjusting(p)}>
-                            Stock
-                          </Button>
+                          {p.trackSerial ? (
+                            <Link href={`/phones?product=${p._id}`} title="Phones of this model by IMEI">
+                              <Button size="sm" variant="ghost" icon={<Smartphone className="h-4 w-4" />}>
+                                IMEIs
+                              </Button>
+                            </Link>
+                          ) : (
+                            <Button size="sm" variant="ghost" icon={<SlidersHorizontal className="h-4 w-4" />} onClick={() => setAdjusting(p)}>
+                              Stock
+                            </Button>
+                          )}
                           <Link href={`/labels?ids=${p._id}`} title="Print barcode labels">
                             <Button size="sm" variant="ghost" aria-label="Print labels">
                               <Barcode className="h-4 w-4" />
@@ -334,7 +345,9 @@ function ProductForm({
   const [form, setForm] = useState(EMPTY);
   const [packs, setPacks] = useState<PackRow[]>([]);
   const [trackExpiry, setTrackExpiry] = useState(false);
+  const [trackSerial, setTrackSerial] = useState(false);
   const [saving, setSaving] = useState(false);
+  const phonesOn = !!settings?.modules?.phones || !!product?.trackSerial;
 
   useEffect(() => {
     if (!open) return;
@@ -355,10 +368,12 @@ function ProductForm({
             openingStock: "",
             pctCode: product.pctCode ?? "",
             shelfLifeDays: product.shelfLifeDays ? String(product.shelfLifeDays) : "",
+            warrantyMonths: product.warrantyMonths ? String(product.warrantyMonths) : "",
           }
         : EMPTY,
     );
     setTrackExpiry(!!product?.trackExpiry);
+    setTrackSerial(!!product?.trackSerial);
     setPacks(
       (product?.packs ?? []).map((k) => ({
         name: k.name,
@@ -406,7 +421,9 @@ function ProductForm({
         ...form,
         expiryDate: form.expiryDate || null,
         trackExpiry,
-        packs: packs
+        ...(phonesOn ? { trackSerial } : {}),
+        ...(trackSerial ? { unit: "pcs", openingStock: "" } : {}),
+        packs: (trackSerial ? [] : packs)
           .filter((k) => k.name.trim() || k.size)
           .map((k) => ({ name: k.name.trim(), size: Number(k.size), price: k.price, wholesalePrice: k.wholesalePrice, barcode: k.barcode.trim() })),
       };
@@ -496,8 +513,33 @@ function ProductForm({
         <Field label="Wholesale price (optional)" hint={`For customers marked "wholesale". Empty = same as sale price.`}>
           <Input type="number" inputMode="decimal" step="any" min="0" value={form.wholesalePrice} onChange={set("wholesalePrice")} placeholder={form.salePrice || "0"} aria-label="Wholesale price" />
         </Field>
-        <PacksEditor unit={UNIT_LABELS[form.unit] ?? form.unit} unitPrice={Number(form.salePrice) || 0} packs={packs} onChange={setPacks} />
-        {!product && (
+        {phonesOn && (
+          <div className="space-y-3 sm:col-span-2">
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3">
+              <input
+                type="checkbox"
+                checked={trackSerial}
+                onChange={(e) => {
+                  setTrackSerial(e.target.checked);
+                  if (e.target.checked) setForm((f) => ({ ...f, unit: "pcs" }));
+                }}
+                className="mt-0.5 h-5 w-5 accent-brand-600"
+                aria-label="Track by IMEI"
+              />
+              <span>
+                <span className="block font-semibold text-slate-800">Track each piece by IMEI / serial number</span>
+                <span className="text-sm text-slate-500">For mobile phones and tablets. Every phone is bought, sold, returned and moved by its IMEI, and the IMEI prints on the bill. After saving, add phones from Phones → Add phones or from a purchase.</span>
+              </span>
+            </label>
+            {trackSerial && (
+              <Field label="Warranty (months)" hint="Printed on the bill with the end date. Empty = no warranty.">
+                <Input type="number" inputMode="numeric" min="0" max="120" value={form.warrantyMonths} onChange={set("warrantyMonths")} placeholder="e.g. 12" aria-label="Warranty months" />
+              </Field>
+            )}
+          </div>
+        )}
+        {!trackSerial && <PacksEditor unit={UNIT_LABELS[form.unit] ?? form.unit} unitPrice={Number(form.salePrice) || 0} packs={packs} onChange={setPacks} />}
+        {!product && !trackSerial && (
           <Field label="Stock you have now" hint="How many are in the shop today">
             <Input type="number" inputMode="decimal" step="any" min="0" value={form.openingStock} onChange={set("openingStock")} placeholder="0" />
           </Field>

@@ -6,7 +6,7 @@ const StockMovementSchema = new Schema(
   {
     product: { type: Schema.Types.ObjectId, ref: "Product", required: true, index: true },
     branch: { type: Schema.Types.ObjectId, ref: "Branch" },
-    type: { type: String, enum: ["sale", "purchase", "return", "adjustment", "wastage", "opening", "production", "import", "transfer", "purchase_return", "void"], required: true },
+    type: { type: String, enum: ["sale", "purchase", "return", "adjustment", "wastage", "opening", "production", "import", "transfer", "purchase_return", "void", "used_buy", "repair", "repossess"], required: true },
     qty: { type: Number, required: true },
     stockAfter: { type: Number },
     refNo: { type: String },

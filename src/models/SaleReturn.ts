@@ -26,6 +26,8 @@ const SaleReturnSchema = new Schema(
           /** Line value before the bill discount (same basis as Sale.items.total). */
           total: { type: Number, required: true },
           cost: { type: Number, default: 0 },
+          /** Phones that came back (products with "track IMEI"). */
+          serials: { type: [{ device: { type: Schema.Types.ObjectId, ref: "Device" }, imei: String, _id: false }], default: undefined },
         },
         { _id: false },
       ),

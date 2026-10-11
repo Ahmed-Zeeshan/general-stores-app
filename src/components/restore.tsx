@@ -20,6 +20,7 @@ const LABELS: Record<string, string> = {
   shifts: "Day closes",
   promotions: "Offers",
   stockBatches: "Expiry lots",
+  devices: "Phones (IMEI)",
 };
 
 /**

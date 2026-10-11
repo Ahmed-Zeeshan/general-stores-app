@@ -19,7 +19,7 @@ export type ShopRow = {
   lastSaleAt?: string | null;
 };
 
-export const SHOP_TYPES: Record<string, string> = { karyana: "Karyana", general: "General Store", bakery: "Bakery", other: "Other" };
+export const SHOP_TYPES: Record<string, string> = { karyana: "Karyana", general: "General Store", bakery: "Bakery", mobile: "Mobile Phone Shop", other: "Other" };
 
 export function shopState(s: { status: string; expiresAt?: string | null }) {
   if (s.status !== "active") return { label: "Suspended", color: "red" as const };

@@ -1,4 +1,5 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
+import { SHOP_TYPES } from "@/lib/constants";
 
 /** A tenant is one shop: its settings (managed by the owner) and its plan limits (managed by the super admin). */
 const TenantSchema = new Schema(
@@ -13,7 +14,7 @@ const TenantSchema = new Schema(
 
     // --- Managed by shop owner ---
     shopName: { type: String, required: true, trim: true },
-    shopType: { type: String, enum: ["karyana", "general", "bakery", "other"], default: "general" },
+    shopType: { type: String, enum: SHOP_TYPES, default: "general" },
     ownerName: { type: String, trim: true },
     phone: { type: String, trim: true },
     address: { type: String, trim: true },
@@ -50,6 +51,15 @@ const TenantSchema = new Schema(
 
     /** Sent after a customer pays udhaar. Empty = the built-in message. */
     waPaymentTemplate: { type: String, trim: true },
+
+    // --- Optional features (Settings → Features) ---
+    modules: {
+      type: new Schema(
+        { phones: { type: Boolean, default: false }, repairs: { type: Boolean, default: false }, wallets: { type: Boolean, default: false }, installments: { type: Boolean, default: false } },
+        { _id: false },
+      ),
+      default: () => ({}),
+    },
 
   },
   { timestamps: true },

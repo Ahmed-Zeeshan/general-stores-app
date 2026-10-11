@@ -52,10 +52,12 @@ export async function moveStock(opts: {
   branch: Types.ObjectId;
   productId: Id;
   qty: number;
-  type: "sale" | "purchase" | "return" | "adjustment" | "wastage" | "opening" | "production" | "import" | "transfer" | "purchase_return" | "void";
+  type: "sale" | "purchase" | "return" | "adjustment" | "wastage" | "opening" | "production" | "import" | "transfer" | "purchase_return" | "void" | "used_buy" | "repair" | "repossess";
   refNo?: string;
   note?: string;
   userId?: Id;
+  /** The caller has added / taken the matching IMEI records (products with "track IMEI"). */
+  serialOk?: boolean;
   /** Expiry batches (only used for products with "track expiry" on). */
   batch?: {
     /** Incoming: the batches that arrive (expiry date, batch no.). Default: one batch, expiry from shelf life. */
@@ -70,6 +72,11 @@ export async function moveStock(opts: {
   };
 }) {
   const qty = Math.round(opts.qty * 1000) / 1000;
+  // Phones (track IMEI): stock is the list of pieces, so it only changes together with them.
+  if (!opts.serialOk) {
+    const p = await Product.findOne({ _id: opts.productId, tenant: opts.tid }).select("trackSerial name").lean();
+    if (p?.trackSerial) throw new ApiError(400, `${p.name} is tracked by IMEI. Add, sell or remove it by choosing the phones (IMEI), not by quantity.`);
+  }
   const product = await Product.findOneAndUpdate({ _id: opts.productId, tenant: opts.tid }, { $inc: { stock: qty } }, { new: true });
   if (!product) return null;
   const level = await StockLevel.findOneAndUpdate(

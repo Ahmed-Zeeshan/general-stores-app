@@ -23,6 +23,14 @@ const SaleItemSchema = new Schema(
     wholesale: { type: Boolean, default: undefined },
     /** Offer applied to this line (its discount is included in `discount`). */
     promo: { type: new Schema({ name: String, amount: Number }, { _id: false }), default: undefined },
+    /** Phones sold on this line (products with "track IMEI"); `returned` = came back on a return. */
+    serials: {
+      type: [{ device: { type: Schema.Types.ObjectId, ref: "Device" }, imei: String, imei2: String, returned: { type: Boolean, default: false }, _id: false }],
+      default: undefined,
+    },
+    /** Warranty given on this line (months) and until when. */
+    warrantyMonths: { type: Number },
+    warrantyUntil: { type: Date },
     /** Expiry batches the units came from (products with "track expiry"); `returned` = put back so far. */
     batches: {
       type: [{ batch: { type: Schema.Types.ObjectId, ref: "StockBatch" }, qty: Number, expiryDate: Date, returned: { type: Number, default: 0 }, _id: false }],

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { escapeRegex, handle } from "@/lib/api";
+import { ApiError, escapeRegex, handle } from "@/lib/api";
 import { branchStock, requireBranch } from "@/lib/branches";
 import { withCategories } from "@/lib/categories";
 import { assertBarcodesFree } from "@/lib/barcode-server";
@@ -46,7 +46,19 @@ export const POST = handle(async (req) => {
   const body = ProductInput.parse(raw);
   const openingStock = z.coerce.number().min(0).optional().parse(raw.openingStock) ?? 0;
   await assertBarcodesFree(tid, body);
-  const product = await Product.create({ ...body, tenant: tid, barcode: body.barcode || undefined, wholesalePrice: body.wholesalePrice ?? undefined, stock: 0 });
+  if (body.trackSerial) {
+    if (openingStock > 0) throw new ApiError(400, "Phones tracked by IMEI start with no stock. Save the product, then add each phone with its IMEI (Phones → Add phones, or a purchase).");
+    if (body.packs?.length) throw new ApiError(400, "Phones tracked by IMEI are sold one piece at a time, so they cannot have pack sizes.");
+    if (body.unit !== "pcs") throw new ApiError(400, "Phones tracked by IMEI must use the unit Piece.");
+  }
+  const product = await Product.create({
+    ...body,
+    tenant: tid,
+    barcode: body.barcode || undefined,
+    wholesalePrice: body.wholesalePrice ?? undefined,
+    warrantyMonths: body.warrantyMonths ?? undefined,
+    stock: 0,
+  });
   if (openingStock > 0) {
     await moveStock({
       tid,

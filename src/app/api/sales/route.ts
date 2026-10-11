@@ -9,7 +9,8 @@ import { findPack, sellPrice } from "@/lib/pricing";
 import { applyPromotions, pointsEarned, type PromoLike, type PromoLine } from "@/lib/promotions";
 import { optionalId } from "@/lib/schemas";
 import { moveStock, postLedger } from "@/lib/services";
-import { nextNumber, PAYMENT_METHODS, Party, Product, Promotion, Sale, TENDER_METHODS, Tenant } from "@/models";
+import { addMonths, claimDevices, linkSale, undoClaim } from "@/lib/devices";
+import { Device, nextNumber, PAYMENT_METHODS, Party, Product, Promotion, Sale, TENDER_METHODS, Tenant } from "@/models";
 
 export const GET = handle(async (req) => {
   const ctx = await requireBranch();
@@ -44,6 +45,8 @@ const Body = z.object({
         discount: z.coerce.number().min(0).default(0),
         /** Sell in a pack size of the product, e.g. "Carton"; qty is then the number of packs. */
         pack: z.string().trim().max(30).optional(),
+        /** Phones (products with "track IMEI"): the pieces sold; qty must equal their number. */
+        serials: z.array(z.string().regex(/^[a-f0-9]{24}$/i)).max(500).optional(),
       }),
     )
     .min(1, "Add at least one item"),
@@ -104,6 +107,10 @@ export const POST = handle(async (req) => {
   }
   const wholesale = customer?.priceLevel === "wholesale";
   const priceChanges: string[] = [];
+  // Phones sold by IMEI: each piece may have its own price and cost.
+  const serialIds = body.items.flatMap((i) => i.serials ?? []);
+  const devices = serialIds.length ? await Device.find({ tenant: tid, _id: { $in: serialIds } }).lean() : [];
+  const deviceById = new Map(devices.map((d) => [String(d._id), d]));
   const promoLines: PromoLine[] = [];
 
   const items = body.items.map((i) => {
@@ -111,8 +118,22 @@ export const POST = handle(async (req) => {
     if (!p) throw new ApiError(400, "One of the products no longer exists. Please refresh.");
     const pack = findPack(p, i.pack);
     if (i.pack && !pack) throw new ApiError(400, `${p.name} is not sold in "${i.pack}" any more. Please refresh.`);
+    let pieces: NonNullable<ReturnType<typeof deviceById.get>>[] = [];
+    if (p.trackSerial) {
+      if (!i.serials?.length) throw new ApiError(400, `Choose which ${p.name} is being sold (IMEI).`);
+      if (i.pack) throw new ApiError(400, `${p.name} is sold one piece at a time (by IMEI).`);
+      if (i.qty !== i.serials.length) throw new ApiError(400, `${p.name}: quantity must match the number of phones chosen (${i.serials.length}).`);
+      pieces = i.serials.map((id) => {
+        const d = deviceById.get(id);
+        if (!d || String(d.product) !== String(p._id)) throw new ApiError(400, `One of the chosen ${p.name} phones was not found. Please refresh.`);
+        return d;
+      });
+    } else if (i.serials?.length) {
+      throw new ApiError(400, `${p.name} is not tracked by IMEI.`);
+    }
     // Cashiers always sell at the saved price; owner/manager may change the price at the counter.
-    const listPrice = sellPrice(p, pack, wholesale);
+    // A single phone with its own asking price (used phones) is sold at that price.
+    const listPrice = pieces.length === 1 && pieces[0].price ? pieces[0].price : sellPrice(p, pack, wholesale);
     const price = user.role === "cashier" || i.price === undefined ? listPrice : i.price;
     if (Math.abs(price - listPrice) > 0.004) priceChanges.push(`${p.name}${pack ? ` (${pack.name})` : ""} ${listPrice} → ${price}`);
     const gross = round2(i.qty * price);
@@ -134,11 +155,18 @@ export const POST = handle(async (req) => {
       unit: p.unit,
       qty,
       price: pack ? Math.round((price / pack.size) * 10000) / 10000 : price,
-      cost: p.costPrice ?? 0,
+      // Phones: the real cost of the pieces sold.
+      cost: pieces.length ? Math.round((pieces.reduce((a, d) => a + (d.cost ?? 0), 0) / pieces.length) * 100) / 100 : (p.costPrice ?? 0),
       discount,
       total: round2(gross - discount),
       ...(pack ? { pack: { name: pack.name, size: pack.size, count: i.qty, price } } : {}),
       ...(wholesale ? { wholesale: true } : {}),
+      ...(pieces.length
+        ? {
+            serials: pieces.map((d) => ({ device: d._id, imei: d.imei, ...(d.imei2 ? { imei2: d.imei2 } : {}) })),
+            ...(p.warrantyMonths ? { warrantyMonths: p.warrantyMonths, warrantyUntil: addMonths(soldAt ?? new Date(), p.warrantyMonths) } : {}),
+          }
+        : {}),
     };
   });
 
@@ -204,6 +232,29 @@ export const POST = handle(async (req) => {
   const pointsEarnedNow = customer && settings?.loyaltyEnabled ? pointsEarned(amountPaid, settings.loyaltyEarnPer ?? 100) : 0;
 
   const invoiceNo = await nextNumber(tid, "sale", "INV");
+  // Reserve the phones first (all or nothing), so the same phone can never be sold twice.
+  const claims: string[] = [];
+  const undoClaims = () => Promise.all(claims.map((op) => undoClaim(tid, op)));
+  try {
+    for (const it of items) {
+      if (!("serials" in it) || !it.serials?.length) continue;
+      const each = round2(it.total / it.qty);
+      const { op } = await claimDevices({
+        tid,
+        ids: it.serials.map((x) => x.device),
+        productId: it.product,
+        branch: branch._id,
+        to: "sold",
+        sale: { invoiceNo, customerName: customer?.name, at: soldAt ?? new Date(), prices: new Map(it.serials.map((x) => [String(x.device), each])), warrantyMonths: it.warrantyMonths },
+        event: { action: "Sold", refNo: invoiceNo, note: customer?.name ? `to ${customer.name}` : undefined },
+        userName: user.name,
+      });
+      claims.push(op);
+    }
+  } catch (err) {
+    await undoClaims();
+    throw err;
+  }
   let sale;
   try {
     sale = await Sale.create({
@@ -238,17 +289,19 @@ export const POST = handle(async (req) => {
       ...(pointsEarnedNow > 0 ? { pointsEarned: pointsEarnedNow } : {}),
     });
   } catch (err) {
-    // Give the points back if the bill could not be saved.
+    // Give the points and the phones back if the bill could not be saved.
     if (pointsRedeemed > 0) await Party.updateOne({ _id: customer!._id, tenant: tid }, { $inc: { points: pointsRedeemed } });
+    await undoClaims();
     throw err;
   }
+  for (const op of claims) await linkSale(tid, op, sale._id);
   if (customer && (pointsRedeemed > 0 || pointsEarnedNow > 0)) {
     await recordPoints(tid, customer._id, { redeemed: pointsRedeemed, earned: pointsEarnedNow, saleId: sale._id, invoiceNo, userId: user.id });
   }
 
   const batchSet: Record<string, unknown> = {};
   for (const [i, item] of items.entries()) {
-    const moved = await moveStock({ tid, branch: branch._id, productId: item.product, qty: -item.qty, type: "sale", refNo: invoiceNo, userId: user.id });
+    const moved = await moveStock({ tid, branch: branch._id, productId: item.product, qty: -item.qty, type: "sale", refNo: invoiceNo, userId: user.id, serialOk: "serials" in item && !!item.serials?.length });
     if (moved?.allocations.length) batchSet[`items.${i}.batches`] = moved.allocations.map((a) => ({ batch: a.batch, qty: a.qty, expiryDate: a.expiryDate }));
   }
   if (Object.keys(batchSet).length) await Sale.updateOne({ _id: sale._id, tenant: tid }, { $set: batchSet });

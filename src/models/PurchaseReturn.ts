@@ -21,6 +21,7 @@ const PurchaseReturnSchema = new Schema(
           qty: Number,
           cost: Number,
           total: Number,
+          serials: { type: [{ device: { type: Schema.Types.ObjectId, ref: "Device" }, imei: String, _id: false }], default: undefined },
           _id: false,
         },
       ],

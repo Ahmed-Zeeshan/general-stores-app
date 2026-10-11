@@ -54,6 +54,12 @@ export const ProductInput = z.object({
     .union([z.coerce.number().int().min(0).max(3650), z.literal(""), z.null()])
     .optional()
     .transform((v) => (typeof v === "number" && v > 0 ? v : null)),
+  /** Mobile phones: every piece has its own IMEI / serial number. */
+  trackSerial: z.boolean().optional(),
+  warrantyMonths: z
+    .union([z.coerce.number().int().min(0).max(120), z.literal(""), z.null()])
+    .optional()
+    .transform((v) => (typeof v === "number" && v > 0 ? v : null)),
 });
 
 export { optionalId };

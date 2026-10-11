@@ -5,6 +5,7 @@ import {
   Branch,
   Category,
   Counter,
+  Device,
   Expense,
   LedgerEntry,
   Party,
@@ -53,6 +54,7 @@ const SHOP_DATA: [string, Model<any>][] = [
   ["promotions", Promotion],
   ["pointsHistory", PointsEntry],
   ["shifts", Shift],
+  ["devices", Device],
 ];
 
 /** Shop settings restored from a backup. Admin limits, status and secrets are never taken from a file. */
@@ -78,6 +80,7 @@ const RESTORABLE_SETTINGS = [
   "loyaltyEarnPer",
   "loyaltyPointValue",
   "loyaltyMinRedeem",
+  "modules",
 ] as const;
 
 /** Full JSON export of one shop's data (passwords and secrets excluded). */

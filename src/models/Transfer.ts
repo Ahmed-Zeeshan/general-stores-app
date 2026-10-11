@@ -16,6 +16,8 @@ const TransferSchema = new Schema(
           name: String,
           unit: String,
           qty: { type: Number, required: true },
+          /** Phones sent (products with "track IMEI"). */
+          serials: { type: [{ device: { type: Schema.Types.ObjectId, ref: "Device" }, imei: String, _id: false }], default: undefined },
         },
         { _id: false },
       ),

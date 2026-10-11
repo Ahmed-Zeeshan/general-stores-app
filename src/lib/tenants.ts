@@ -2,11 +2,13 @@ import bcrypt from "bcryptjs";
 import type { Types } from "mongoose";
 import { Branch, Category, Tenant, User } from "@/models";
 import { ApiError } from "./api";
+import { DEFAULT_MODULES, type ShopType } from "./constants";
 
 export const DEFAULT_CATEGORIES: Record<string, string[]> = {
   karyana: ["Atta & Flour", "Rice & Daal", "Ghee & Oil", "Sugar & Salt", "Spices", "Tea & Beverages", "Snacks", "Soap & Detergent"],
   general: ["Grocery", "Beverages", "Snacks", "Personal Care", "Household", "Dairy", "Stationery"],
   bakery: ["Bread", "Cakes", "Biscuits & Rusk", "Sweets", "Patties & Savoury", "Dairy", "Beverages", "Baking Ingredients"],
+  mobile: ["Mobile Phones", "Used Phones", "Tablets", "Chargers & Cables", "Handsfree & Earbuds", "Covers & Protectors", "Power Banks", "SIMs & Cards", "Spare Parts", "Smart Watches"],
   other: ["General"],
 };
 
@@ -18,7 +20,7 @@ export async function hashPassword(password: string) {
 
 export async function createTenantWithOwner(input: {
   shopName: string;
-  shopType: "karyana" | "general" | "bakery" | "other";
+  shopType: ShopType;
   phone?: string;
   address?: string;
   maxUsers: number;
@@ -35,6 +37,7 @@ export async function createTenantWithOwner(input: {
   const tenant = await Tenant.create({
     shopName: input.shopName,
     shopType: input.shopType,
+    modules: Object.fromEntries(DEFAULT_MODULES[input.shopType].map((m) => [m, true])),
     phone: input.phone,
     address: input.address,
     ownerName: input.ownerName,

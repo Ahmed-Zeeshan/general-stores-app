@@ -3,9 +3,10 @@ import { ApiError } from "./api";
 import { round2 } from "./money";
 import { reversePoints } from "./loyalty";
 import { moveStock, postLedger } from "./services";
+import { restoreDevices } from "./devices";
 import { nextNumber, Sale, SaleReturn } from "@/models";
 
-export type ReturnLine = { index: number; qty: number };
+export type ReturnLine = { index: number; qty: number; serials?: string[] };
 export type RefundMethod = "cash" | "card" | "jazzcash" | "easypaisa" | "bank" | "khata";
 
 type SaleLean = NonNullable<Awaited<ReturnType<typeof loadSale>>>;
@@ -21,11 +22,28 @@ function loadSale(tid: Types.ObjectId, saleId: string) {
 export function priceReturn(sale: SaleLean, lines: ReturnLine[]) {
   if (!lines.length) throw new ApiError(400, "Choose at least one item to return.");
   const seen = new Set<number>();
-  const items = lines.map((l) => {
+  const items = lines.map((line) => {
+    let l = line;
     const it = sale.items[l.index];
     if (!it) throw new ApiError(400, "Item not found on this bill.");
     if (seen.has(l.index)) throw new ApiError(400, "The same item is listed twice.");
     seen.add(l.index);
+    // Phones: say which ones come back; the quantity is their number.
+    let serials: { device: Types.ObjectId; imei: string; at: number }[] | undefined;
+    if (it.serials?.length) {
+      const wanted = l.serials ?? [];
+      if (!wanted.length) throw new ApiError(400, `Choose which ${it.name} phone(s) are coming back (IMEI).`);
+      if (new Set(wanted).size !== wanted.length) throw new ApiError(400, "The same phone is listed twice.");
+      serials = wanted.map((id) => {
+        const at = it.serials!.findIndex((x) => String(x.device) === id);
+        if (at < 0) throw new ApiError(400, `That phone was not sold on this bill (${it.name}).`);
+        if (it.serials![at].returned) throw new ApiError(400, `IMEI ${it.serials![at].imei} was already returned.`);
+        return { device: it.serials![at].device as Types.ObjectId, imei: it.serials![at].imei ?? "", at };
+      });
+      l = { ...l, qty: serials.length };
+    } else if (l.serials?.length) {
+      throw new ApiError(400, `${it.name} is not tracked by IMEI.`);
+    }
     const left = round3(it.qty - (it.returnedQty ?? 0));
     if (!(l.qty > 0)) throw new ApiError(400, `Quantity for ${it.name} must be more than zero.`);
     if (l.qty > left + 0.0005) throw new ApiError(400, `Only ${left} of ${it.name} can still be returned.`);
@@ -39,11 +57,12 @@ export function priceReturn(sale: SaleLean, lines: ReturnLine[]) {
       price: it.price,
       total: round2(it.total * share),
       cost: round2((it.cost ?? 0) * l.qty),
+      ...(serials ? { serials } : {}),
     };
   });
 
   const willReturnAll = sale.items.every((it, i) => {
-    const r = lines.find((l) => l.index === i);
+    const r = items.find((x) => x.index === i);
     return round3((it.returnedQty ?? 0) + (r?.qty ?? 0)) >= it.qty - 0.0005;
   });
 
@@ -83,7 +102,13 @@ export async function createReturn(opts: {
     const lines =
       opts.lines && opts.lines.length
         ? opts.lines
-        : sale.items.map((it, index) => ({ index, qty: round3(it.qty - (it.returnedQty ?? 0)) })).filter((l) => l.qty > 0);
+        : sale.items
+            .map((it, index) => ({
+              index,
+              qty: round3(it.qty - (it.returnedQty ?? 0)),
+              ...(it.serials?.length ? { serials: it.serials.filter((x) => !x.returned).map((x) => String(x.device)) } : {}),
+            }))
+            .filter((l) => l.qty > 0);
     const priced = priceReturn(sale, lines);
 
     // Default: give it back the way it was paid (cash for split-payment bills).
@@ -118,13 +143,12 @@ export async function createReturn(opts: {
       }
       restorePlan.set(it.index, plan);
     }
+    const set: Record<string, unknown> = { status: priced.willReturnAll ? "returned" : "partially_returned", returnedAt: opts.at ?? new Date() };
+    for (const it of priced.items) for (const x of it.serials ?? []) set[`items.${it.index}.serials.${x.at}.returned`] = true;
     const claimed = await Sale.updateOne(
       // Bills saved before returns were tracked have no counter yet: treat missing as 0.
       { _id: sale._id, tenant: tid, returnSeq: sale.returnSeq ? sale.returnSeq : { $in: [0, null] } },
-      {
-        $inc: inc,
-        $set: { status: priced.willReturnAll ? "returned" : "partially_returned", returnedAt: opts.at ?? new Date() },
-      },
+      { $inc: inc, $set: set },
     );
     if (!claimed.modifiedCount) continue; // someone else returned at the same moment: try again with fresh data
 
@@ -139,7 +163,7 @@ export async function createReturn(opts: {
       branchName: sale.branchName,
       customer: sale.customer,
       customerName: sale.customerName,
-      items: priced.items,
+      items: priced.items.map(({ serials, ...it }) => ({ ...it, ...(serials ? { serials: serials.map((x) => ({ device: x.device, imei: x.imei })) } : {}) })),
       subtotal: priced.subtotal,
       discount: priced.discount,
       tax: priced.tax,
@@ -156,8 +180,12 @@ export async function createReturn(opts: {
     });
 
     for (const it of priced.items) {
+      if (it.serials?.length) {
+        await restoreDevices({ tid, ids: it.serials.map((x) => x.device), branch, event: { action: "Returned by customer", refNo: returnNo, note: `from bill ${sale.invoiceNo}` }, userName: opts.user.name });
+      }
       if (it.product) {
         await moveStock({
+          serialOk: !!it.serials?.length,
           tid,
           branch,
           productId: it.product,

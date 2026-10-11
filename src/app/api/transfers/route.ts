@@ -3,6 +3,7 @@ import { ApiError, dateRange, handle } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
 import { branchStock, requireBranch } from "@/lib/branches";
 import { moveStock } from "@/lib/services";
+import { moveDevices } from "@/lib/devices";
 import { nextNumber, Product, Transfer } from "@/models";
 
 export const GET = handle(async (req) => {
@@ -16,7 +17,14 @@ export const GET = handle(async (req) => {
 const Body = z.object({
   toBranch: z.string().regex(/^[a-f0-9]{24}$/i, "Choose the branch to send stock to"),
   items: z
-    .array(z.object({ productId: z.string().regex(/^[a-f0-9]{24}$/i), qty: z.coerce.number().positive("Quantity must be more than zero") }))
+    .array(
+      z.object({
+        productId: z.string().regex(/^[a-f0-9]{24}$/i),
+        qty: z.coerce.number().positive("Quantity must be more than zero"),
+        /** Phones (track IMEI): which ones are sent. */
+        serials: z.array(z.string().regex(/^[a-f0-9]{24}$/i)).max(500).optional(),
+      }),
+    )
     .min(1, "Add at least one item"),
   note: z.string().trim().optional(),
 });
@@ -31,7 +39,7 @@ export const POST = handle(async (req) => {
   if (!target) throw new ApiError(404, "Branch not found or closed.");
   if (new Set(body.items.map((i) => i.productId)).size !== body.items.length) throw new ApiError(400, "The same item is listed twice.");
 
-  const products = await Product.find({ tenant: tid, _id: { $in: body.items.map((i) => i.productId) } }).select("name unit").lean();
+  const products = await Product.find({ tenant: tid, _id: { $in: body.items.map((i) => i.productId) } }).select("name unit trackSerial").lean();
   const byId = new Map(products.map((p) => [String(p._id), p]));
   const here = await branchStock(tid, branchId, products.map((p) => p._id));
   const items = body.items.map((i) => {
@@ -39,7 +47,11 @@ export const POST = handle(async (req) => {
     if (!p) throw new ApiError(400, "One of the items no longer exists. Please refresh.");
     const have = here.get(i.productId) ?? 0;
     if (have < i.qty) throw new ApiError(400, `Not enough ${p.name} in ${branch.name}: you have ${have}, trying to send ${i.qty}.`);
-    return { product: p._id, name: p.name, unit: p.unit, qty: Math.round(i.qty * 1000) / 1000 };
+    if (p.trackSerial) {
+      if (!i.serials?.length) throw new ApiError(400, `Choose which ${p.name} phones to send (IMEI).`);
+      if (i.serials.length !== i.qty) throw new ApiError(400, `${p.name}: quantity must match the number of phones chosen.`);
+    } else if (i.serials?.length) throw new ApiError(400, `${p.name} is not tracked by IMEI.`);
+    return { product: p._id, name: p.name, unit: p.unit, qty: Math.round(i.qty * 1000) / 1000, serialIds: i.serials };
   });
 
   const transferNo = await nextNumber(tid, "transfer", "TRF");
@@ -50,12 +62,19 @@ export const POST = handle(async (req) => {
     fromName: branch.name,
     to: target._id,
     toName: target.name,
-    items,
+    items: items.map((i) => ({ product: i.product, name: i.name, unit: i.unit, qty: i.qty })),
     note: body.note,
     user: user.id,
     userName: user.name,
   });
-  for (const i of items) {
+  for (const [n, i] of items.entries()) {
+    if (i.serialIds?.length) {
+      const moved = await moveDevices({ tid, ids: i.serialIds, productId: i.product, from: branchId, to: target._id, event: { action: `Moved to ${target.name}`, refNo: transferNo }, userName: user.name });
+      await Transfer.updateOne({ _id: transfer._id, tenant: tid }, { $set: { [`items.${n}.serials`]: moved.map((d) => ({ device: d._id, imei: d.imei })) } });
+      await moveStock({ tid, branch: branchId, productId: i.product, qty: -i.qty, type: "transfer", refNo: transferNo, note: `To ${target.name}`, userId: user.id, serialOk: true });
+      await moveStock({ tid, branch: target._id, productId: i.product, qty: i.qty, type: "transfer", refNo: transferNo, note: `From ${branch.name}`, userId: user.id, serialOk: true });
+      continue;
+    }
     const out = await moveStock({ tid, branch: branchId, productId: i.product, qty: -i.qty, type: "transfer", refNo: transferNo, note: `To ${target.name}`, userId: user.id });
     // The same lots (with their expiry dates) arrive at the other branch.
     await moveStock({

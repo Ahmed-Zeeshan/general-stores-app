@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SHOP_TYPES } from "@/lib/constants";
 import { handle, requireTenant } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
 import { Sale, SaleReturn, Tenant } from "@/models";
@@ -17,7 +18,7 @@ export const GET = handle(async () => {
 
 const Body = z.object({
   shopName: z.string().trim().min(2),
-  shopType: z.enum(["karyana", "general", "bakery", "other"]),
+  shopType: z.enum(SHOP_TYPES),
   ownerName: z.string().trim().optional(),
   phone: z.string().trim().optional(),
   address: z.string().trim().optional(),
@@ -39,6 +40,7 @@ const Body = z.object({
   loyaltyEarnPer: z.coerce.number().min(1).max(1_000_000).optional(),
   loyaltyPointValue: z.coerce.number().min(0).max(100_000).optional(),
   loyaltyMinRedeem: z.coerce.number().int().min(0).max(1_000_000).optional(),
+  modules: z.object({ phones: z.boolean(), repairs: z.boolean(), wallets: z.boolean(), installments: z.boolean() }).partial().optional(),
 });
 
 const SETTING_LABELS: Record<string, string> = {
@@ -64,6 +66,7 @@ const SETTING_LABELS: Record<string, string> = {
   loyaltyEarnPer: "points earning rate",
   loyaltyPointValue: "point value",
   loyaltyMinRedeem: "minimum points to spend",
+  modules: "features",
 };
 
 export const PUT = handle(async (req) => {
@@ -71,6 +74,8 @@ export const PUT = handle(async (req) => {
   const { fbrToken, ...body } = Body.parse(await req.json());
   const before = (await Tenant.findById(tid).lean()) as Record<string, unknown> | null;
   const update: Record<string, unknown> = { ...body };
+  // Switching one feature keeps the others as they are.
+  if (body.modules) update.modules = { ...((before?.modules as object) ?? {}), ...body.modules };
   // Secret: an empty field means "keep the saved one".
   if (fbrToken) update.fbrToken = fbrToken;
   const saved = await Tenant.findByIdAndUpdate(tid, update, { new: true }).select("-adminNotes").lean();

@@ -1,7 +1,7 @@
 import { Client, ok, eq, section, db, oid, done } from "../lib/harness.mjs";
 
 // ---------- Batch-wise expiry (FEFO) ----------
-const day = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+const day = (n) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi" }).format(new Date(Date.now() + n * 864e5));
 const admin = new Client("admin"), owner = new Client("owner"), other = new Client("other");
 await admin.call("/api/setup", { body: { name: "Admin", username: "admin", password: "admin-pass-123" } });
 await admin.call("/api/admin/tenants", { body: { shopName: "Fresh Mart", shopType: "general", maxUsers: 4, maxBranches: 2, ownerName: "Hamza", username: "hamza", password: "secret1" } });

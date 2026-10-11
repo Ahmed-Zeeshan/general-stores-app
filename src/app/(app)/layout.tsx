@@ -24,6 +24,7 @@ import {
   Receipt,
   Settings as SettingsIcon,
   ShoppingCart,
+  Smartphone,
   Truck,
   Wallet,
   PackagePlus,
@@ -40,19 +41,21 @@ import type { Role } from "@/lib/session";
 import { LangSwitch, useLang, useT } from "@/lib/i18n";
 
 const SHOP: Role[] = ["owner", "manager", "cashier"];
-const NAV: { href: string; label: string; urdu: string; icon: typeof Package; roles: Role[]; multiBranch?: boolean }[] = [
+type ModuleKey = "phones" | "repairs" | "wallets" | "installments";
+const NAV: { href: string; label: string; urdu: string; icon: typeof Package; roles: Role[]; multiBranch?: boolean; module?: ModuleKey; hideFor?: string[] }[] = [
   { href: "/admin", label: "Shops", urdu: "دکانیں", icon: Building2, roles: ["superadmin"] },
   { href: "/", label: "Dashboard", urdu: "ڈیش بورڈ", icon: LayoutDashboard, roles: SHOP },
   { href: "/pos", label: "New Bill", urdu: "نیا بل", icon: ShoppingCart, roles: SHOP },
   { href: "/sales", label: "Sales History", urdu: "فروخت", icon: Receipt, roles: SHOP },
   { href: "/products", label: "Products & Stock", urdu: "اشیاء", icon: Package, roles: SHOP },
   { href: "/customers", label: "Customers Khata", urdu: "کھاتہ", icon: BookOpen, roles: SHOP },
+  { href: "/phones", label: "Phones (IMEI)", urdu: "موبائل فون", icon: Smartphone, roles: SHOP, module: "phones" },
   { href: "/drawer", label: "Cash Drawer", urdu: "کیش دراز", icon: Banknote, roles: SHOP },
   { href: "/udhaar", label: "Udhaar Report", urdu: "ادھار رپورٹ", icon: BellRing, roles: ["owner", "manager"] },
   { href: "/promotions", label: "Offers", urdu: "آفرز", icon: BadgePercent, roles: ["owner", "manager"] },
   { href: "/expiry", label: "Expiry", urdu: "میعاد", icon: CalendarClock, roles: ["owner", "manager"] },
   { href: "/labels", label: "Barcode Labels", urdu: "لیبل", icon: Barcode, roles: ["owner", "manager"] },
-  { href: "/production", label: "Production", urdu: "تیاری", icon: ChefHat, roles: ["owner", "manager"] },
+  { href: "/production", label: "Production", urdu: "تیاری", icon: ChefHat, roles: ["owner", "manager"], hideFor: ["mobile"] },
   { href: "/transfers", label: "Stock Transfer", urdu: "منتقلی", icon: ArrowLeftRight, roles: ["owner", "manager"], multiBranch: true },
   { href: "/purchases", label: "Purchases", urdu: "خریداری", icon: PackagePlus, roles: ["owner", "manager"] },
   { href: "/suppliers", label: "Suppliers", urdu: "سپلائرز", icon: Truck, roles: ["owner", "manager"] },
@@ -117,7 +120,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (!data) return <Spinner className="min-h-screen" />;
   const multiBranch = (data.branches?.length ?? 0) > 1;
-  const nav = NAV.filter((n) => n.roles.includes(data.user.role) && (!n.multiBranch || multiBranch));
+  const modules = data.settings?.modules ?? {};
+  const nav = NAV.filter(
+    (n) =>
+      n.roles.includes(data.user.role) &&
+      (!n.multiBranch || multiBranch) &&
+      (!n.module || modules[n.module]) &&
+      !(n.hideFor && data.settings && n.hideFor.includes(data.settings.shopType)),
+  );
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
   const isAdmin = data.user.role === "superadmin";
 

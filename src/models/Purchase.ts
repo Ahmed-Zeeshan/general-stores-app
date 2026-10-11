@@ -15,6 +15,8 @@ const PurchaseItemSchema = new Schema(
     pack: { type: new Schema({ name: String, size: Number, count: Number, cost: Number }, { _id: false }), default: undefined },
     expiryDate: { type: Date },
     batchNo: { type: String, trim: true },
+    /** Phones bought on this line (products with "track IMEI"). */
+    serials: { type: [{ device: { type: Schema.Types.ObjectId, ref: "Device" }, imei: String, returned: { type: Boolean, default: false }, _id: false }], default: undefined },
   },
   { _id: false },
 );

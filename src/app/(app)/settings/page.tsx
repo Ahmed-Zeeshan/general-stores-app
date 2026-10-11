@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Database, Download, FileUp, Gift, KeyRound, Printer, MapPin, MessageCircle, Pencil, Plus, RefreshCw, Save, ShieldCheck, Store, UserCog, Users } from "lucide-react";
+import { Database, Download, FileUp, Gift, KeyRound, LayoutGrid, Printer, MapPin, MessageCircle, Pencil, Plus, RefreshCw, Save, ShieldCheck, Store, UserCog, Users } from "lucide-react";
+import { MODULE_INFO, MODULES, SHOP_TYPE_LABELS, SHOP_TYPES } from "@/lib/constants";
 import { Badge, Button, Card, Field, Input, Modal, PageHeader, Select, Spinner, Table, Td, Th, Textarea } from "@/components/ui";
 import { useSession, type ShopSettings } from "@/components/session";
 import { useToast } from "@/components/toast";
@@ -86,6 +87,7 @@ export default function SettingsPage() {
           loyaltyEarnPer: Number(form.loyaltyEarnPer) || 100,
           loyaltyPointValue: Number(form.loyaltyPointValue) || 0,
           loyaltyMinRedeem: Number(form.loyaltyMinRedeem) || 0,
+          modules: Object.fromEntries(MODULES.map((m) => [m, !!form.modules?.[m]])),
         },
       });
       toast.success("Settings saved");
@@ -110,10 +112,9 @@ export default function SettingsPage() {
             <Field label="Shop name"><Input required value={form.shopName} onChange={set("shopName")} /></Field>
             <Field label="Shop type">
               <Select value={form.shopType} onChange={set("shopType")}>
-                <option value="karyana">Karyana Store</option>
-                <option value="general">General Store</option>
-                <option value="bakery">Bakery</option>
-                <option value="other">Other</option>
+                {SHOP_TYPES.map((t) => (
+                  <option key={t} value={t}>{SHOP_TYPE_LABELS[t]}</option>
+                ))}
               </Select>
             </Field>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -180,6 +181,21 @@ export default function SettingsPage() {
             </div>
           </Card>
           <PrintingCard />
+          <Card className="p-6">
+            <h2 className="mb-1 flex items-center gap-2 font-bold text-slate-900"><LayoutGrid className="h-5 w-5 text-brand-600" /> Features</h2>
+            <p className="mb-4 text-sm text-slate-500">Switch on what your shop needs. Mobile phone shops usually use all four; a karyana store can switch on just Easyload &amp; wallets.</p>
+            <div className="space-y-3">
+              {MODULES.map((m) => (
+                <Toggle
+                  key={m}
+                  checked={!!form.modules?.[m]}
+                  onChange={(v) => setForm({ ...form, modules: { ...form.modules, [m]: v } })}
+                  title={MODULE_INFO[m].label}
+                  text={MODULE_INFO[m].hint}
+                />
+              ))}
+            </div>
+          </Card>
           <Card className="p-6">
             <h2 className="mb-5 flex items-center gap-2 font-bold text-slate-900"><Gift className="h-5 w-5 text-violet-600" /> Loyalty points</h2>
             <div className="space-y-4">

@@ -28,6 +28,7 @@ export type ShopSettings = {
   loyaltyEarnPer?: number;
   loyaltyPointValue?: number;
   loyaltyMinRedeem?: number;
+  modules?: Partial<Record<"phones" | "repairs" | "wallets" | "installments", boolean>>;
 };
 
 export type BranchInfo = { _id: string; name: string; address?: string; phone?: string };
