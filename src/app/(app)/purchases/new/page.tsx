@@ -2,9 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, PackagePlus, Search, Trash2, Truck, X } from "lucide-react";
+import { ArrowLeft, PackagePlus, Search, Smartphone, Trash2, Truck, X } from "lucide-react";
 import Link from "next/link";
-import { Button, Card, Field, Input, PageHeader, Table, Td, Th } from "@/components/ui";
+import { Button, Card, Field, Input, Modal, PageHeader, Select, Table, Td, Th } from "@/components/ui";
+import { ImeiInput } from "@/components/devices";
+import { CONDITION_LABELS, PTA_LABELS, type ImeiLine } from "@/lib/imei";
+import { DEVICE_CONDITIONS, PTA_STATUS } from "@/lib/constants";
 import { CustomerPicker, type PartyLite } from "@/components/customer-picker";
 import { useToast } from "@/components/toast";
 import { CameraButton, CameraScanner, beep, useBarcodeScanner } from "@/components/barcode-scanner";
@@ -12,9 +15,21 @@ import { api, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, round2 } from "@/lib/money";
 
 type Pack = { name: string; size: number; barcode?: string };
-type Product = { _id: string; name: string; barcode?: string; unit: string; costPrice: number; salePrice: number; stock: number; packs?: Pack[]; trackExpiry?: boolean; shelfLifeDays?: number };
+type Product = { _id: string; name: string; barcode?: string; unit: string; costPrice: number; salePrice: number; stock: number; packs?: Pack[]; trackExpiry?: boolean; shelfLifeDays?: number; trackSerial?: boolean };
 /** `pack` = "" for loose units; then qty and cost are per pack. */
-type Line = { product: Product; qty: string; cost: string; salePrice: string; pack: string; expiry?: string; batchNo?: string };
+type Line = {
+  product: Product;
+  qty: string;
+  cost: string;
+  salePrice: string;
+  pack: string;
+  expiry?: string;
+  batchNo?: string;
+  /** Phones (track IMEI): the IMEIs typed or scanned, and details for all of them. */
+  imeiText?: string;
+  imeis?: ImeiLine[];
+  phone?: { color: string; storage: string; condition: string; pta: string };
+};
 
 export default function NewPurchasePage() {
   const router = useRouter();
@@ -27,6 +42,7 @@ export default function NewPurchasePage() {
   const [paid, setPaid] = useState("");
   const [invoice, setInvoice] = useState("");
   const [saving, setSaving] = useState(false);
+  const [imeiFor, setImeiFor] = useState<string | null>(null);
 
   useEffect(() => {
     api<Product[]>("/api/products?limit=2000").then(setProducts).catch(() => {});
@@ -41,7 +57,18 @@ export default function NewPurchasePage() {
   const packCost = (p: Product, pack?: Pack) => (pack ? round2(p.costPrice * pack.size) : p.costPrice);
   function add(p: Product, pack?: Pack) {
     if (!lines.find((l) => l.product._id === p._id)) {
-      setLines([...lines, { product: p, qty: "", cost: String(packCost(p, pack) || ""), salePrice: String(p.salePrice || ""), pack: pack?.name ?? "" }]);
+      setLines([
+        ...lines,
+        {
+          product: p,
+          qty: "",
+          cost: String(packCost(p, pack) || ""),
+          salePrice: String(p.salePrice || ""),
+          pack: pack?.name ?? "",
+          ...(p.trackSerial ? { imeiText: "", imeis: [], phone: { color: "", storage: "", condition: "new", pta: "approved" } } : {}),
+        },
+      ]);
+      if (p.trackSerial) setImeiFor(p._id);
     }
     setQ("");
   }
@@ -63,12 +90,16 @@ export default function NewPurchasePage() {
     } else toast.error(`No product has barcode ${code}.`);
   }
   const [cameraOpen, setCameraOpen] = useState(false);
-  useBarcodeScanner(addByCode, !cameraOpen);
+  useBarcodeScanner(addByCode, !cameraOpen && !imeiFor);
 
   const update = (id: string, patch: Partial<Line>) => setLines(lines.map((l) => (l.product._id === id ? { ...l, ...patch } : l)));
   const total = round2(lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.cost) || 0), 0));
 
   async function save() {
+    const noImei = lines.find((l) => l.product.trackSerial && !l.imeis?.length);
+    if (noImei) return toast.error(`Scan or type the IMEIs of ${noImei.product.name}.`);
+    const badImei = lines.find((l) => l.imeis?.some((x) => x.blocking));
+    if (badImei) return toast.error(`Fix the IMEIs of ${badImei.product.name} (marked in red).`);
     if (lines.some((l) => !(Number(l.qty) > 0))) return toast.error("Enter quantity for every item.");
     const noDate = lines.find((l) => l.product.trackExpiry && !l.expiry && !l.product.shelfLifeDays);
     if (noDate) return toast.error(`Enter the expiry date for ${noDate.product.name}.`);
@@ -86,6 +117,18 @@ export default function NewPurchasePage() {
             salePrice: Number(l.salePrice) || undefined,
             ...(l.pack ? { pack: l.pack } : {}),
             ...(l.product.trackExpiry ? { expiryDate: l.expiry || undefined, batchNo: l.batchNo || undefined } : {}),
+            ...(l.imeis?.length
+              ? {
+                  units: l.imeis.map((x) => ({
+                    imei: x.imei,
+                    imei2: x.imei2,
+                    color: l.phone?.color || undefined,
+                    storage: l.phone?.storage || undefined,
+                    condition: l.phone?.condition,
+                    pta: l.phone?.pta,
+                  })),
+                }
+              : {}),
           })),
         },
       });
@@ -171,6 +214,15 @@ export default function NewPurchasePage() {
                         ) : (
                           <div className="text-xs text-slate-400">per {UNIT_LABELS[l.product.unit]}</div>
                         )}
+                        {l.product.trackSerial && (
+                          <button
+                            type="button"
+                            onClick={() => setImeiFor(l.product._id)}
+                            className={`mt-1 inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-semibold ${l.imeis?.length ? "border-brand-300 bg-brand-50 text-brand-800" : "border-amber-300 bg-amber-50 text-amber-800"}`}
+                          >
+                            <Smartphone className="h-3.5 w-3.5" /> {l.imeis?.length ? `${l.imeis.length} IMEI${l.imeis.length === 1 ? "" : "s"} — change` : "Enter IMEIs"}
+                          </button>
+                        )}
                         {l.product.trackExpiry && (
                           <div className="mt-1 flex flex-wrap gap-1">
                             <input
@@ -196,7 +248,13 @@ export default function NewPurchasePage() {
                           </div>
                         )}
                       </Td>
-                      <Td><Input type="number" inputMode="decimal" min="0" step="any" value={l.qty} onChange={(e) => update(l.product._id, { qty: e.target.value })} className="h-9 w-20" /></Td>
+                      <Td>
+                        {l.product.trackSerial ? (
+                          <span className="inline-block w-20 text-center font-semibold" title="Number of IMEIs entered">{l.imeis?.length ?? 0}</span>
+                        ) : (
+                          <Input type="number" inputMode="decimal" min="0" step="any" value={l.qty} onChange={(e) => update(l.product._id, { qty: e.target.value })} className="h-9 w-20" aria-label={`Quantity of ${l.product.name}`} />
+                        )}
+                      </Td>
                       <Td><Input type="number" inputMode="decimal" min="0" step="any" value={l.cost} onChange={(e) => update(l.product._id, { cost: e.target.value })} className="h-9 w-24" /></Td>
                       <Td><Input type="number" inputMode="decimal" min="0" step="any" value={l.salePrice} onChange={(e) => update(l.product._id, { salePrice: e.target.value })} className="h-9 w-24" /></Td>
                       <Td className="text-right font-semibold">{formatPKR((Number(l.qty) || 0) * (Number(l.cost) || 0))}</Td>
@@ -246,6 +304,75 @@ export default function NewPurchasePage() {
 
       <CustomerPicker type="supplier" open={pick} onClose={() => setPick(false)} onPick={(p) => { setSupplier(p); setPick(false); }} />
       <CameraScanner open={cameraOpen} onClose={() => setCameraOpen(false)} onScan={addByCode} continuous title="Scan items" />
+      <ImeiModal
+        line={lines.find((l) => l.product._id === imeiFor) ?? null}
+        onClose={() => setImeiFor(null)}
+        onSave={(patch) => {
+          if (imeiFor) update(imeiFor, patch);
+          setImeiFor(null);
+        }}
+      />
     </div>
+  );
+}
+
+/** IMEIs of the phones on one purchase line, with colour / storage / condition / PTA for all of them. */
+function ImeiModal({ line, onClose, onSave }: { line: Line | null; onClose: () => void; onSave: (patch: Partial<Line>) => void }) {
+  const [text, setText] = useState("");
+  const [imeis, setImeis] = useState<ImeiLine[]>([]);
+  const [phone, setPhone] = useState({ color: "", storage: "", condition: "new", pta: "approved" });
+  useEffect(() => {
+    if (!line) return;
+    setText(line.imeiText ?? "");
+    setImeis(line.imeis ?? []);
+    setPhone(line.phone ?? { color: "", storage: "", condition: "new", pta: "approved" });
+  }, [line]);
+  return (
+    <Modal
+      open={!!line}
+      onClose={onClose}
+      title={line ? `IMEIs — ${line.product.name}` : "IMEIs"}
+      size="lg"
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button disabled={imeis.some((x) => x.blocking)} onClick={() => onSave({ imeiText: text, imeis, qty: String(imeis.length), phone })}>
+            Use {imeis.length} phone{imeis.length === 1 ? "" : "s"}
+          </Button>
+        </>
+      }
+    >
+      <ImeiInput
+        value={text}
+        autoFocus
+        onChange={(t, l) => {
+          setText(t);
+          setImeis(l);
+        }}
+      />
+      <div className="mt-4 grid gap-3 sm:grid-cols-4">
+        <Field label="Colour">
+          <Input value={phone.color} onChange={(e) => setPhone({ ...phone, color: e.target.value })} placeholder="Black" aria-label="Colour" />
+        </Field>
+        <Field label="Storage">
+          <Input value={phone.storage} onChange={(e) => setPhone({ ...phone, storage: e.target.value })} placeholder="8/256GB" aria-label="Storage" />
+        </Field>
+        <Field label="Condition">
+          <Select value={phone.condition} onChange={(e) => setPhone({ ...phone, condition: e.target.value })} aria-label="Condition">
+            {DEVICE_CONDITIONS.map((c) => (
+              <option key={c} value={c}>{CONDITION_LABELS[c]}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="PTA">
+          <Select value={phone.pta} onChange={(e) => setPhone({ ...phone, pta: e.target.value })} aria-label="PTA status">
+            {PTA_STATUS.map((c) => (
+              <option key={c} value={c}>{PTA_LABELS[c]}</option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+      <p className="mt-2 text-xs text-slate-500">These details apply to all phones on this line. Different colours or storage? Correct a phone later on the Phones page.</p>
+    </Modal>
   );
 }

@@ -11,7 +11,19 @@ import { formatPKR, formatQty } from "@/lib/money";
 type Sale = {
   invoiceNo: string;
   createdAt: string;
-  items: { name: string; qty: number; unit: string; price: number; discount: number; total: number; pack?: { name: string; size: number; count: number; price: number }; promo?: { name: string; amount: number } }[];
+  items: {
+    name: string;
+    qty: number;
+    unit: string;
+    price: number;
+    discount: number;
+    total: number;
+    pack?: { name: string; size: number; count: number; price: number };
+    promo?: { name: string; amount: number };
+    serials?: { imei: string; imei2?: string; returned?: boolean }[];
+    warrantyMonths?: number;
+    warrantyUntil?: string;
+  }[];
   promo?: { name: string; amount: number };
   pointsRedeemed?: number;
   pointsValue?: number;
@@ -135,6 +147,18 @@ function Receipt({ id }: { id: string }) {
               <span className="w-20 text-right">{formatPKR(i.total, { symbol: false })}</span>
             </div>
             {i.promo && <div className="pl-2 text-[11px]">* {i.promo.name}: -{formatPKR(i.promo.amount, { symbol: false })}</div>}
+            {i.serials?.map((x) => (
+              <div key={x.imei} className="pl-2 text-[11px]">
+                IMEI: {x.imei}
+                {x.imei2 && ` / ${x.imei2}`}
+                {x.returned && " (returned)"}
+              </div>
+            ))}
+            {i.warrantyUntil && (
+              <div className="pl-2 text-[11px]">
+                Warranty {i.warrantyMonths} months, till {formatDate(i.warrantyUntil)}
+              </div>
+            )}
           </div>
         ))}
         <Divider />

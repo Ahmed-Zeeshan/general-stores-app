@@ -15,7 +15,17 @@ export type ReturnableSale = {
   customerName?: string;
   paymentMethod: string;
   payments?: { method: string; amount: number }[];
-  items: { name: string; unit: string; qty: number; price: number; total: number; returnedQty?: number; pack?: { name: string; size: number; count: number } }[];
+  items: {
+    name: string;
+    unit: string;
+    qty: number;
+    price: number;
+    total: number;
+    returnedQty?: number;
+    pack?: { name: string; size: number; count: number };
+    /** Phones sold on this line (IMEI). */
+    serials?: { device: string; imei: string; imei2?: string; returned?: boolean }[];
+  }[];
   subtotal: number;
   discount: number;
   tax: number;
@@ -37,6 +47,8 @@ export function ReturnModal({ sale: given, onClose, onDone }: { sale: Returnable
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   const [qty, setQty] = useState<Record<number, string>>({});
+  // Phones: which IMEIs come back, per bill line.
+  const [phones, setPhones] = useState<Record<number, string[]>>({});
   const [method, setMethod] = useState("cash");
   const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
@@ -47,6 +59,7 @@ export function ReturnModal({ sale: given, onClose, onDone }: { sale: Returnable
     setSale(null);
     if (!given) return;
     setQty({});
+    setPhones({});
     setReason("");
     setNote("");
     setDone(null);
@@ -71,10 +84,10 @@ export function ReturnModal({ sale: given, onClose, onDone }: { sale: Returnable
     if (!sale) return [];
     return sale.items.map((it, index) => {
       const left = round3(it.qty - (it.returnedQty ?? 0));
-      const q = Math.min(left, Math.max(0, Number(qty[index]) || 0));
+      const q = it.serials?.length ? (phones[index] ?? []).length : Math.min(left, Math.max(0, Number(qty[index]) || 0));
       return { ...it, index, left, q, value: it.qty ? (it.total * q) / it.qty : 0 };
     });
-  }, [sale, qty]);
+  }, [sale, qty, phones]);
 
   if (!given) return null;
   if (!sale) {
@@ -102,7 +115,12 @@ export function ReturnModal({ sale: given, onClose, onDone }: { sale: Returnable
   const refund = round2(value - creditReduced);
 
   const setLine = (i: number, v: number, left: number) => setQty({ ...qty, [i]: String(Math.max(0, Math.min(left, round3(v)))) });
-  const selectAll = () => setQty(Object.fromEntries(lines.map((l) => [l.index, String(l.left)])));
+  const selectAll = () => {
+    setQty(Object.fromEntries(lines.map((l) => [l.index, String(l.left)])));
+    setPhones(Object.fromEntries(lines.filter((l) => l.serials?.length).map((l) => [l.index, l.serials!.filter((x) => !x.returned).map((x) => x.device)])));
+  };
+  const togglePhone = (i: number, device: string) =>
+    setPhones((p) => ({ ...p, [i]: (p[i] ?? []).includes(device) ? (p[i] ?? []).filter((x) => x !== device) : [...(p[i] ?? []), device] }));
 
   async function submit() {
     if (!sale) return;
@@ -110,7 +128,7 @@ export function ReturnModal({ sale: given, onClose, onDone }: { sale: Returnable
     try {
       const r = await api<{ return: NonNullable<typeof done> }>(`/api/sales/${sale._id}/return`, {
         body: {
-          items: chosen.map((l) => ({ index: l.index, qty: l.q })),
+          items: chosen.map((l) => ({ index: l.index, qty: l.q, ...(l.serials?.length ? { serials: phones[l.index] } : {}) })),
           refundMethod: refund > 0 ? method : undefined,
           reason: [reason, note].filter(Boolean).join(" — ") || undefined,
         },
@@ -187,7 +205,23 @@ export function ReturnModal({ sale: given, onClose, onDone }: { sale: Returnable
                 {(l.returnedQty ?? 0) > 0 && <span className="text-rose-600"> · {formatQty(l.returnedQty!)} already returned</span>}
               </div>
             </div>
-            {l.left > 0 ? (
+            {l.left > 0 && l.serials?.length ? (
+              <div className="flex flex-col gap-1">
+                {l.serials.map((x) => (
+                  <label key={x.device} className={cn("flex items-center gap-2 font-mono text-xs", x.returned && "text-slate-400 line-through")}>
+                    <input
+                      type="checkbox"
+                      disabled={x.returned}
+                      checked={(phones[l.index] ?? []).includes(x.device)}
+                      onChange={() => togglePhone(l.index, x.device)}
+                      className="h-4 w-4 accent-rose-600"
+                      aria-label={`Return IMEI ${x.imei}`}
+                    />
+                    {x.imei}
+                  </label>
+                ))}
+              </div>
+            ) : l.left > 0 ? (
               <div className="flex items-center rounded-xl border border-slate-200 bg-white">
                 <button type="button" className="flex h-9 w-9 items-center justify-center text-slate-600" onClick={() => setLine(l.index, l.q - 1, l.left)} aria-label="Less">
                   <Minus className="h-4 w-4" />

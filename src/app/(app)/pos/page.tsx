@@ -32,6 +32,8 @@ import { useToast } from "@/components/toast";
 import { useConfirm } from "@/components/confirm";
 import { useLang, useT } from "@/lib/i18n";
 import { ReceivePaymentModal } from "@/components/receive-payment";
+import { DevicePicker, DeviceTags, type DeviceRow } from "@/components/devices";
+import { cleanImei } from "@/lib/imei";
 import { api, LOOSE_UNITS, NetworkError, UNIT_LABELS } from "@/lib/client";
 import {
   addToOutbox,
@@ -66,11 +68,13 @@ type Product = {
   wholesalePrice?: number;
   packs?: PackLike[];
   stock: number;
+  trackSerial?: boolean;
+  warrantyMonths?: number;
   category?: { _id: string; name: string } | null;
 };
 type Category = { _id: string; name: string };
-/** One bill line. `qty` counts packs when `pack` is set; `custom` = price changed by hand. */
-type CartItem = { key: string; product: Product; qty: number; price: number; discount: number; pack?: PackLike | null; custom?: boolean };
+/** One bill line. `qty` counts packs when `pack` is set; `custom` = price changed by hand; `device` = the phone sold (IMEI). */
+type CartItem = { key: string; product: Product; qty: number; price: number; discount: number; pack?: PackLike | null; custom?: boolean; device?: DeviceRow };
 const lineKey = (p: Product, pack?: PackLike | null) => (pack ? `${p._id}:${pack.name}` : p._id);
 type Held = HeldBill<CartItem, PartyLite>;
 
@@ -112,6 +116,7 @@ export default function PosPage() {
   const [billDiscount, setBillDiscount] = useState("");
   const [pickCustomer, setPickCustomer] = useState(false);
   const [looseFor, setLooseFor] = useState<Product | null>(null);
+  const [phoneFor, setPhoneFor] = useState<Product | null>(null);
   const [payOpen, setPayOpen] = useState(false);
   const [done, setDone] = useState<{ _id: string; invoiceNo: string; total: number; change: number; creditAmount?: number; printed?: boolean } | null>(null);
   const [autoPrint, setAutoPrint] = useState(false);
@@ -226,7 +231,7 @@ export default function PosPage() {
   }
   // A wholesale customer gets wholesale prices (lines whose price was typed by hand stay as they are).
   useEffect(() => {
-    setCart((c) => c.map((i) => (i.custom ? i : { ...i, price: sellPrice(i.product, i.pack, wholesale) })));
+    setCart((c) => c.map((i) => (i.custom || i.device?.price ? i : { ...i, price: sellPrice(i.product, i.pack, wholesale) })));
   }, [wholesale]);
 
   /** Switch a line between the loose unit and a pack size (merging with an existing line). */
@@ -251,9 +256,39 @@ export default function PosPage() {
     return null;
   }
 
+  /** A phone chosen by IMEI: one line per phone. */
+  function addPhone(p: Product, d: DeviceRow) {
+    const key = `dev:${d._id}`;
+    if (cart.some((i) => i.key === key)) {
+      toast.error(`IMEI ${d.imei} is already on this bill.`);
+      return;
+    }
+    beep();
+    setCart((c) => [...c, { key, product: p, qty: 1, price: d.price ?? sellPrice(p, null, wholesale), discount: 0, device: d }]);
+  }
+
   function onPick(p: Product) {
-    if (LOOSE_UNITS.has(p.unit)) setLooseFor(p);
+    if (p.trackSerial) setPhoneFor(p);
+    else if (LOOSE_UNITS.has(p.unit)) setLooseFor(p);
     else addToCart(p);
+  }
+
+  /** A scanned code that is not a product barcode may be a phone's IMEI. */
+  async function addByImei(code: string) {
+    const imei = cleanImei(code);
+    if (imei.length < 8) return false;
+    try {
+      const found = await api<DeviceRow[]>(`/api/devices?q=${encodeURIComponent(imei)}`);
+      const d = found.find((x) => x.imei === imei || x.imei2 === imei);
+      const p = d && products?.find((x) => x._id === d.product);
+      if (d && p) {
+        addPhone(p, d);
+        return true;
+      }
+    } catch {
+      /* offline: not a phone we can check */
+    }
+    return false;
   }
 
   /** A barcode from a USB scanner or the camera: add the matching product to the bill. */
@@ -266,11 +301,14 @@ export default function PosPage() {
       else onPick(hit.p);
       setQ("");
     } else {
-      toast.error(`No product has barcode ${code}. Add it in Products first.`);
+      addByImei(code).then((found) => {
+        if (found) setQ("");
+        else toast.error(`No product has barcode ${code}, and no phone in stock here has this IMEI.`);
+      });
     }
   }
   // Scanner works anywhere on this screen, except while a pop-up window is open.
-  useBarcodeScanner(addByCode, !payOpen && !looseFor && !pickCustomer && !done && !offlineDone && !cameraOpen && !receiveOpen && !heldOpen);
+  useBarcodeScanner(addByCode, !payOpen && !looseFor && !phoneFor && !pickCustomer && !done && !offlineDone && !cameraOpen && !receiveOpen && !heldOpen);
 
   function onSearchEnter(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key !== "Enter") return;
@@ -289,7 +327,10 @@ export default function PosPage() {
       onPick(pick);
       setQ("");
     } else if (filtered.length === 0) {
-      toast.error(`No product found for "${term}"`);
+      addByImei(term).then((found) => {
+        if (found) setQ("");
+        else toast.error(`No product found for "${term}"`);
+      });
     }
   }
 
@@ -486,7 +527,8 @@ export default function PosPage() {
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
               {filtered.slice(0, 200).map((p) => {
-                const inCart = cart.find((i) => i.product._id === p._id);
+                const inCartQty = round2(cart.filter((i) => i.product._id === p._id).reduce((a, i) => a + i.qty, 0));
+                const inCart = inCartQty > 0 ? { qty: inCartQty } : null;
                 return (
                   <button
                     key={p._id}
@@ -587,7 +629,13 @@ export default function PosPage() {
                           {wholesale && !item.custom && <Badge color="violet">{t("Wholesale")}</Badge>}
                           {offer && <Badge color="green">{offer.name} −{formatPKR(offer.discount)}</Badge>}
                         </div>
-                        {(item.product.packs?.length ?? 0) > 0 && (
+                        {item.device && (
+                          <div className="mt-1 space-y-1">
+                            <div className="font-mono text-xs text-slate-600">IMEI {item.device.imei}</div>
+                            <DeviceTags d={item.device} />
+                          </div>
+                        )}
+                        {!item.device && (item.product.packs?.length ?? 0) > 0 && (
                           <select
                             value={item.pack?.name ?? ""}
                             onChange={(e) => changeUnit(item, e.target.value)}
@@ -608,6 +656,9 @@ export default function PosPage() {
                       </button>
                     </div>
                     <div className="mt-2 flex items-center justify-between gap-2">
+                      {item.device ? (
+                        <span className="text-xs text-slate-500">{item.product.warrantyMonths ? `${item.product.warrantyMonths} months warranty` : "1 phone"}</span>
+                      ) : (
                       <div className="flex items-center rounded-xl border border-slate-200 bg-white">
                         <button
                           className="flex h-9 w-9 items-center justify-center text-slate-600 hover:text-brand-700"
@@ -633,6 +684,7 @@ export default function PosPage() {
                           <Plus className="h-4 w-4" />
                         </button>
                       </div>
+                      )}
                       {can.manage && (
                         <input
                           type="number"
@@ -710,6 +762,22 @@ export default function PosPage() {
         }}
       />
 
+      <DevicePicker
+        open={!!phoneFor}
+        product={phoneFor}
+        exclude={cart.filter((i) => i.device).map((i) => i.device!._id)}
+        title={phoneFor ? `Which ${phoneFor.name}?` : undefined}
+        onClose={() => {
+          setPhoneFor(null);
+          searchRef.current?.focus();
+        }}
+        onPick={([d]) => {
+          if (phoneFor && d) addPhone(phoneFor, d);
+          setPhoneFor(null);
+          searchRef.current?.focus();
+        }}
+      />
+
       <PaymentModal
         open={payOpen}
         onClose={() => setPayOpen(false)}
@@ -717,7 +785,14 @@ export default function PosPage() {
         customer={customer}
         onChooseCustomer={() => setPickCustomer(true)}
         payload={{
-          items: cart.map((i) => ({ productId: i.product._id, qty: i.qty, ...(i.custom ? { price: i.price } : {}), discount: i.discount, ...(i.pack ? { pack: i.pack.name } : {}) })),
+          items: cart.map((i) => ({
+            productId: i.product._id,
+            qty: i.qty,
+            ...(i.custom ? { price: i.price } : {}),
+            discount: i.discount,
+            ...(i.pack ? { pack: i.pack.name } : {}),
+            ...(i.device ? { serials: [i.device._id] } : {}),
+          })),
           discount: manualDiscount,
           customerId: customer?._id,
           ...(redeemPoints > 0 ? { redeemPoints } : {}),
@@ -1022,7 +1097,10 @@ function PaymentModal({
       onDone(sale);
     } catch (err) {
       if (err instanceof NetworkError) {
-        onOffline({ clientId: clientId.current, soldAt: new Date().toISOString(), payload: body, total, change, status: "pending" });
+        // A phone's IMEI must be checked by the server, so phones are never sold offline.
+        if ((payload.items as { serials?: string[] }[]).some((i) => i.serials?.length)) {
+          toast.error("No connection to the shop server. Phones sold by IMEI need the connection — try again when it is back.");
+        } else onOffline({ clientId: clientId.current, soldAt: new Date().toISOString(), payload: body, total, change, status: "pending" });
       } else toast.error((err as Error).message);
     } finally {
       setSaving(false);

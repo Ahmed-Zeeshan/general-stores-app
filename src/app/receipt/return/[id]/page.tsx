@@ -14,7 +14,7 @@ type Ret = {
   customerName?: string;
   branchName?: string;
   userName?: string;
-  items: { name: string; unit: string; qty: number; total: number }[];
+  items: { name: string; unit: string; qty: number; total: number; serials?: { imei: string }[] }[];
   subtotal: number;
   discount: number;
   tax: number;
@@ -95,11 +95,16 @@ function ReturnReceipt({ id }: { id: string }) {
         {ret.reason && <div>Reason: {ret.reason}</div>}
         <div className="my-2 border-t border-dashed border-black" />
         {ret.items.map((i, idx) => (
-          <div key={idx} className="flex justify-between">
-            <span className="pr-2">
-              {i.name} × {formatQty(i.qty)} {UNIT_LABELS[i.unit] ?? i.unit}
-            </span>
-            <span>{formatPKR(i.total, { symbol: false })}</span>
+          <div key={idx}>
+            <div className="flex justify-between">
+              <span className="pr-2">
+                {i.name} × {formatQty(i.qty)} {UNIT_LABELS[i.unit] ?? i.unit}
+              </span>
+              <span>{formatPKR(i.total, { symbol: false })}</span>
+            </div>
+            {i.serials?.map((x) => (
+              <div key={x.imei} className="pl-2 text-[11px]">IMEI: {x.imei}</div>
+            ))}
           </div>
         ))}
         <div className="my-2 border-t border-dashed border-black" />

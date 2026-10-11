@@ -2,28 +2,11 @@ import { randomUUID } from "node:crypto";
 import type { Types } from "mongoose";
 import { ApiError } from "./api";
 import { Device } from "@/models";
+import { cleanImei } from "./imei";
 
 type Id = string | Types.ObjectId;
 
-/** Spaces and dashes people type or scanners add are ignored; letters are kept (serial numbers). */
-export function cleanImei(raw: string) {
-  return raw.replace(/[\s-]+/g, "").toUpperCase();
-}
-
-/** True when a 15-digit IMEI passes its check digit (other serial numbers are not checked). */
-export function imeiCheckOk(imei: string) {
-  if (!/^\d{15}$/.test(imei)) return true;
-  let sum = 0;
-  for (let i = 0; i < 15; i++) {
-    let d = Number(imei[i]);
-    if (i % 2 === 1) {
-      d *= 2;
-      if (d > 9) d -= 9;
-    }
-    sum += d;
-  }
-  return sum % 10 === 0;
-}
+export { cleanImei, imeiCheckOk } from "./imei";
 
 export type DeviceUnit = {
   imei: string;

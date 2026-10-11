@@ -11,7 +11,7 @@ import { useConfirm } from "@/components/confirm";
 import { api, formatDate, todayISO, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty, round2 } from "@/lib/money";
 
-type Item = { name: string; unit: string; qty: number; cost: number; total: number; returnedQty?: number };
+type Item = { name: string; unit: string; qty: number; cost: number; total: number; returnedQty?: number; serials?: { device: string; imei: string; returned?: boolean }[] };
 type Purchase = {
   _id: string;
   purchaseNo: string;
@@ -203,6 +203,7 @@ function PurchaseModal({ id, onClose, onChanged }: { id: string | null; onClose:
   const [p, setP] = useState<(Purchase & { returns: PReturn[] }) | null>(null);
   const [mode, setMode] = useState<"view" | "return">("view");
   const [qty, setQty] = useState<Record<number, string>>({});
+  const [phones, setPhones] = useState<Record<number, string[]>>({});
   const [settlement, setSettlement] = useState<"khata" | "cash">("khata");
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
@@ -220,6 +221,7 @@ function PurchaseModal({ id, onClose, onChanged }: { id: string | null; onClose:
     setP(null);
     setMode("view");
     setQty({});
+    setPhones({});
     setReason("");
     load();
   }, [load]);
@@ -227,7 +229,7 @@ function PurchaseModal({ id, onClose, onChanged }: { id: string | null; onClose:
   if (!id) return null;
   const lines = (p?.items ?? []).map((it, index) => {
     const left = round3(it.qty - (it.returnedQty ?? 0));
-    const q = Math.min(left, Math.max(0, Number(qty[index]) || 0));
+    const q = it.serials?.length ? (phones[index] ?? []).length : Math.min(left, Math.max(0, Number(qty[index]) || 0));
     return { ...it, index, left, q };
   });
   const chosen = lines.filter((l) => l.q > 0);
@@ -238,10 +240,13 @@ function PurchaseModal({ id, onClose, onChanged }: { id: string | null; onClose:
     if (!p) return;
     setSaving(true);
     try {
-      const r = await api<PReturn>(`/api/purchases/${p._id}/return`, { body: { items: chosen.map((l) => ({ index: l.index, qty: l.q })), settlement, reason: reason || undefined } });
+      const r = await api<PReturn>(`/api/purchases/${p._id}/return`, {
+        body: { items: chosen.map((l) => ({ index: l.index, qty: l.q, ...(l.serials?.length ? { serials: phones[l.index] } : {}) })), settlement, reason: reason || undefined },
+      });
       toast.success(`${r.returnNo} saved — ${formatPKR(r.total)} ${r.settlement === "khata" ? "taken off the supplier's khata" : "cash back from supplier"}`);
       setMode("view");
       setQty({});
+      setPhones({});
       load();
       onChanged();
     } catch (err) {
@@ -333,8 +338,33 @@ function PurchaseModal({ id, onClose, onChanged }: { id: string | null; onClose:
                     {formatQty(l.qty)} {UNIT_LABELS[l.unit] ?? l.unit} × {formatPKR(l.cost)}
                     {(l.returnedQty ?? 0) > 0 && <span className="text-amber-700"> · {formatQty(l.returnedQty!)} returned</span>}
                   </div>
+                  {mode === "view" && l.serials?.length ? (
+                    <div className="mt-0.5 font-mono text-[11px] text-slate-500">
+                      {l.serials.map((x) => (
+                        <span key={x.device} className={cn("mr-2", x.returned && "line-through")}>{x.imei}</span>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
-                {mode === "return" && l.left > 0 ? (
+                {mode === "return" && l.left > 0 && l.serials?.length ? (
+                  <div className="flex flex-col gap-1">
+                    {l.serials.map((x) => (
+                      <label key={x.device} className={cn("flex items-center gap-2 font-mono text-xs", x.returned && "text-slate-400 line-through")}>
+                        <input
+                          type="checkbox"
+                          disabled={x.returned}
+                          checked={(phones[l.index] ?? []).includes(x.device)}
+                          onChange={() =>
+                            setPhones((ph) => ({ ...ph, [l.index]: (ph[l.index] ?? []).includes(x.device) ? (ph[l.index] ?? []).filter((d) => d !== x.device) : [...(ph[l.index] ?? []), x.device] }))
+                          }
+                          className="h-4 w-4 accent-rose-600"
+                          aria-label={`Return IMEI ${x.imei} to supplier`}
+                        />
+                        {x.imei}
+                      </label>
+                    ))}
+                  </div>
+                ) : mode === "return" && l.left > 0 ? (
                   <div className="flex items-center rounded-xl border border-slate-200 bg-white">
                     <button type="button" className="flex h-9 w-9 items-center justify-center text-slate-600" aria-label="Less" onClick={() => setQty({ ...qty, [l.index]: String(Math.max(0, round3(l.q - 1))) })}>
                       <Minus className="h-4 w-4" />

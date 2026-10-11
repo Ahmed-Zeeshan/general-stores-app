@@ -1,16 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeftRight, ArrowRight, Search, Send, Trash2 } from "lucide-react";
+import { ArrowLeftRight, ArrowRight, Search, Send, Smartphone, Trash2 } from "lucide-react";
 import { Button, Card, EmptyState, Field, Input, PageHeader, Select, Spinner, Table, Td, Th } from "@/components/ui";
 import { DateRange } from "@/components/date-range";
 import { useSession } from "@/components/session";
+import { DevicePicker, type DeviceRow } from "@/components/devices";
 import { useToast } from "@/components/toast";
 import { CameraButton, CameraScanner, beep, useBarcodeScanner } from "@/components/barcode-scanner";
 import { api, formatDate, todayISO, UNIT_LABELS } from "@/lib/client";
 import { formatQty } from "@/lib/money";
 
-type Product = { _id: string; name: string; barcode?: string; unit: string; stock: number };
+type Product = { _id: string; name: string; barcode?: string; unit: string; stock: number; trackSerial?: boolean };
 type Transfer = {
   _id: string;
   transferNo: string;
@@ -28,7 +29,9 @@ export default function TransfersPage() {
   const others = (branches ?? []).filter((b) => b._id !== branch?._id);
   const [products, setProducts] = useState<Product[]>([]);
   const [q, setQ] = useState("");
-  const [lines, setLines] = useState<{ product: Product; qty: string }[]>([]);
+  /** `phones` = the phones chosen by IMEI (products tracked by IMEI). */
+  const [lines, setLines] = useState<{ product: Product; qty: string; phones?: DeviceRow[] }[]>([]);
+  const [phonesFor, setPhonesFor] = useState<Product | null>(null);
   const [to, setTo] = useState(others[0]?._id ?? "");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -51,7 +54,8 @@ export default function TransfersPage() {
   }, [q, products]);
 
   function add(p: Product) {
-    if (!lines.find((l) => l.product._id === p._id)) setLines([...lines, { product: p, qty: "" }]);
+    if (!lines.find((l) => l.product._id === p._id)) setLines([...lines, { product: p, qty: "", ...(p.trackSerial ? { phones: [] } : {}) }]);
+    if (p.trackSerial) setPhonesFor(p);
     setQ("");
   }
   /** USB scanner or camera: add the product with this barcode. */
@@ -64,15 +68,17 @@ export default function TransfersPage() {
     } else toast.error(`No product has barcode ${code}.`);
   }
   const [cameraOpen, setCameraOpen] = useState(false);
-  useBarcodeScanner(addByCode, !cameraOpen);
+  useBarcodeScanner(addByCode, !cameraOpen && !phonesFor);
 
 
   async function send() {
-    const bad = lines.find((l) => !(Number(l.qty) > 0) || Number(l.qty) > l.product.stock);
+    const noPhones = lines.find((l) => l.product.trackSerial && !l.phones?.length);
+    if (noPhones) return toast.error(`Choose which ${noPhones.product.name} phones to send.`);
+    const bad = lines.find((l) => !l.product.trackSerial && (!(Number(l.qty) > 0) || Number(l.qty) > l.product.stock));
     if (bad) return toast.error(`Check the quantity of ${bad.product.name} (you have ${formatQty(bad.product.stock)}).`);
     setSaving(true);
     try {
-      await api("/api/transfers", { body: { toBranch: to, note, items: lines.map((l) => ({ productId: l.product._id, qty: Number(l.qty) })) } });
+      await api("/api/transfers", { body: { toBranch: to, note, items: lines.map((l) => (l.phones ? { productId: l.product._id, qty: l.phones.length, serials: l.phones.map((d) => d._id) } : { productId: l.product._id, qty: Number(l.qty) })) } });
       toast.success(`Stock sent to ${others.find((b) => b._id === to)?.name}`);
       setLines([]);
       setNote("");
@@ -145,15 +151,23 @@ export default function TransfersPage() {
                       <Td className="font-semibold">{l.product.name}</Td>
                       <Td className="text-right text-slate-500">{formatQty(l.product.stock)} {UNIT_LABELS[l.product.unit]}</Td>
                       <Td>
-                        <Input
-                          type="number"
-                          inputMode="decimal"
-                          min="0"
-                          step="any"
-                          value={l.qty}
-                          onChange={(e) => setLines(lines.map((x) => (x === l ? { ...x, qty: e.target.value } : x)))}
-                          className="h-9 w-24"
-                        />
+                        {l.phones ? (
+                          <button type="button" onClick={() => setPhonesFor(l.product)} className="inline-flex items-center gap-1 rounded-lg border border-brand-300 bg-brand-50 px-2 py-1 text-xs font-semibold text-brand-800">
+                            <Smartphone className="h-3.5 w-3.5" /> {l.phones.length ? `${l.phones.length} phone${l.phones.length === 1 ? "" : "s"} — change` : "Choose phones"}
+                          </button>
+                        ) : (
+                          <Input
+                            type="number"
+                            inputMode="decimal"
+                            min="0"
+                            step="any"
+                            value={l.qty}
+                            onChange={(e) => setLines(lines.map((x) => (x === l ? { ...x, qty: e.target.value } : x)))}
+                            className="h-9 w-24"
+                            aria-label={`Quantity of ${l.product.name} to send`}
+                          />
+                        )}
+                        {l.phones && l.phones.length > 0 && <div className="mt-1 font-mono text-[11px] text-slate-500">{l.phones.map((d) => d.imei).join(", ")}</div>}
                       </Td>
                       <Td>
                         <button onClick={() => setLines(lines.filter((x) => x !== l))} className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label="Remove">
@@ -224,6 +238,17 @@ export default function TransfersPage() {
         )}
       </Card>
       <CameraScanner open={cameraOpen} onClose={() => setCameraOpen(false)} onScan={addByCode} continuous title="Scan items" />
+      <DevicePicker
+        open={!!phonesFor}
+        product={phonesFor}
+        multiple
+        title={phonesFor ? `Which ${phonesFor.name} to send?` : undefined}
+        onClose={() => setPhonesFor(null)}
+        onPick={(picked) => {
+          setLines((ls) => ls.map((l) => (l.product._id === phonesFor?._id ? { ...l, phones: picked } : l)));
+          setPhonesFor(null);
+        }}
+      />
     </div>
   );
 }
