@@ -1,6 +1,6 @@
 /** Activity log actions grouped for filtering, with plain labels (shared by the API and the page). */
 export const ACTIVITY_GROUPS: Record<string, string[]> = {
-  sales: ["sale.price", "sale.discount", "sale.return"],
+  sales: ["sale.price", "sale.discount", "sale.return", "repair.create", "repair.deliver", "repair.cancel", "repair.refund", "repair.discount"],
   money: ["payment.receive", "payment.supplier", "payment.cancel", "khata.charge", "khata.opening", "party.update", "expense.add", "expense.delete"],
   stock: ["stock.adjust", "stock.wastage", "stock.writeoff", "stock.transfer", "product.price", "product.remove", "product.import", "purchase.create", "purchase.return", "purchase.cancel", "device.add", "device.update", "device.remove", "used.buy", "used.cancel"],
   drawer: ["drawer.open", "drawer.in", "drawer.out", "drawer.close"],
@@ -9,7 +9,7 @@ export const ACTIVITY_GROUPS: Record<string, string[]> = {
 };
 
 export const GROUP_LABELS: Record<string, string> = {
-  sales: "Bills & returns",
+  sales: "Bills, returns & repairs",
   money: "Money & khata",
   stock: "Stock & prices",
   drawer: "Cash drawer",
@@ -21,6 +21,11 @@ export const ACTION_LABELS: Record<string, string> = {
   "sale.price": "Price changed on bill",
   "sale.discount": "Discount on bill",
   "sale.return": "Bill return",
+  "repair.create": "Repair booked",
+  "repair.deliver": "Repair delivered",
+  "repair.cancel": "Repair returned unrepaired",
+  "repair.refund": "Repair money given back",
+  "repair.discount": "Repair discount",
   "payment.receive": "Udhaar received",
   "payment.supplier": "Supplier paid",
   "payment.cancel": "Payment cancelled",

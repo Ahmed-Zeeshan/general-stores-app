@@ -50,3 +50,17 @@ export const DEFAULT_MODULES: Record<ShopType, ModuleKey[]> = {
 /** Condition and PTA status of a phone. */
 export const DEVICE_CONDITIONS = ["new", "used", "refurbished"] as const;
 export const PTA_STATUS = ["approved", "non_pta", "unknown"] as const;
+
+/** Repair job steps (in order) and their labels. */
+export const REPAIR_STATUSES = ["received", "checking", "waiting_parts", "repairing", "ready", "delivered", "cancelled"] as const;
+export type RepairStatus = (typeof REPAIR_STATUSES)[number];
+export const REPAIR_STATUS_LABELS: Record<RepairStatus, string> = {
+  received: "Received",
+  checking: "Checking",
+  waiting_parts: "Waiting for parts",
+  repairing: "Repairing",
+  ready: "Ready to collect",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+};
+export const REPAIR_ACCESSORIES = ["SIM", "Memory card", "Back cover", "Charger", "Battery", "Box"];

@@ -1,7 +1,7 @@
 import type { Types } from "mongoose";
 import { round2 } from "./money";
 import { khataPaymentsPipeline, PAYMENTS_EXPR } from "./report-agg";
-import { Expense, LedgerEntry, Purchase, PurchaseReturn, Sale, SaleReturn, UsedPurchase } from "@/models";
+import { Expense, LedgerEntry, Purchase, PurchaseReturn, Repair, Sale, SaleReturn, UsedPurchase } from "@/models";
 
 type Money = { method: string; total: number; count: number };
 
@@ -24,6 +24,8 @@ export type ShiftSummary = {
   supplierCashBack: number;
   /** Used phones bought from customers, by how they were paid. */
   usedPhonesByMethod: Money[];
+  /** Repair money taken (advances and payments, less money given back), by method. */
+  repairsByMethod: Money[];
   expensesCash: number;
   expensesOther: number;
   cashIn: number;
@@ -46,7 +48,7 @@ export async function shiftSummary(
   to: Date,
 ): Promise<ShiftSummary> {
   const match = { tenant: tid, branch: shift.branch, createdAt: { $gte: shift.openedAt, $lte: to } };
-  const [sales, salesByMethod, returns, refunds, collected, supplierKhata, purchases, expenses, cashBack, usedBuys] = await Promise.all([
+  const [sales, salesByMethod, returns, refunds, collected, supplierKhata, purchases, expenses, cashBack, usedBuys, repairPays] = await Promise.all([
     Sale.aggregate([{ $match: match }, { $group: { _id: null, bills: { $sum: 1 }, total: { $sum: "$total" }, discount: { $sum: "$discount" }, tax: { $sum: "$tax" } } }]),
     Sale.aggregate([
       { $match: match },
@@ -64,6 +66,12 @@ export async function shiftSummary(
     Expense.aggregate([{ $match: match }, { $group: { _id: { $ifNull: ["$method", "cash"] }, total: { $sum: "$amount" } } }]),
     PurchaseReturn.aggregate([{ $match: { ...match, settlement: "cash" } }, { $group: { _id: null, total: { $sum: "$total" } } }]),
     UsedPurchase.aggregate([{ $match: { ...match, status: "completed" } }, { $group: { _id: "$method", total: { $sum: "$price" }, count: { $sum: 1 } } }]),
+    Repair.aggregate([
+      { $match: { tenant: tid, branch: shift.branch, "payments.at": { $gte: shift.openedAt, $lte: to } } },
+      { $unwind: "$payments" },
+      { $match: { "payments.at": { $gte: shift.openedAt, $lte: to } } },
+      { $group: { _id: "$payments.method", total: { $sum: "$payments.amount" }, count: { $sum: 1 } } },
+    ]),
   ]);
 
   const s = sales[0] ?? { bills: 0, total: 0, discount: 0, tax: 0 };
@@ -74,6 +82,7 @@ export async function shiftSummary(
   const purchasesPaid = round2(purchases[0]?.paid ?? 0);
   const supplierCashBack = round2(cashBack[0]?.total ?? 0);
   const usedPhonesByMethod = tidy(usedBuys);
+  const repairsByMethod = tidy(repairPays);
   const expensesCash = round2(expenses.find((e) => e._id === "cash")?.total ?? 0);
   const expensesOther = round2(expenses.filter((e) => e._id !== "cash").reduce((a, e) => a + e.total, 0));
   const moves = shift.movements ?? [];
@@ -84,6 +93,7 @@ export async function shiftSummary(
     { label: "Opening cash", amount: shift.openingCash },
     { label: "Cash sales", amount: pick(byMethod, "cash") },
     { label: "Udhaar collected in cash", amount: pick(udhaar, "cash") },
+    { label: "Repairs (cash, after refunds)", amount: pick(repairsByMethod, "cash") },
     { label: "Cash put in drawer", amount: cashIn },
     { label: "Cash back from suppliers", amount: supplierCashBack },
     { label: "Cash refunds", amount: -pick(refundsByMethod, "cash") },
@@ -112,6 +122,7 @@ export async function shiftSummary(
     purchasesPaid,
     supplierCashBack,
     usedPhonesByMethod,
+    repairsByMethod,
     expensesCash,
     expensesOther,
     cashIn,

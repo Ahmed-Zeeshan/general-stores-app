@@ -132,3 +132,40 @@ export function statementMessage(v: {
   ];
   return lines.join("\n");
 }
+
+/** WhatsApp messages for a repair job: booked, ready to collect, delivered. */
+export function repairMessage(
+  kind: "booked" | "ready" | "delivered",
+  v: { name: string; jobNo: string; device: string; problem?: string; total?: number; paid?: number; balance?: number; estimate?: number; promisedAt?: string | null; warrantyUntil?: string | null; shop: string; shopPhone?: string },
+) {
+  const d = (s?: string | null) => (s ? new Date(s).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "");
+  const lines =
+    kind === "booked"
+      ? [
+          `Assalam o Alaikum ${v.name},`,
+          `${v.shop} ne aap ka ${v.device} repair ke liye receive kar liya hai.`,
+          `Job no: *${v.jobNo}*`,
+          v.problem ? `Masla: ${v.problem}` : "",
+          v.estimate ? `Andaza kharcha: ${formatPKR(v.estimate)}` : "",
+          v.paid ? `Advance: ${formatPKR(v.paid)}` : "",
+          v.promisedAt ? `Tayyar hone ki tareekh: ${d(v.promisedAt)}` : "",
+          "Phone lene ke liye job slip saath layein.",
+        ]
+      : kind === "ready"
+        ? [
+            `Assalam o Alaikum ${v.name},`,
+            `Aap ka ${v.device} (job *${v.jobNo}*) repair ho kar tayyar hai. ✅`,
+            v.total !== undefined ? `Kul bill: ${formatPKR(v.total)}` : "",
+            v.paid ? `Advance diya: ${formatPKR(v.paid)}` : "",
+            v.balance !== undefined && v.balance > 0 ? `*Baqaya: ${formatPKR(v.balance)}*` : "",
+            "Dukaan ke auqaat mein tashreef la kar phone le lein. Shukriya!",
+          ]
+        : [
+            `Assalam o Alaikum ${v.name},`,
+            `Aap ka ${v.device} (job *${v.jobNo}*) aap ko de diya gaya hai.`,
+            v.total !== undefined ? `Kul bill: ${formatPKR(v.total)}` : "",
+            v.warrantyUntil ? `Repair warranty: ${d(v.warrantyUntil)} tak` : "",
+            "Hamari khidmat lene ka shukriya!",
+          ];
+  return [...lines.filter(Boolean), "", `${v.shop}${v.shopPhone ? ` ${v.shopPhone}` : ""}`].join("\n");
+}
