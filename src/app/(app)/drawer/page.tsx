@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowDownCircle, ArrowUpCircle, Banknote, CheckCircle2, FileText, Lock, LockOpen, Printer } from "lucide-react";
+import { DayCloseWhatsApp } from "@/components/day-summary";
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Segmented, Spinner, StatCard, Table, Td, Th, Textarea, cn } from "@/components/ui";
 import { DateRange } from "@/components/date-range";
 import { BranchFilter } from "@/components/branch-filter";
@@ -55,6 +56,7 @@ export default function DrawerPage() {
   const [move, setMove] = useState<"in" | "out" | null>(null);
   const [closing, setClosing] = useState(false);
   const [closed, setClosed] = useState<Shift | null>(null);
+  const [closedSummary, setClosedSummary] = useState<Summary | null>(null);
 
   const load = useCallback(() => {
     api<Current>("/api/shifts/current").then(setCurrent).catch((e) => toast.error(e.message));
@@ -198,6 +200,7 @@ export default function DrawerPage() {
           onClose={() => setClosing(false)}
           onClosed={(s) => {
             setClosing(false);
+            setClosedSummary(current?.summary ?? null);
             setClosed(s);
             load();
           }}
@@ -216,6 +219,7 @@ export default function DrawerPage() {
             <div className="mt-6 grid grid-cols-2 gap-3">
               <Button variant="outline" icon={<Printer className="h-4 w-4" />} onClick={() => window.open(`/receipt/shift/${closed._id}?print=1`, "_blank")}>Z report</Button>
               <Button onClick={() => setClosed(null)}>Done</Button>
+              <DayCloseWhatsApp shift={closed} summary={closedSummary} />
             </div>
           </div>
         )}
