@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/client";
-import { getPrintPrefs } from "@/lib/print";
+import { getPrintPrefs, PRINTER_TESTED_KEY } from "@/lib/print";
 
 /** A sample receipt to check the printer, paper width and cash drawer. */
 export default function PrinterTestPage() {
@@ -20,6 +20,11 @@ function PrinterTest() {
   const [narrow, setNarrow] = useState(false);
   useEffect(() => {
     setNarrow(getPrintPrefs().paper === "58");
+    try {
+      localStorage.setItem(PRINTER_TESTED_KEY, "1");
+    } catch {
+      /* ignore */
+    }
     api<{ settings: { shopName: string } }>("/api/auth/me")
       .then((me) => setShop(me.settings.shopName))
       .catch(() => setShop(""));
