@@ -1,4 +1,4 @@
-import { B, norm } from "../lib/harness.mjs";
+import { B } from "../lib/harness.mjs";
 // Browser test: the end-of-day WhatsApp summary for the owner (dashboard) and the day-close message.
 import { chromium } from "playwright";
 const out = process.argv[2];
@@ -6,13 +6,14 @@ const ok = (c, m) => { if (!c) { console.log("  ✗", m); process.exitCode = 1; 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, timezoneId: "Asia/Karachi" });
 const waLinks = [];
+// WhatsApp opens in its own window; wait for it rather than a fixed time.
+const waSeen = async (pred) => { for (let i = 0; i < 60; i++) { if (waLinks.some(pred)) return true; await new Promise((r) => setTimeout(r, 100)); } return false; };
 await ctx.route(/wa\.me|web\.whatsapp\.com|whatsapp:/, (route) => { waLinks.push(decodeURIComponent(route.request().url())); route.fulfill({ status: 200, body: "wa" }); });
 const page = await ctx.newPage();
 let nativeDialogs = 0;
 page.on("dialog", (d) => { nativeDialogs++; d.dismiss(); });
 const errors = []; page.on("pageerror", (e) => errors.push(e.message));
 const post = (path, body, method = "POST") => page.evaluate(async ([p, b, m]) => (await fetch(p, { method: m, headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) })).json(), [path, body, method]);
-const dlg = page.locator("[role=dialog]");
 
 await page.goto(B + "/setup");
 await post("/api/setup", { name: "Admin", username: "admin", password: "admin-pass-123" });
@@ -49,7 +50,7 @@ ok(msg.includes("*Khalis munafa: Rs 210*") && msg.includes("Udhaar diya: Rs 220"
 ok(msg.includes("Cash daraz:") && msg.includes("abhi khula hai") && msg.includes("1. Lux Soap — Rs 1,320"), "drawer still open; best seller listed");
 await page.click("[role=dialog] button:has-text('Open WhatsApp')");
 await page.waitForTimeout(400);
-ok(waLinks.some((l) => l.includes("923339998887") && l.includes("din ka hisaab")), "WhatsApp opened to the owner");
+ok(await waSeen((l) => l.includes("923339998887") && l.includes("din ka hisaab")), "WhatsApp opened to the owner");
 
 // ---- Day close message
 await page.goto(B + "/drawer");

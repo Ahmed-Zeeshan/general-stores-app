@@ -1,4 +1,4 @@
-import { Client, ok, eq, section, done } from "../lib/harness.mjs";
+import { Client, ok, section, done } from "../lib/harness.mjs";
 
 // ---------- Bills, repair slips and installment plans on WhatsApp: signed customer links ----------
 const day = (n) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi" }).format(new Date(Date.now() + n * 864e5));

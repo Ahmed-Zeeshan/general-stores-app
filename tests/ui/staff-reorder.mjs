@@ -7,6 +7,8 @@ const ok = (c, m) => { if (!c) { console.log("  ✗", m); process.exitCode = 1; 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, timezoneId: "Asia/Karachi" });
 const waLinks = [];
+// WhatsApp opens in its own window; wait for it rather than a fixed time.
+const waSeen = async (pred) => { for (let i = 0; i < 60; i++) { if (waLinks.some(pred)) return true; await new Promise((r) => setTimeout(r, 100)); } return false; };
 await ctx.route(/wa\.me|web\.whatsapp\.com|whatsapp:/, (route) => { waLinks.push(decodeURIComponent(route.request().url())); route.fulfill({ status: 200, body: "wa" }); });
 const page = await ctx.newPage();
 let nativeDialogs = 0;
@@ -74,7 +76,7 @@ ok(t.includes("Sugar") && t.includes("5 days") && (await page.inputValue('input[
 await page.fill('input[aria-label="Order Sugar"]', "20");
 await page.click("button:has-text('WhatsApp order')");
 await page.waitForTimeout(400);
-ok(waLinks.some((l) => l.includes("923001112223") && l.includes("Sugar — 20")), "WhatsApp order to the supplier with the changed quantity");
+ok(await waSeen((l) => l.includes("923001112223") && l.includes("Sugar — 20")), "WhatsApp order to the supplier with the changed quantity");
 await page.click("button:has-text('1 month')");
 await page.waitForFunction(() => document.querySelector('input[aria-label="Order Sugar"]')?.value === "25");
 ok(true, "one month: order 25 kg");

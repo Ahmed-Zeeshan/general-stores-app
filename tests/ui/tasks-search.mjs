@@ -7,6 +7,8 @@ const day = (n) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi" }
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, timezoneId: "Asia/Karachi" });
 const waLinks = [];
+// WhatsApp opens in its own window; wait for it rather than a fixed time.
+const waSeen = async (pred) => { for (let i = 0; i < 60; i++) { if (waLinks.some(pred)) return true; await new Promise((r) => setTimeout(r, 100)); } return false; };
 await ctx.route(/wa\.me|web\.whatsapp\.com|whatsapp:/, (route) => { waLinks.push(decodeURIComponent(route.request().url())); route.fulfill({ status: 200, body: "wa" }); });
 const page = await ctx.newPage();
 let nativeDialogs = 0;
@@ -45,7 +47,7 @@ ok(t.includes("Open the cash drawer") && t.includes("Redmi Note 12 ready for Nad
 await dlg.locator("button[aria-label='WhatsApp: Redmi Note 12 ready for Nadeem Akhtar']").click();
 await dlg.locator("text=Sent").waitFor();
 await page.waitForTimeout(300);
-ok(waLinks.some((l) => l.includes("923337654321") && l.includes("JOB-000001") && l.includes("tayyar")), "one tap: 'ready' WhatsApp to the customer");
+ok(await waSeen((l) => l.includes("923337654321") && l.includes("JOB-000001") && l.includes("tayyar")), "one tap: 'ready' WhatsApp to the customer");
 await dlg.locator("text=Open the cash drawer").click();
 await page.waitForURL(B + "/drawer");
 ok(true, "tapping a task opens its page");

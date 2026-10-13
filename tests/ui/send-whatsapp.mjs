@@ -7,6 +7,8 @@ const ok = (c, m) => { if (!c) { console.log("  ✗", m); process.exitCode = 1; 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, timezoneId: "Asia/Karachi" });
 const waLinks = [];
+// WhatsApp opens in its own window; wait for it rather than a fixed time.
+const waSeen = async (pred) => { for (let i = 0; i < 60; i++) { if (waLinks.some(pred)) return true; await new Promise((r) => setTimeout(r, 100)); } return false; };
 await ctx.route(/wa\.me|web\.whatsapp\.com|whatsapp:/, (route) => { waLinks.push(decodeURIComponent(route.request().url())); route.fulfill({ status: 200, body: "wa" }); });
 const page = await ctx.newPage();
 let nativeDialogs = 0;
@@ -47,7 +49,7 @@ const msg = await page.inputValue('textarea[aria-label="Message"]');
 ok(msg.includes("INV-000001") && msg.includes("Lux Soap × 2 — Rs 220") && msg.includes("*Kul: Rs 220*") && msg.includes(`Bill dekhein: ${B}/r/s-`), "message: bill no, items, total and the link");
 await page.click("[role=dialog] button:has-text('Open WhatsApp')");
 await page.waitForTimeout(400);
-ok(waLinks.some((l) => l.includes("923211234567") && l.includes("INV-000001")), "WhatsApp opened for 0321-1234567 with the bill");
+ok(await waSeen((l) => l.includes("923211234567") && l.includes("INV-000001")), "WhatsApp opened for 0321-1234567 with the bill");
 const link = msg.match(/Bill dekhein: (\S+)/)[1];
 
 // ---- The customer opens the link (no login)
@@ -76,7 +78,7 @@ ok((await page.locator("[role=dialog] button:has-text('Open WhatsApp')").isDisab
 await page.fill('input[aria-label="Customer WhatsApp number"]', "0345 1234567");
 await page.click("[role=dialog] button:has-text('Open WhatsApp')");
 await page.waitForTimeout(400);
-ok(waLinks.some((l) => l.includes("923451234567") && l.includes("INV-000002")), "sent to the typed number");
+ok(await waSeen((l) => l.includes("923451234567") && l.includes("INV-000002")), "sent to the typed number");
 
 ok(nativeDialogs === 0, "no browser pop-ups");
 ok(errors.length === 0, "no page errors " + JSON.stringify(errors));

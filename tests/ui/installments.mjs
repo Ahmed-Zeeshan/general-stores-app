@@ -21,6 +21,8 @@ const imei = (n) => {
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, timezoneId: "Asia/Karachi" });
 const waLinks = [];
+// WhatsApp opens in its own window; wait for it rather than a fixed time.
+const waSeen = async (pred) => { for (let i = 0; i < 60; i++) { if (waLinks.some(pred)) return true; await new Promise((r) => setTimeout(r, 100)); } return false; };
 await ctx.route(/wa\.me|web\.whatsapp\.com|whatsapp:/, (route) => { waLinks.push(decodeURIComponent(route.request().url())); route.fulfill({ status: 200, body: "wa" }); });
 const page = await ctx.newPage();
 let nativeDialogs = 0;
@@ -102,7 +104,7 @@ ok(t.includes("QST-000001-1") && t.includes("Left before Rs 33,000") && t.includ
 await slip.close();
 await page.click("button:has-text('WhatsApp confirmation')");
 await page.waitForTimeout(300);
-ok(waLinks.some((l) => l.includes("923211234567") && l.includes("wusool") && l.includes("Rs 27,500")), "WhatsApp: payment confirmation with balance");
+ok(await waSeen((l) => l.includes("923211234567") && l.includes("wusool") && l.includes("Rs 27,500")), "WhatsApp: payment confirmation with balance");
 // A second payment entered by mistake, then cancelled by the owner.
 await page.click("button:has-text('Receive installment')");
 await dlg.waitFor();
@@ -141,7 +143,7 @@ await page.click("text=QST-000001");
 await page.waitForSelector("text=Monthly installments");
 await page.locator("main button:has-text('Send reminder')").click();
 await page.waitForTimeout(300);
-ok(waLinks.some((l) => l.includes("yaad-dehani") && l.includes("Rs 11,000") && l.includes("QST-000001")), "WhatsApp reminder with the late amount");
+ok(await waSeen((l) => l.includes("yaad-dehani") && l.includes("Rs 11,000") && l.includes("QST-000001")), "WhatsApp reminder with the late amount");
 await page.waitForSelector("text=Last reminder");
 ok(true, "reminder date shown");
 
