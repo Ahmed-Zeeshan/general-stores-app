@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpen, CalendarRange, HelpCircle, Keyboard, Languages, Mic, Package, Printer, Receipt, RotateCcw, Save, ScanBarcode, Search, ShoppingCart, Smartphone, Truck, Users, Wallet, Wrench, Zap } from "lucide-react";
+import { BookOpen, CalendarRange, HelpCircle, Keyboard, Languages, Package, Printer, Receipt, RotateCcw, Save, ScanBarcode, Search, ShoppingCart, Smartphone, Truck, Users, Wallet, Wrench, Zap } from "lucide-react";
 import { Card, PageHeader } from "@/components/ui";
 import { useSession } from "@/components/session";
 import { useLang } from "@/lib/i18n";
@@ -119,20 +119,6 @@ const TOPICS: Topic[] = [
       "Press Ctrl+K (or the Search box in the menu) on any screen.",
       "Type a name, mobile number, CNIC, IMEI, bill number or job number — dashes don't matter.",
       "The bell in the menu lists today's tasks: late installments, phones ready, low balances, udhaar to remind.",
-    ],
-  },
-  {
-    id: "voice",
-    icon: Mic,
-    title: "Speaking instead of typing",
-    urdu: "مائیک دبائیں اور اردو یا انگریزی میں بولیں — بل، ادھار، خرچہ، سوال۔ ہاں دبانے سے پہلے کچھ محفوظ نہیں ہوتا۔",
-    steps: [
-      "New Bill: press the mic next to the search box and say the items, e.g. “do lux sabun, aadha kilo cheeni, 500 rupay ki cheeni”. Check the list and press Add.",
-      "The mic next to Search in the menu (or at the top on a phone): “Shahid ne 500 rupay diye”, “Shahid ke khate mein 300 likh do”, “bijli ka bill 4500”.",
-      "Ask: “aaj ki sale kitni hui”, “Shahid ka udhaar kitna hai”, “cheeni ka stock kitna hai”, “kaun qist mein late hai”. The answer is shown and read aloud.",
-      "Say a page name to open it: “naya bill”, “khata”, “din band karo”. Anything else is searched.",
-      "Nothing is saved until you press Yes. Choose اردو or English above the mic. Udhaar by hand and expenses are for the owner / manager.",
-      "Voice works in Chrome or Edge with the internet on; allow the microphone when the browser asks. Without voice you can type the same sentence in the box.",
     ],
   },
   {

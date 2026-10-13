@@ -39,7 +39,6 @@ import { ReceivePaymentModal } from "@/components/receive-payment";
 import { DevicePicker, DeviceTags, type DeviceRow } from "@/components/devices";
 import { InstallmentSaleModal } from "@/components/installments";
 import { SendBillModal } from "@/components/send-whatsapp";
-import { MicButton, VoiceBillModal } from "@/components/voice";
 import { cleanImei } from "@/lib/imei";
 import { productMatches } from "@/lib/product-search";
 import { api, formatDate, LOOSE_UNITS, NetworkError, UNIT_LABELS } from "@/lib/client";
@@ -131,7 +130,6 @@ export default function PosPage() {
   const [billDiscount, setBillDiscount] = useState("");
   const [pickCustomer, setPickCustomer] = useState(false);
   const [looseFor, setLooseFor] = useState<Product | null>(null);
-  const [voiceText, setVoiceText] = useState<string | null>(null);
   const [phoneFor, setPhoneFor] = useState<Product | null>(null);
   const [payOpen, setPayOpen] = useState(false);
   const [qistOpen, setQistOpen] = useState(false);
@@ -560,8 +558,7 @@ export default function PosPage() {
             </button>
           )}
         </div>
-          <div className="flex gap-2 [&>button]:h-14 [&>button]:w-14">
-            <MicButton label="Bill by voice" className="rounded-xl border border-slate-300 bg-white shadow-xs" onText={setVoiceText} />
+          <div className="[&>button]:h-14 [&>button]:w-14">
             <CameraButton onClick={() => setCameraOpen(true)} />
           </div>
         </div>
@@ -834,22 +831,6 @@ export default function PosPage() {
           </div>
         </div>
       </aside>
-
-      <VoiceBillModal
-        text={voiceText}
-        products={products ?? []}
-        onClose={() => {
-          setVoiceText(null);
-          searchRef.current?.focus();
-        }}
-        onAdd={(lines) => {
-          for (const l of lines) addToCart(l.product, l.qty, l.pack);
-          beep();
-          toast.success(t("{n} items added to the bill", { n: lines.length }));
-          setVoiceText(null);
-          searchRef.current?.focus();
-        }}
-      />
 
       <LooseQtyModal
         product={looseFor}

@@ -48,7 +48,6 @@ import { LangSwitch, useLang, useT } from "@/lib/i18n";
 import { TasksBell, TasksProvider } from "@/components/tasks-bell";
 import { SearchButton, SearchHotkey } from "@/components/global-search";
 import { SwitchUserButton } from "@/components/switch-user";
-import { VoiceButton } from "@/components/voice";
 
 const SHOP: Role[] = ["owner", "manager", "cashier"];
 type ModuleKey = "phones" | "repairs" | "wallets" | "installments";
@@ -165,9 +164,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {multiBranch && data.branch && <BranchSwitcher data={data} />}
       </div>
       {!isAdmin && (
-        <div className="mx-4 mb-2 flex gap-2">
+        <div className="mx-4 mb-2">
           <SearchButton />
-          <VoiceButton />
         </div>
       )}
       <nav className="scrollbar-thin flex-1 space-y-1 overflow-y-auto px-3 py-2">
@@ -252,7 +250,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             ) : (
               <div className="flex shrink-0 items-center gap-1">
                 <SearchButton compact />
-                <VoiceButton compact />
                 <TasksBell light />
                 <Link href="/pos" className="rounded-lg bg-brand-600 p-2 text-white" aria-label="New bill">
                   <ShoppingCart className="h-5 w-5" />
