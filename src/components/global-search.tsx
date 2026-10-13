@@ -7,6 +7,7 @@ import { BookOpen, CalendarRange, CornerDownLeft, Loader2, Package, Receipt, Rep
 import { cn } from "./ui";
 import { api } from "@/lib/client";
 import type { SearchGroup, SearchHit } from "@/lib/search";
+import { MicButton } from "./voice";
 
 const ICONS: Record<string, typeof Search> = {
   customer: BookOpen,
@@ -50,12 +51,12 @@ export function SearchButton({ compact }: { compact?: boolean }) {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500 transition hover:border-brand-300 hover:text-slate-700"
+          className="flex w-full min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500 transition hover:border-brand-300 hover:text-slate-700"
           aria-label="Search"
         >
-          <Search className="h-4 w-4" />
-          <span className="flex-1 text-left">Search anything…</span>
-          <kbd className="rounded border border-slate-200 bg-slate-50 px-1.5 text-[10px] font-semibold text-slate-400">Ctrl K</kbd>
+          <Search className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 flex-1 truncate whitespace-nowrap text-left">Search anything…</span>
+          <kbd className="shrink-0 rounded border border-slate-200 bg-slate-50 px-1.5 text-[10px] font-semibold text-slate-400">Ctrl K</kbd>
         </button>
       )}
       {open && <SearchDialog onClose={() => setOpen(false)} />}
@@ -136,6 +137,7 @@ function SearchDialog({ onClose }: { onClose: () => void }) {
             aria-label="Search anything"
           />
           {loading && <Loader2 className="h-5 w-5 shrink-0 animate-spin text-brand-600" />}
+          <MicButton label="Search by voice" className="rounded-lg p-1.5" onText={(text) => setQ(text)} />
           <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100" aria-label="Close search">
             <X className="h-5 w-5" />
           </button>
