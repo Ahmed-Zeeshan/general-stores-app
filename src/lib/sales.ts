@@ -10,7 +10,7 @@ import { applyPromotions, pointsEarned, type PromoLike, type PromoLine } from ".
 import { optionalId } from "./schemas";
 import { moveStock, postLedger } from "./services";
 import { addMonths, claimDevices, linkSale, undoClaim } from "./devices";
-import { Device, nextNumber, PAYMENT_METHODS, Party, Product, Promotion, Sale, TENDER_METHODS, Tenant } from "@/models";
+import { Device, nextNumber, PAYMENT_METHODS, Party, Product, Promotion, Sale, TENDER_METHODS, Tenant, User } from "@/models";
 
 export const SaleBody = z.object({
   items: z
@@ -198,6 +198,17 @@ export async function createSale(ctx: BranchContext, body: SaleInput, opts: { in
   const creditAmount = round2(Math.max(0, total - amountPaid));
 
   if (opts.installment && !customer) throw new ApiError(400, "Choose the customer who buys on installments.");
+  // Staff limits set by the owner (an offline bill was already handed over, so it is recorded).
+  if (!offline && user.role !== "owner") {
+    const limits = await User.findOne({ _id: user.id, tenant: tid }).select("maxDiscountPct allowUdhaar").lean();
+    if (limits?.allowUdhaar === false && creditAmount > 0) throw new ApiError(400, "You are not allowed to give udhaar or installments. Ask the owner or manager.");
+    if (limits?.maxDiscountPct !== undefined && limits.maxDiscountPct !== null) {
+      const gross = round2(items.reduce((s, i) => s + i.total + i.discount, 0));
+      const typed = round2(manualLineDiscount + Math.min(body.discount, subtotal));
+      const pct = gross > 0 ? (typed / gross) * 100 : 0;
+      if (pct > limits.maxDiscountPct + 0.01) throw new ApiError(400, `Discount ${pct.toFixed(1)}% is more than your limit of ${limits.maxDiscountPct}%. Ask the owner or manager.`);
+    }
+  }
   if (creditAmount > 0 && !opts.installment) {
     if (!customer) throw new ApiError(400, "Amount received is less than the bill. Select a customer to add the rest to their khata (udhaar).");
     // An offline bill has already been handed over, so it is recorded even above the limit.

@@ -16,6 +16,8 @@ import {
   Building2,
   ChefHat,
   History,
+  ClipboardList,
+  HelpCircle,
   KeyRound,
   LayoutDashboard,
   LogOut,
@@ -45,6 +47,7 @@ import type { Role } from "@/lib/session";
 import { LangSwitch, useLang, useT } from "@/lib/i18n";
 import { TasksBell, TasksProvider } from "@/components/tasks-bell";
 import { SearchButton, SearchHotkey } from "@/components/global-search";
+import { SwitchUserButton } from "@/components/switch-user";
 
 const SHOP: Role[] = ["owner", "manager", "cashier"];
 type ModuleKey = "phones" | "repairs" | "wallets" | "installments";
@@ -69,6 +72,7 @@ const NAV: { href: string; label: string; urdu: string; icon: typeof Package; ro
   { href: "/transfers", label: "Stock Transfer", urdu: "منتقلی", icon: ArrowLeftRight, roles: ["owner", "manager"], multiBranch: true },
   { href: "/purchases", label: "Purchases", urdu: "خریداری", icon: PackagePlus, roles: ["owner", "manager"] },
   { href: "/suppliers", label: "Suppliers", urdu: "سپلائرز", icon: Truck, roles: ["owner", "manager"] },
+  { href: "/reorder", label: "Reorder List", urdu: "آرڈر لسٹ", icon: ClipboardList, roles: ["owner", "manager"] },
   { href: "/expenses", label: "Expenses", urdu: "اخراجات", icon: Wallet, roles: ["owner", "manager"] },
   { href: "/reports", label: "Reports", urdu: "رپورٹس", icon: BarChart3, roles: ["owner", "manager"] },
   { href: "/activity", label: "Activity Log", urdu: "سرگرمی", icon: History, roles: ["owner"] },
@@ -153,6 +157,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="text-xs text-brand-700">
               {data.user.name} · {ROLE_LABEL[data.user.role]}
             </div>
+            {!isAdmin && <SwitchUserButton className="mt-0.5" />}
           </div>
           {!isAdmin && <TasksBell className="-mr-1 -mt-1" />}
         </div>
@@ -192,6 +197,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="flex justify-center pb-1">
           <LangSwitch />
         </div>
+        {!isAdmin && (
+          <Link
+            href="/help"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+          >
+            <HelpCircle className="h-5 w-5" /> {t("Help")}
+          </Link>
+        )}
         <button
           onClick={() => setPwOpen(true)}
           className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"

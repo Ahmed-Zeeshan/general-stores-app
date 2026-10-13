@@ -1,7 +1,10 @@
 "use client";
 
 import { forwardRef, useEffect, useLayoutEffect, useRef } from "react";
-import { Loader2, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { HelpCircle, Loader2, X } from "lucide-react";
 import { useLang, useT } from "@/lib/i18n";
 
 /** Translates plain text (Urdu / Roman Urdu); anything else is shown as it is. */
@@ -118,6 +121,28 @@ export function Card({ className, children }: { className?: string; children: Re
   return <div className={cn("min-w-0 rounded-2xl border border-slate-200/80 bg-white shadow-soft", className)}>{children}</div>;
 }
 
+/** Which help topic belongs to which screen (the "?" next to page headings). */
+const HELP_FOR: [string, string][] = [
+  ["/pos", "bill"],
+  ["/customers", "udhaar"],
+  ["/udhaar", "udhaar"],
+  ["/products", "stock"],
+  ["/labels", "stock"],
+  ["/expiry", "stock"],
+  ["/purchases", "purchases"],
+  ["/suppliers", "purchases"],
+  ["/sales", "returns"],
+  ["/drawer", "drawer"],
+  ["/settings", "staff"],
+  ["/activity", "staff"],
+  ["/transfers", "staff"],
+  ["/phones", "phones"],
+  ["/used-phones", "phones"],
+  ["/repairs", "repairs"],
+  ["/wallets", "wallets"],
+  ["/installments", "installments"],
+];
+
 export function PageHeader({
   title,
   urdu,
@@ -133,6 +158,8 @@ export function PageHeader({
   const { lang } = useLang();
   // Urdu: the Urdu heading is the main one, with the English name small beside it.
   const main = lang === "ur" && urdu ? urdu : tx(title);
+  const pathname = usePathname() ?? "";
+  const help = HELP_FOR.find(([p]) => pathname.startsWith(p))?.[1];
   const side = lang === "ur" ? (urdu ? title : null) : urdu;
   return (
     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -140,6 +167,11 @@ export function PageHeader({
         <div className="flex flex-wrap items-baseline gap-x-3">
           <h1 className={cn("text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl", lang === "ur" && urdu && "urdu leading-loose")}>{main}</h1>
           {side && <span className={cn("text-lg text-slate-400", lang !== "ur" && "urdu", lang === "ur" && "text-sm")}>{side}</span>}
+          {help && (
+            <Link href={`/help#${help}`} className="self-center text-slate-300 hover:text-brand-600" aria-label="Help for this page" title="How does this page work?">
+              <HelpCircle className="h-5 w-5" />
+            </Link>
+          )}
         </div>
         {subtitle && <p className="mt-1 text-sm text-slate-500">{tx(subtitle)}</p>}
       </div>
@@ -190,7 +222,8 @@ export function Modal({
   }, [open, onClose]);
   if (!open) return null;
   const sizes = { sm: "max-w-md", md: "max-w-lg", lg: "max-w-2xl", xl: "max-w-4xl" };
-  return (
+  // Rendered at the top of the page, so a dialog opened from the menu is never hidden behind the page.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-xs" onClick={onClose} />
       <div
@@ -207,7 +240,8 @@ export function Modal({
         <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
         {footer && <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

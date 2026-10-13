@@ -2,7 +2,8 @@
 
 import { Suspense, use, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Printer } from "lucide-react";
+import { MessageCircle, Printer } from "lucide-react";
+import { SendBillModal } from "@/components/send-whatsapp";
 import QRCode from "qrcode";
 import { api, formatDate, PAYMENT_LABELS, UNIT_LABELS } from "@/lib/client";
 import { getPrintPrefs } from "@/lib/print";
@@ -65,6 +66,7 @@ function Receipt({ id }: { id: string }) {
   const [branchInfo, setBranchInfo] = useState<{ name: string; address?: string; phone?: string }[]>([]);
   const [error, setError] = useState("");
   const [qr, setQr] = useState("");
+  const [waOpen, setWaOpen] = useState(false);
   // 58 mm printers are set per computer in Settings → Printing.
   const [narrow, setNarrow] = useState(false);
   useEffect(() => setNarrow(getPrintPrefs().paper === "58"), []);
@@ -232,10 +234,14 @@ function Receipt({ id }: { id: string }) {
         <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 font-semibold text-white shadow-sm hover:bg-brand-700">
           <Printer className="h-4 w-4" /> Print receipt
         </button>
+        <button onClick={() => setWaOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 font-semibold text-emerald-700 shadow-sm">
+          <MessageCircle className="h-4 w-4" /> WhatsApp
+        </button>
         <button onClick={() => window.close()} className="rounded-xl bg-white px-5 py-2.5 font-semibold text-slate-700 shadow-sm">
           Close
         </button>
       </div>
+      <SendBillModal saleId={id} open={waOpen} onClose={() => setWaOpen(false)} shop={{ shopName: settings.shopName, phone: settings.phone }} />
       {Array.from({ length: copies }, (_, n) => (
         <div
           key={n}

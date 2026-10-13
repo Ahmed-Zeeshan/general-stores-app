@@ -136,7 +136,7 @@ export function statementMessage(v: {
 /** WhatsApp messages for a repair job: booked, ready to collect, delivered. */
 export function repairMessage(
   kind: "booked" | "ready" | "delivered",
-  v: { name: string; jobNo: string; device: string; problem?: string; total?: number; paid?: number; balance?: number; estimate?: number; promisedAt?: string | null; warrantyUntil?: string | null; shop: string; shopPhone?: string },
+  v: { name: string; jobNo: string; device: string; problem?: string; total?: number; paid?: number; balance?: number; estimate?: number; promisedAt?: string | null; warrantyUntil?: string | null; shop: string; shopPhone?: string; link?: string | null },
 ) {
   const d = (s?: string | null) => (s ? new Date(s).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "");
   const lines =
@@ -167,13 +167,13 @@ export function repairMessage(
             v.warrantyUntil ? `Repair warranty: ${d(v.warrantyUntil)} tak` : "",
             "Hamari khidmat lene ka shukriya!",
           ];
-  return [...lines.filter(Boolean), "", `${v.shop}${v.shopPhone ? ` ${v.shopPhone}` : ""}`].join("\n");
+  return [...lines.filter(Boolean), ...(v.link ? [`Tafseel: ${v.link}`] : []), "", `${v.shop}${v.shopPhone ? ` ${v.shopPhone}` : ""}`].join("\n");
 }
 
 /** WhatsApp messages for installments: reminder (due / late) and payment received. */
 export function installmentMessage(
   kind: "reminder" | "paid",
-  v: { name: string; planNo: string; items?: string; amount: number; dueDate?: string | Date | null; overdue?: number; balance: number; receiptNo?: string; shop: string; shopPhone?: string },
+  v: { name: string; planNo: string; items?: string; amount: number; dueDate?: string | Date | null; overdue?: number; balance: number; receiptNo?: string; shop: string; shopPhone?: string; link?: string | null },
 ) {
   const d = (s?: string | Date | null) => (s ? new Date(s).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "");
   const lines =
@@ -191,5 +191,122 @@ export function installmentMessage(
           v.balance > 0 ? `Baqaya: ${formatPKR(v.balance)}` : "Mubarak ho! Tamam qistein mukammal ho gayi hain. 🎉",
           "Shukriya!",
         ];
-  return [...lines, "", `${v.shop}${v.shopPhone ? ` ${v.shopPhone}` : ""}`].join("\n");
+  return [...lines, ...(v.link ? [`Qiston ki tafseel: ${v.link}`] : []), "", `${v.shop}${v.shopPhone ? ` ${v.shopPhone}` : ""}`].join("\n");
+}
+
+/** A bill sent on WhatsApp instead of (or with) the paper receipt. */
+export function billMessage(v: {
+  name?: string;
+  invoiceNo: string;
+  date: string | Date;
+  items: { name: string; qty: number; unit?: string; total: number; imeis?: string[]; warrantyUntil?: string | null }[];
+  discount?: number;
+  total: number;
+  paid: number;
+  credit?: number;
+  installment?: boolean;
+  shop: string;
+  shopPhone?: string;
+  link?: string | null;
+}) {
+  const d = (s: string | Date) => new Date(s).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  const MAX = 15;
+  const lines = [
+    `Assalam o Alaikum${v.name ? ` ${v.name}` : ""},`,
+    `${v.shop} se aap ka bill *${v.invoiceNo}* (${d(v.date)}):`,
+    "",
+    ...v.items.slice(0, MAX).flatMap((i) => [
+      `• ${i.name}${i.qty !== 1 ? ` × ${Math.round(i.qty * 1000) / 1000}${i.unit && i.unit !== "pcs" ? ` ${i.unit}` : ""}` : ""} — ${formatPKR(i.total)}`,
+      ...(i.imeis?.length ? [`   IMEI ${i.imeis.join(", ")}`] : []),
+      ...(i.warrantyUntil ? [`   Warranty: ${d(i.warrantyUntil)} tak`] : []),
+    ]),
+    ...(v.items.length > MAX ? [`… aur ${v.items.length - MAX} cheezein`] : []),
+    "",
+    ...(v.discount ? [`Riayat: ${formatPKR(v.discount)}`] : []),
+    `*Kul: ${formatPKR(v.total)}*`,
+    `${v.installment ? "Advance" : "Ada"}: ${formatPKR(v.paid)}`,
+    ...(v.credit && !v.installment ? [`Udhaar (khata): ${formatPKR(v.credit)}`] : []),
+    ...(v.link ? ["", `Bill dekhein: ${v.link}`] : []),
+    "",
+    `Shukriya! ${v.shop}${v.shopPhone ? ` ${v.shopPhone}` : ""}`,
+  ];
+  return lines.join("\n");
+}
+
+const rs = (n: number) => formatPKR(n);
+
+/** End-of-day summary for the owner (from the reports of the day). */
+export function daySummaryMessage(v: {
+  shop: string;
+  date: string | Date;
+  branch?: string;
+  sales: number;
+  bills: number;
+  returns: number;
+  grossProfit?: number;
+  expenses: number;
+  netProfit?: number;
+  udhaarGiven: number;
+  udhaarCollected: number;
+  byMethod: { label: string; total: number }[];
+  drawers: { shiftNo: string; branchName?: string; status: string; expected?: number; counted?: number; difference?: number }[];
+  mobile?: { repairsDelivered?: number; repairsProfit?: number; walletEarned?: number; walletCount?: number; installmentsCollected?: number; installmentsLate?: number; usedBought?: number; usedSpent?: number };
+  top: { name: string; total: number }[];
+}) {
+  const d = new Date(v.date).toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+  const drawer = (x: (typeof v.drawers)[number]) =>
+    x.status === "open"
+      ? `• ${x.shiftNo}${x.branchName ? ` (${x.branchName})` : ""}: abhi khula hai`
+      : `• ${x.shiftNo}${x.branchName ? ` (${x.branchName})` : ""}: ${x.difference === undefined || Math.abs(x.difference) < 0.5 ? "bilkul theek ✅" : x.difference < 0 ? `*kam ${rs(-x.difference)}* ⚠️` : `zyada ${rs(x.difference)}`}`;
+  const m = v.mobile;
+  const lines = [
+    `*${v.shop}* — din ka hisaab`,
+    `${d}${v.branch ? ` · ${v.branch}` : ""}`,
+    "",
+    `Sale: *${rs(v.sales)}* (${v.bills} bill)`,
+    ...(v.returns ? [`Wapsi: ${rs(v.returns)}`] : []),
+    ...v.byMethod.filter((x) => x.total).map((x) => `  ${x.label}: ${rs(x.total)}`),
+    ...(v.grossProfit !== undefined ? [`Munafa (bills): ${rs(v.grossProfit)}`] : []),
+    ...(m?.repairsDelivered ? [`Repair: ${m.repairsDelivered} delivered${m.repairsProfit !== undefined ? `, munafa ${rs(m.repairsProfit)}` : ""}`] : []),
+    ...(m?.walletEarned ? [`Easyload/wallet kamai: ${rs(m.walletEarned)}${m.walletCount ? ` (${m.walletCount} entries)` : ""}`] : []),
+    `Kharchay: ${rs(v.expenses)}`,
+    ...(v.netProfit !== undefined ? [`*Khalis munafa: ${rs(v.netProfit)}*`] : []),
+    "",
+    `Udhaar diya: ${rs(v.udhaarGiven)} · wusool: ${rs(v.udhaarCollected)}`,
+    ...(m?.installmentsCollected ? [`Qistein wusool: ${rs(m.installmentsCollected)}`] : []),
+    ...(m?.installmentsLate ? [`Late qistein: ${rs(m.installmentsLate)}`] : []),
+    ...(m?.usedBought ? [`Purane phone khareede: ${m.usedBought} (${rs(m.usedSpent ?? 0)})`] : []),
+    ...(v.drawers.length ? ["", "Cash daraz:", ...v.drawers.map(drawer)] : []),
+    ...(v.top.length ? ["", "Sab se zyada bikne wali:", ...v.top.slice(0, 3).map((t, i) => `${i + 1}. ${t.name} — ${rs(t.total)}`)] : []),
+  ];
+  return lines.join("\n");
+}
+
+/** Day close (Z report) message: what the drawer should have had and what was counted. */
+export function dayCloseMessage(v: { shop: string; branch?: string; shiftNo: string; closedAt?: string | Date; closedBy?: string; expected: number; counted: number; difference: number; sales?: number; bills?: number; byMethod?: { label: string; total: number }[] }) {
+  const d = new Date(v.closedAt ?? Date.now()).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  const diff = Math.abs(v.difference) < 0.5 ? "Bilkul theek ✅" : v.difference < 0 ? `*Kam: ${rs(-v.difference)}* ⚠️` : `Zyada: ${rs(v.difference)}`;
+  return [
+    `*${v.shop}* — din band (${v.shiftNo})`,
+    `${d}${v.branch ? ` · ${v.branch}` : ""}${v.closedBy ? ` · ${v.closedBy}` : ""}`,
+    "",
+    ...(v.sales !== undefined ? [`Sale: ${rs(v.sales)}${v.bills !== undefined ? ` (${v.bills} bill)` : ""}`] : []),
+    ...(v.byMethod ?? []).filter((x) => x.total).map((x) => `  ${x.label}: ${rs(x.total)}`),
+    `Daraz mein hona chahiye: ${rs(v.expected)}`,
+    `Gina gaya: ${rs(v.counted)}`,
+    diff,
+  ].join("\n");
+}
+
+/** Order list sent to a supplier. */
+export function orderMessage(v: { shop: string; shopPhone?: string; supplier?: string; rows: { name: string; qty: number; unit?: string }[] }) {
+  return [
+    `Assalam o Alaikum${v.supplier ? ` ${v.supplier}` : ""},`,
+    `${v.shop} ka order:`,
+    "",
+    ...v.rows.map((r, i) => `${i + 1}. ${r.name} — ${Math.round(r.qty * 1000) / 1000}${r.unit && r.unit !== "pcs" ? ` ${r.unit}` : ""}`),
+    "",
+    "Meharbani farma kar rate aur delivery ka bata dein. Shukriya!",
+    `${v.shop}${v.shopPhone ? ` ${v.shopPhone}` : ""}`,
+  ].join("\n");
 }

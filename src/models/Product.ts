@@ -48,6 +48,11 @@ const ProductSchema = new Schema(
     warrantyMonths: { type: Number, min: 0, max: 120 },
     /** FBR Pakistan Customs Tariff code; falls back to the shop default. */
     pctCode: { type: String, trim: true },
+    /** Small photo for the sale screen (JPEG data URL); loaded separately, never with the product list. */
+    image: { type: String, select: false },
+    hasImage: { type: Boolean, default: false },
+    /** Shown first on the sale screen ("Favourites"). */
+    favourite: { type: Boolean, default: false },
     active: { type: Boolean, default: true },
   },
   { timestamps: true },

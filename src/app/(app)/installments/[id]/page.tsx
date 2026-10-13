@@ -6,6 +6,7 @@ import { ArrowLeft, Ban, HandCoins, MessageCircle, Printer, RotateCcw } from "lu
 import { Badge, Button, Card, Field, Input, Modal, Select, Spinner, Table, Td, Textarea, Th, cn } from "@/components/ui";
 import { PlanStatus, sendInstallmentWhatsApp, type PlanRow } from "@/components/installments";
 import { useCan, useSession } from "@/components/session";
+import { useShareLink } from "@/components/send-whatsapp";
 import { useToast } from "@/components/toast";
 import { api, formatDate, PAYMENT_LABELS } from "@/lib/client";
 import { formatPKR, round2 } from "@/lib/money";
@@ -28,6 +29,7 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
   const [reversing, setReversing] = useState<NonNullable<PlanRow["payments"]>[number] | null>(null);
   const [closing, setClosing] = useState(false);
   const [lastPaid, setLastPaid] = useState<{ amount: number; receiptNo: string } | null>(null);
+  const link = useShareLink("installment", id);
 
   const load = useCallback(() => {
     api<PlanRow>(`/api/installments/${id}`)
@@ -39,7 +41,7 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
   if (!plan) return <Spinner />;
   const shop = { shopName: settings?.shopName ?? "", phone: settings?.phone };
   const remind = async () => {
-    if (!sendInstallmentWhatsApp("reminder", plan, shop)) return toast.error("The customer's mobile number is not a valid WhatsApp number.");
+    if (!sendInstallmentWhatsApp("reminder", plan, shop, undefined, link)) return toast.error("The customer's mobile number is not a valid WhatsApp number.");
     await api(`/api/installments/${id}/remind`, { method: "POST" }).catch(() => {});
     load();
   };
@@ -114,7 +116,7 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
               variant="outline"
               icon={<MessageCircle className="h-4 w-4 text-emerald-600" />}
               onClick={() => {
-                if (!sendInstallmentWhatsApp("paid", plan, shop, lastPaid)) toast.error("The customer's mobile number is not a valid WhatsApp number.");
+                if (!sendInstallmentWhatsApp("paid", plan, shop, lastPaid, link)) toast.error("The customer's mobile number is not a valid WhatsApp number.");
               }}
             >
               WhatsApp confirmation

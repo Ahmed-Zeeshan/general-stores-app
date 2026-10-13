@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Eye, Receipt, RotateCcw, Search, Undo2 } from "lucide-react";
+import { Eye, MessageCircle, Receipt, RotateCcw, Search, Undo2 } from "lucide-react";
 import { Badge, Button, Card, EmptyState, Input, PageHeader, Segmented, Spinner, StatCard, Table, Td, Th } from "@/components/ui";
 import { DateRange } from "@/components/date-range";
 import { BranchFilter } from "@/components/branch-filter";
 import { ReturnModal, type ReturnableSale } from "@/components/return-modal";
-import { useCan } from "@/components/session";
+import { useCan, useSession } from "@/components/session";
+import { SendBillModal } from "@/components/send-whatsapp";
 import { useToast } from "@/components/toast";
 import { api, formatDate, PAYMENT_LABELS, todayISO } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
@@ -50,6 +51,8 @@ export default function SalesPage() {
   const [returns, setReturns] = useState<Ret[] | null>(null);
   const [returning, setReturning] = useState<Sale | null>(null);
   const showBranch = branch === "all";
+  const { settings } = useSession();
+  const [waBill, setWaBill] = useState<string | null>(null);
   // Opened from search: ?q=…&from=…&to=…
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
@@ -159,6 +162,7 @@ export default function SalesPage() {
                         <Link href={`/receipt/${s._id}`} target="_blank">
                           <Button size="sm" variant="ghost" icon={<Eye className="h-4 w-4" />}>View</Button>
                         </Link>
+                        <Button size="sm" variant="ghost" aria-label={`WhatsApp ${s.invoiceNo}`} title="Send the bill on WhatsApp" icon={<MessageCircle className="h-4 w-4 text-emerald-600" />} onClick={() => setWaBill(s._id)} />
                         {can.manage && s.status !== "returned" && (
                           <Button size="sm" variant="ghost" className="hover:text-rose-600" icon={<RotateCcw className="h-4 w-4" />} onClick={() => setReturning(s)}>
                             Return
@@ -226,6 +230,7 @@ export default function SalesPage() {
         )}
       </Card>
 
+      <SendBillModal saleId={waBill} open={!!waBill} onClose={() => setWaBill(null)} shop={{ shopName: settings?.shopName ?? "", phone: settings?.phone }} />
       <ReturnModal sale={returning} onClose={() => setReturning(null)} onDone={load} />
     </div>
   );

@@ -7,14 +7,14 @@ import { Badge, Button, Card, Field, Input, Modal, PageHeader, Select, Spinner, 
 import { useSession, type ShopSettings } from "@/components/session";
 import { useToast } from "@/components/toast";
 import { useConfirm } from "@/components/confirm";
-import { api } from "@/lib/client";
+import { api, formatDate } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
 import { getPrintPrefs, printInFrame, setPrintPrefs, type PrintPrefs } from "@/lib/print";
 import { RestoreButton } from "@/components/restore";
 import { WaModePicker } from "@/components/wa-mode";
 import { DEFAULT_WA_PAYMENT_TEMPLATE, DEFAULT_WA_TEMPLATE, paymentMessage, reminderMessage } from "@/lib/whatsapp";
 
-type User = { _id: string; name: string; username: string; role: "owner" | "manager" | "cashier"; active: boolean; branch?: string };
+type User = { _id: string; name: string; username: string; role: "owner" | "manager" | "cashier"; active: boolean; branch?: string; hasPin?: boolean; maxDiscountPct?: number; allowUdhaar?: boolean };
 type BranchRow = { _id: string; name: string; address?: string; phone?: string; isMain: boolean; active: boolean; staff: number };
 type BranchData = { branches: BranchRow[]; maxBranches: number; activeBranches: number };
 type SettingsForm = ShopSettings & { ownerName?: string; fbrToken?: string; fbrTokenSet?: boolean; fbrPending?: number };
@@ -83,6 +83,8 @@ export default function SettingsPage() {
           fbrToken: form.fbrToken,
           waTemplate: form.waTemplate,
           waPaymentTemplate: form.waPaymentTemplate,
+          publicUrl: form.publicUrl ?? "",
+          ownerPhone: form.ownerPhone ?? "",
           loyaltyEnabled: !!form.loyaltyEnabled,
           loyaltyEarnPer: Number(form.loyaltyEarnPer) || 100,
           loyaltyPointValue: Number(form.loyaltyPointValue) || 0,
@@ -226,6 +228,15 @@ export default function SettingsPage() {
                 <WaModePicker />
                 <p className="mt-1 text-xs text-slate-500">Desktop opens the WhatsApp app installed on this PC; Web opens web.whatsapp.com.</p>
               </div>
+              <Field label="Owner's WhatsApp number" hint="The end-of-day summary is sent here. Empty = the shop phone above.">
+                <Input value={form.ownerPhone ?? ""} onChange={set("ownerPhone")} inputMode="tel" placeholder="03xx-xxxxxxx" aria-label="Owner's WhatsApp number" />
+              </Field>
+              <Field
+                label="App address for customers (optional)"
+                hint="Only if the app is on the internet (e.g. https://myshop.example.com). Then bills, repair slips and installment plans sent on WhatsApp include a link the customer can open. A link to this PC (localhost) would not open on the customer's phone."
+              >
+                <Input value={form.publicUrl ?? ""} onChange={set("publicUrl")} placeholder="https://" aria-label="App address for customers" />
+              </Field>
               <Field label="Udhaar reminder message" hint="{name} customer · {amount} udhaar · {shop} shop name · {shopPhone} shop phone">
                 <Textarea value={form.waTemplate ?? DEFAULT_WA_TEMPLATE} onChange={set("waTemplate")} className="min-h-[110px]" />
               </Field>
@@ -272,7 +283,15 @@ export default function SettingsPage() {
               <tr key={u._id}>
                 <Td className="font-semibold">{u.name}{u._id === me.id && <span className="ml-2 text-xs text-slate-400">(you)</span>}</Td>
                 <Td className="text-slate-500">{u.username}</Td>
-                <Td><Badge color={ROLE_INFO[u.role].color}>{ROLE_INFO[u.role].label}</Badge></Td>
+                <Td>
+                  <Badge color={ROLE_INFO[u.role].color}>{ROLE_INFO[u.role].label}</Badge>
+                  {u.hasPin && <span className="ml-1"><Badge color="slate">PIN</Badge></span>}
+                  {u.role !== "owner" && (u.maxDiscountPct !== undefined || u.allowUdhaar === false) && (
+                    <div className="mt-0.5 text-xs text-slate-500">
+                      {[u.maxDiscountPct !== undefined && `discount up to ${u.maxDiscountPct}%`, u.allowUdhaar === false && "no udhaar"].filter(Boolean).join(" · ")}
+                    </div>
+                  )}
+                </Td>
                 {activeBranches.length > 1 && <Td className="text-slate-500">{branchName(u.branch) ?? "All branches"}</Td>}
                 <Td>{u.active ? <Badge color="green">Active</Badge> : <Badge color="red">Disabled</Badge>}</Td>
                 <Td className="text-right">
@@ -427,8 +446,64 @@ function DataCard() {
             <RestoreButton shopName={settings?.shopName ?? ""} restoreUrl="/api/restore" backupUrl="/api/backup" />
           </div>
         </div>
+        <AutoBackups />
       </div>
     </Card>
+  );
+}
+
+type AutoStatus = { enabled: boolean; time: string; keep: number; dir: string; lastRunAt: string | null; lastOk: boolean | null; lastError?: string; files: { name: string; size: number; at: string }[] };
+
+/** Nightly copies on this computer, and how to keep them in Google Drive too. */
+function AutoBackups() {
+  const [s, setS] = useState<AutoStatus | null>(null);
+  useEffect(() => {
+    api<AutoStatus>("/api/backup/auto")
+      .then(setS)
+      .catch(() => {});
+  }, []);
+  if (!s) return null;
+  const at = (name: string) => name.replace(".json.gz", "").replace(/^(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})$/, "$1 $2:$3");
+  return (
+    <div className="sm:col-span-2">
+      <h3 className="mb-2 text-sm font-semibold text-slate-700">Automatic backups</h3>
+      {!s.enabled ? (
+        <p className="text-xs text-slate-500">Automatic backups are switched off on this computer (AUTO_BACKUP=off).</p>
+      ) : (
+        <>
+          <p className="text-xs text-slate-500">
+            Every night at {s.time} a copy is saved on this computer; the last {s.keep} are kept.{" "}
+            {s.lastRunAt ? (
+              s.lastOk === false ? (
+                <span className="font-semibold text-rose-600">The last one failed: {s.lastError}</span>
+              ) : (
+                <span className="font-semibold text-emerald-700">Last copy: {formatDate(s.lastRunAt, true)}.</span>
+              )
+            ) : (
+              "No copy yet."
+            )}
+          </p>
+          <p className="mt-1 break-all text-xs text-slate-500">
+            Folder: <code className="rounded bg-slate-100 px-1">{s.dir}</code>
+          </p>
+          {s.files.length > 0 && (
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {s.files.slice(0, 5).map((f) => (
+                <li key={f.name}>
+                  <a href={`/api/backup/auto?file=${encodeURIComponent(f.name)}`} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200">
+                    <Download className="h-3.5 w-3.5" /> {at(f.name)}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="mt-3 rounded-xl bg-sky-50 p-3 text-xs text-sky-900">
+            <b>Keep a copy online (Google Drive):</b> install <i>Google Drive for desktop</i> on this computer, then set the backup folder (BACKUP_DIR in the app&apos;s settings file) to a folder inside Google Drive, e.g.{" "}
+            <code className="rounded bg-white px-1">G:\My Drive\Dukaan Backups</code>, and restart the app. Every nightly copy then also goes to Google Drive, so it survives a broken computer. Any copy can be restored with “Restore from backup”.
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -446,14 +521,26 @@ function UserModal({
   onSaved: () => void;
 }) {
   const toast = useToast();
-  const [form, setForm] = useState({ name: "", username: "", password: "", role: "cashier", active: true, branch: "" });
+  const [form, setForm] = useState({ name: "", username: "", password: "", role: "cashier", active: true, branch: "", pin: "", removePin: false, maxDiscountPct: "", allowUdhaar: true });
   const [saving, setSaving] = useState(false);
   const isNew = value === "new";
 
   useEffect(() => {
     if (!value) return;
-    if (value === "new") setForm({ name: "", username: "", password: "", role: "cashier", active: true, branch: "" });
-    else setForm({ name: value.name, username: value.username, password: "", role: value.role, active: value.active, branch: value.branch ?? "" });
+    if (value === "new") setForm({ name: "", username: "", password: "", role: "cashier", active: true, branch: "", pin: "", removePin: false, maxDiscountPct: "", allowUdhaar: true });
+    else
+      setForm({
+        name: value.name,
+        username: value.username,
+        password: "",
+        role: value.role,
+        active: value.active,
+        branch: value.branch ?? "",
+        pin: "",
+        removePin: false,
+        maxDiscountPct: value.maxDiscountPct !== undefined ? String(value.maxDiscountPct) : "",
+        allowUdhaar: value.allowUdhaar !== false,
+      });
   }, [value]);
   if (!value) return null;
 
@@ -461,11 +548,17 @@ function UserModal({
     e.preventDefault();
     setSaving(true);
     try {
-      if (isNew) await api("/api/users", { body: form });
-      else
+      const extra = {
+        ...(form.pin ? { pin: form.pin } : form.removePin ? { pin: "" } : {}),
+        ...(form.role !== "owner" ? { maxDiscountPct: form.maxDiscountPct === "" ? "" : Number(form.maxDiscountPct), allowUdhaar: form.allowUdhaar } : {}),
+      };
+      if (isNew) {
+        const created = await api<{ _id: string }>("/api/users", { body: { name: form.name, username: form.username, password: form.password, role: form.role, branch: form.branch } });
+        if (Object.keys(extra).length) await api(`/api/users/${created._id}`, { method: "PUT", body: extra });
+      } else
         await api(`/api/users/${(value as User)._id}`, {
           method: "PUT",
-          body: { name: form.name, role: form.role, active: form.active, password: form.password, ...(isSelf ? {} : { branch: form.branch }) },
+          body: { name: form.name, role: form.role, active: form.active, password: form.password, ...(isSelf ? {} : { branch: form.branch }), ...extra },
         });
       toast.success("Saved");
       onSaved();
@@ -511,6 +604,27 @@ function UserModal({
               ))}
             </Select>
           </Field>
+        )}
+        <Field label={(value as User).hasPin ? "New PIN for switching user" : "PIN for switching user (optional)"} hint="4–6 digits. Lets this person take over a shared counter quickly with “Switch user”.">
+          <Input type="password" inputMode="numeric" maxLength={6} value={form.pin} onChange={(e) => setForm({ ...form, pin: e.target.value.replace(/\D/g, ""), removePin: false })} autoComplete="new-password" aria-label="PIN" />
+        </Field>
+        {!isNew && (value as User).hasPin && !form.pin && (
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input type="checkbox" checked={form.removePin} onChange={(e) => setForm({ ...form, removePin: e.target.checked })} className="h-4 w-4 accent-brand-600" aria-label="Remove PIN" />
+            Remove the PIN
+          </label>
+        )}
+        {form.role !== "owner" && (
+          <div className="space-y-3 rounded-xl border border-slate-200 p-3">
+            <div className="text-sm font-semibold text-slate-700">Limits at the counter</div>
+            <Field label="Largest discount on a bill (%)" hint="Empty = no limit. Offers and points don't count.">
+              <Input type="number" min="0" max="100" step="any" value={form.maxDiscountPct} onChange={(e) => setForm({ ...form, maxDiscountPct: e.target.value })} placeholder="No limit" aria-label="Discount limit" />
+            </Field>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" checked={form.allowUdhaar} onChange={(e) => setForm({ ...form, allowUdhaar: e.target.checked })} className="h-4 w-4 accent-brand-600" aria-label="May give udhaar" />
+              May give udhaar and installments
+            </label>
+          </div>
         )}
         {!isNew && !isSelf && (
           <label className="flex items-center gap-3">

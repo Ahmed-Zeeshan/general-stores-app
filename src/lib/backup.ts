@@ -101,7 +101,8 @@ export async function tenantBackup(tid: Types.ObjectId) {
   const [tenant, users, ...rest] = await Promise.all([
     Tenant.findById(tid).lean(),
     User.find(q).lean(),
-    ...SHOP_DATA.map(([, model]) => model.find(q).lean()),
+    // Product photos are left out of normal reads; a backup must keep them.
+    ...SHOP_DATA.map(([, model]) => (model === Product ? model.find(q).select("+image") : model.find(q)).lean()),
   ]);
   const data: Record<string, unknown[]> = { users: users as unknown[] };
   SHOP_DATA.forEach(([name], i) => (data[name] = rest[i] as unknown[]));

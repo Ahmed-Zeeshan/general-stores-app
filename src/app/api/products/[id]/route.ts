@@ -48,6 +48,14 @@ export const PUT = handle<Ctx>(async (req, { params }) => {
     delete update.warrantyMonths;
     unset.warrantyMonths = 1;
   }
+  // Photo: missing = keep it, "" = remove it.
+  if (body.image === undefined) delete update.image;
+  else if (body.image === "") {
+    delete update.image;
+    unset.image = 1;
+    update.hasImage = false;
+  } else update.hasImage = true;
+  if (body.favourite === undefined) delete update.favourite;
   const before = await Product.findOne({ _id: id, tenant: tid }).select("trackExpiry trackSerial stock name salePrice costPrice wholesalePrice").lean();
   if (!before) throw new ApiError(404, "Product not found.");
   // IMEI tracking can only be switched while the shop has none of it in stock (stock = the list of phones).

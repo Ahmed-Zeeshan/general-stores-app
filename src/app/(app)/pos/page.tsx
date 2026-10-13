@@ -12,6 +12,9 @@ import {
   CreditCard,
   HandCoins,
   Landmark,
+  Maximize2,
+  MessageCircle,
+  Star,
   Minus,
   PauseCircle,
   Plus,
@@ -35,6 +38,7 @@ import { useLang, useT } from "@/lib/i18n";
 import { ReceivePaymentModal } from "@/components/receive-payment";
 import { DevicePicker, DeviceTags, type DeviceRow } from "@/components/devices";
 import { InstallmentSaleModal } from "@/components/installments";
+import { SendBillModal } from "@/components/send-whatsapp";
 import { cleanImei } from "@/lib/imei";
 import { productMatches } from "@/lib/product-search";
 import { api, formatDate, LOOSE_UNITS, NetworkError, UNIT_LABELS } from "@/lib/client";
@@ -68,6 +72,9 @@ type Product = {
   sku?: string;
   brand?: string;
   fits?: string;
+  hasImage?: boolean;
+  favourite?: boolean;
+  updatedAt?: string;
   unit: string;
   salePrice: number;
   wholesalePrice?: number;
@@ -78,6 +85,8 @@ type Product = {
   category?: { _id: string; name: string } | null;
 };
 type Category = { _id: string; name: string };
+const FAV = "__favourites";
+const BIG_KEY = "dukaan:pos-big";
 /** One bill line. `qty` counts packs when `pack` is set; `custom` = price changed by hand; `device` = the phone sold (IMEI). */
 type CartItem = { key: string; product: Product; qty: number; price: number; discount: number; pack?: PackLike | null; custom?: boolean; device?: DeviceRow };
 const lineKey = (p: Product, pack?: PackLike | null) => (pack ? `${p._id}:${pack.name}` : p._id);
@@ -124,6 +133,24 @@ export default function PosPage() {
   const [phoneFor, setPhoneFor] = useState<Product | null>(null);
   const [payOpen, setPayOpen] = useState(false);
   const [qistOpen, setQistOpen] = useState(false);
+  // Big buttons for touch screens, remembered on this computer.
+  const [big, setBigState] = useState(false);
+  useEffect(() => {
+    try {
+      setBigState(localStorage.getItem(BIG_KEY) === "1");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const setBig = (v: boolean) => {
+    setBigState(v);
+    try {
+      localStorage.setItem(BIG_KEY, v ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  };
+  const [waBill, setWaBill] = useState<string | null>(null);
   const [qistDone, setQistDone] = useState<{ planId: string; planNo: string; invoiceNo: string; financed: number; months: number; perMonth: number; firstDue: string } | null>(null);
   const [done, setDone] = useState<{ _id: string; invoiceNo: string; total: number; change: number; creditAmount?: number; printed?: boolean } | null>(null);
   const [autoPrint, setAutoPrint] = useState(false);
@@ -220,12 +247,16 @@ export default function PosPage() {
   const filtered = useMemo(() => {
     if (!products) return [];
     const term = q.trim().toLowerCase();
-    return products.filter((p) => {
+    const list = products.filter((p) => {
+      if (cat === FAV) return !!p.favourite && (!term || productMatches(p, q));
       if (cat && p.category?._id !== cat) return false;
       if (!term) return true;
       return productMatches(p, q);
     });
+    // Starred items first when nothing is typed.
+    return term ? list : [...list.filter((p) => p.favourite), ...list.filter((p) => !p.favourite)];
   }, [products, q, cat]);
+  const hasFavourites = !!products?.some((p) => p.favourite);
 
   const wholesale = customer?.priceLevel === "wholesale";
   function addToCart(p: Product, qty = 1, pack: PackLike | null = null) {
@@ -492,6 +523,17 @@ export default function PosPage() {
                 {t("Held bills")} <Badge color="amber">{held.length}</Badge>
               </Button>
             )}
+            <Button
+              size="sm"
+              variant={big ? "secondary" : "outline"}
+              className="hidden whitespace-nowrap sm:inline-flex"
+              icon={<Maximize2 className="h-4 w-4" />}
+              onClick={() => setBig(!big)}
+              aria-pressed={big}
+              title="Bigger buttons for touch screens (this computer)"
+            >
+              {t("Big buttons")}
+            </Button>
             <Button size="sm" variant="outline" className="whitespace-nowrap" icon={<HandCoins className="h-4 w-4 text-brand-600" />} onClick={() => setReceiveOpen(true)} title="Customer pays old udhaar (F8)">
               <span className="hidden sm:inline">{t("Receive udhaar")}</span>
               <span className="sm:hidden">{t("Udhaar")}</span>
@@ -522,6 +564,12 @@ export default function PosPage() {
         </div>
 
         <div className="scrollbar-thin -mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
+          {hasFavourites && (
+            <CatChip active={cat === FAV} onClick={() => setCat(cat === FAV ? "" : FAV)}>
+              <Star className="mr-1 inline h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+              {t("Favourites")}
+            </CatChip>
+          )}
           <CatChip active={!cat} onClick={() => setCat("")}>{t("All")}</CatChip>
           {categories.map((c) => (
             <CatChip key={c._id} active={cat === c._id} onClick={() => setCat(c._id)}>
@@ -546,7 +594,7 @@ export default function PosPage() {
           ) : filtered.length === 0 ? (
             <p className="py-10 text-center text-slate-500">No matching products.</p>
           ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            <div className={big ? "grid grid-cols-2 gap-4 sm:grid-cols-3 2xl:grid-cols-4" : "grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"}>
               {filtered.slice(0, 200).map((p) => {
                 const inCartQty = round2(cart.filter((i) => i.product._id === p._id).reduce((a, i) => a + i.qty, 0));
                 const inCart = inCartQty > 0 ? { qty: inCartQty } : null;
@@ -555,23 +603,29 @@ export default function PosPage() {
                     key={p._id}
                     onClick={() => onPick(p)}
                     className={cn(
-                      "relative flex flex-col rounded-2xl border bg-white p-3.5 text-left shadow-xs transition hover:-translate-y-0.5 hover:border-brand-400 hover:shadow-md active:translate-y-0",
+                      "relative flex flex-col rounded-2xl border bg-white text-left shadow-xs transition hover:-translate-y-0.5 hover:border-brand-400 hover:shadow-md active:translate-y-0",
+                      big ? "p-4" : "p-3.5",
                       inCart ? "border-brand-500 ring-2 ring-brand-100" : "border-slate-200",
                     )}
                   >
+                    {p.favourite && <Star className="absolute left-2 top-2 h-4 w-4 fill-amber-400 text-amber-400" aria-label="Favourite" />}
+                    {p.hasImage && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={`/api/products/${p._id}/image?v=${encodeURIComponent(p.updatedAt ?? "")}`} alt="" loading="lazy" className={cn("mb-2 w-full rounded-xl bg-slate-50 object-contain", big ? "h-28" : "h-20")} />
+                    )}
                     {inCart && (
                       <span className="absolute -right-1.5 -top-1.5 flex h-6 min-w-6 items-center justify-center rounded-full bg-brand-600 px-1.5 text-xs font-bold text-white">
                         {formatQty(inCart.qty)}
                       </span>
                     )}
-                    <span className="line-clamp-2 min-h-10 font-semibold leading-tight text-slate-800">{p.name}</span>
+                    <span className={cn("line-clamp-2 font-semibold leading-tight text-slate-800", big ? "min-h-12 text-lg" : "min-h-10")}>{p.name}</span>
                     {p.nameUrdu && <span className="urdu truncate text-xs text-slate-400">{p.nameUrdu}</span>}
                     {(p.brand || p.fits) && (
                       <span className="truncate text-xs text-slate-500" title={p.fits ? `Fits ${p.fits}` : undefined}>
                         {[p.brand, p.fits && `Fits ${p.fits}`].filter(Boolean).join(" · ")}
                       </span>
                     )}
-                    <span className="mt-2 text-lg font-bold text-brand-700">
+                    <span className={cn("mt-2 font-bold text-brand-700", big ? "text-2xl" : "text-lg")}>
                       {formatPKR(p.salePrice)}
                       <span className="text-xs font-medium text-slate-400">/{UNIT_LABELS[p.unit]}</span>
                     </span>
@@ -892,6 +946,8 @@ export default function PosPage() {
         )}
       </Modal>
 
+      <SendBillModal saleId={waBill} open={!!waBill} onClose={() => setWaBill(null)} shop={{ shopName: settings?.shopName ?? "", phone: settings?.phone }} />
+
       <CustomerPicker
         open={pickCustomer}
         onClose={() => setPickCustomer(false)}
@@ -981,6 +1037,9 @@ export default function PosPage() {
               </Button>
               <Button size="lg" onClick={() => setDone(null)}>
                 {t("Next bill")}
+              </Button>
+              <Button variant="outline" size="lg" className="col-span-2" icon={<MessageCircle className="h-5 w-5 text-emerald-600" />} onClick={() => setWaBill(done._id)}>
+                {t("Send bill on WhatsApp")}
               </Button>
             </div>
             {done.printed && <p className="mt-3 text-xs text-slate-500">{t("Receipt sent to the printer.")}</p>}

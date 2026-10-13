@@ -58,6 +58,8 @@ export const POST = handle(async (req) => {
     barcode: body.barcode || undefined,
     wholesalePrice: body.wholesalePrice ?? undefined,
     warrantyMonths: body.warrantyMonths ?? undefined,
+    image: body.image || undefined,
+    hasImage: !!body.image,
     stock: 0,
   });
   if (openingStock > 0) {

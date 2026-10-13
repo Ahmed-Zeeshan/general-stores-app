@@ -46,3 +46,6 @@ export function receiptUrl(saleId: string, opts: { print?: boolean; creditAmount
   const qs = params.toString();
   return `/receipt/${saleId}${qs ? `?${qs}` : ""}`;
 }
+
+/** Set once a test receipt has been opened on this computer (for the setup guide). */
+export const PRINTER_TESTED_KEY = "dukaan:printer-tested";

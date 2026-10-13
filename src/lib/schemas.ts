@@ -14,6 +14,13 @@ export const ProductInput = z.object({
   barcode: z.string().trim().optional(),
   sku: z.string().trim().optional(),
   brand: z.string().trim().max(60).optional(),
+  /** Photo as a JPEG / PNG / WebP data URL (made small in the browser); "" removes it, missing keeps it. */
+  image: z
+    .string()
+    .max(150_000, "The photo is too large.")
+    .refine((v) => v === "" || /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v), "Not a photo.")
+    .optional(),
+  favourite: z.boolean().optional(),
   fits: z.string().trim().max(300).optional(),
   category: optionalId,
   unit: z.enum(UNITS),

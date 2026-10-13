@@ -23,6 +23,8 @@ export type ShopSettings = {
   fbrPosId?: string;
   fbrDefaultPct?: string;
   waTemplate?: string;
+  publicUrl?: string;
+  ownerPhone?: string;
   waPaymentTemplate?: string;
   loyaltyEnabled?: boolean;
   loyaltyEarnPer?: number;

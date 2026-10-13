@@ -60,7 +60,12 @@ const TenantSchema = new Schema(
       ),
       default: () => ({}),
     },
-
+    /** Owner's WhatsApp number for the end-of-day summary (empty = the shop phone). */
+    ownerPhone: { type: String, trim: true },
+    /** Address customers can open (e.g. https://myshop.example.com) — adds bill / slip links to WhatsApp messages. */
+    publicUrl: { type: String, trim: true },
+    /** The owner closed the "Get your shop ready" guide on the dashboard. */
+    setupDismissedAt: { type: Date },
   },
   { timestamps: true },
 );

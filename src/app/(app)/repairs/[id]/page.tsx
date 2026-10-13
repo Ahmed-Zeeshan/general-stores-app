@@ -6,6 +6,7 @@ import { ArrowLeft, Ban, CheckCircle2, Eye, HandCoins, MessageCircle, PackageChe
 import { Badge, Button, Card, Field, Input, Modal, Select, Spinner, Textarea, cn } from "@/components/ui";
 import { RepairStatusBadge, isLate, sendRepairWhatsApp, type RepairJob } from "@/components/repairs";
 import { useCan, useSession } from "@/components/session";
+import { useShareLink } from "@/components/send-whatsapp";
 import { useToast } from "@/components/toast";
 import { api, formatDate, PAYMENT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty, round2 } from "@/lib/money";
@@ -27,6 +28,7 @@ export default function RepairJobPage({ params }: { params: Promise<{ id: string
   const [delivering, setDelivering] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [showLock, setShowLock] = useState(false);
+  const link = useShareLink("repair", id);
 
   const load = useCallback(() => {
     api<RepairJob>(`/api/repairs/${id}`)
@@ -55,7 +57,7 @@ export default function RepairJobPage({ params }: { params: Promise<{ id: string
   const balance = job.balance ?? round2(job.total - job.paid - (job.creditAmount ?? 0));
   const shop = { shopName: settings?.shopName ?? "", phone: settings?.phone };
   const whatsapp = (kind: "booked" | "ready" | "delivered") => {
-    if (!sendRepairWhatsApp(kind, job, shop)) toast.error("The customer's mobile number is not a valid WhatsApp number.");
+    if (!sendRepairWhatsApp(kind, job, shop, link)) toast.error("The customer's mobile number is not a valid WhatsApp number.");
   };
   const setStatus = (status: RepairStatus) => act(() => api(`/api/repairs/${id}/status`, { body: { status } }), `Status: ${REPAIR_STATUS_LABELS[status]}`);
 

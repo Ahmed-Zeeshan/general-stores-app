@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { Badge, Card, Spinner, StatCard } from "@/components/ui";
 import { SalesBarChart } from "@/components/charts";
+import { SetupGuide } from "@/components/setup-guide";
+import { DaySummaryButton } from "@/components/day-summary";
 import { useCan, useSession } from "@/components/session";
 import { api, formatDate, PAYMENT_LABELS, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty } from "@/lib/money";
@@ -72,12 +74,17 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <p className="text-sm font-medium text-slate-500">{formatDate(new Date())}</p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-          {greeting()}, {user.name.split(" ")[0]} 👋
-        </h1>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm font-medium text-slate-500">{formatDate(new Date())}</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            {greeting()}, {user.name.split(" ")[0]} 👋
+          </h1>
+        </div>
+        {can.manage && <DaySummaryButton />}
       </div>
+
+      {user.role === "owner" && <SetupGuide />}
 
       <div className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {quick.map((q) => (

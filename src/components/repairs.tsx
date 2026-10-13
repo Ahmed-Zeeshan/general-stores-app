@@ -71,7 +71,7 @@ export function isLate(j: Pick<RepairJob, "promisedAt" | "status">) {
 }
 
 /** Opens WhatsApp with the booked / ready / delivered message for this job. */
-export function sendRepairWhatsApp(kind: "booked" | "ready" | "delivered", j: RepairJob, shop: { shopName: string; phone?: string }) {
+export function sendRepairWhatsApp(kind: "booked" | "ready" | "delivered", j: RepairJob, shop: { shopName: string; phone?: string }, link?: string | null) {
   const phone = waNumber(j.customerPhone);
   if (!phone) return false;
   openWhatsApp(
@@ -89,6 +89,7 @@ export function sendRepairWhatsApp(kind: "booked" | "ready" | "delivered", j: Re
       warrantyUntil: j.warrantyUntil,
       shop: shop.shopName,
       shopPhone: shop.phone,
+      link,
     }),
   );
   return true;

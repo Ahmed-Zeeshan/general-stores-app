@@ -12,6 +12,11 @@ const Body = z.object({
   active: z.boolean().optional(),
   password: z.string().min(6).optional().or(z.literal("")),
   branch: z.string().regex(/^[a-f0-9]{24}$/i).optional().or(z.literal("")).or(z.null()),
+  /** "" removes the PIN. */
+  pin: z.string().regex(/^\d{4,6}$/, "PIN must be 4 to 6 digits").optional().or(z.literal("")),
+  /** Empty = no limit. */
+  maxDiscountPct: z.union([z.literal(""), z.null(), z.coerce.number().min(0).max(100)]).optional(),
+  allowUdhaar: z.boolean().optional(),
 });
 
 export const PUT = handle<Ctx>(async (req, { params }) => {
@@ -35,6 +40,16 @@ export const PUT = handle<Ctx>(async (req, { params }) => {
   if (body.role) update.role = body.role;
   if (body.active !== undefined) update.active = body.active;
   if (body.password) update.passwordHash = await hashPassword(body.password);
+  if (body.pin) {
+    update.pinHash = await hashPassword(body.pin);
+    update.hasPin = true;
+  } else if (body.pin === "") {
+    update.hasPin = false;
+    unset.pinHash = 1;
+  }
+  if (typeof body.maxDiscountPct === "number") update.maxDiscountPct = body.maxDiscountPct;
+  else if (body.maxDiscountPct === "" || body.maxDiscountPct === null) unset.maxDiscountPct = 1;
+  if (body.allowUdhaar !== undefined) update.allowUdhaar = body.allowUdhaar;
   const updated = await User.findOneAndUpdate({ _id: id, tenant: tid }, { $set: update, $unset: unset }, { new: true }).lean();
   forgetUser(id);
   const changes = [
@@ -42,6 +57,9 @@ export const PUT = handle<Ctx>(async (req, { params }) => {
     body.role && body.role !== target.role && `role ${target.role} → ${body.role}`,
     body.active !== undefined && body.active !== target.active && (body.active ? "enabled" : "disabled"),
     body.password && "password reset",
+    body.pin !== undefined && (body.pin ? "PIN set" : "PIN removed"),
+    body.maxDiscountPct !== undefined && String(body.maxDiscountPct ?? "") !== String(target.maxDiscountPct ?? "") && `discount limit ${body.maxDiscountPct === "" || body.maxDiscountPct === null ? "removed" : `${body.maxDiscountPct}%`}`,
+    body.allowUdhaar !== undefined && body.allowUdhaar !== (target.allowUdhaar ?? true) && (body.allowUdhaar ? "may give udhaar" : "no udhaar"),
     (body.branch !== undefined && String(body.branch || "") !== String(target.branch ?? "")) && "branch changed",
   ].filter(Boolean);
   if (changes.length) {

@@ -40,6 +40,13 @@ const Body = z.object({
   loyaltyEarnPer: z.coerce.number().min(1).max(1_000_000).optional(),
   loyaltyPointValue: z.coerce.number().min(0).max(100_000).optional(),
   loyaltyMinRedeem: z.coerce.number().int().min(0).max(1_000_000).optional(),
+  ownerPhone: z.string().trim().max(20).optional(),
+  publicUrl: z
+    .string()
+    .trim()
+    .max(200)
+    .refine((v) => v === "" || /^https?:\/\/[^\s/]+\.[^\s]+$/i.test(v) || /^https?:\/\/localhost(:\d+)?\/?$/i.test(v), "The app's address must start with https:// (e.g. https://myshop.example.com)")
+    .optional(),
   modules: z.object({ phones: z.boolean(), repairs: z.boolean(), wallets: z.boolean(), installments: z.boolean() }).partial().optional(),
 });
 
@@ -67,6 +74,8 @@ const SETTING_LABELS: Record<string, string> = {
   loyaltyPointValue: "point value",
   loyaltyMinRedeem: "minimum points to spend",
   modules: "features",
+  publicUrl: "app address for customer links",
+  ownerPhone: "owner's WhatsApp number",
 };
 
 export const PUT = handle(async (req) => {

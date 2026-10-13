@@ -12,6 +12,12 @@ const UserSchema = new Schema(
     role: { type: String, enum: ["superadmin", "owner", "manager", "cashier"], default: "cashier" },
     active: { type: Boolean, default: true },
     lastLoginAt: { type: Date },
+    /** 4–6 digit PIN to switch to this user on a shared counter (hashed). */
+    pinHash: { type: String, select: false },
+    hasPin: { type: Boolean, default: false },
+    /** Limits for staff set by the owner: largest discount on a bill (% of the bill), and udhaar allowed or not. */
+    maxDiscountPct: { type: Number, min: 0, max: 100 },
+    allowUdhaar: { type: Boolean, default: true },
   },
   { timestamps: true },
 );

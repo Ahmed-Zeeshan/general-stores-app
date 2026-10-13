@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { BookOpen, CalendarRange, CornerDownLeft, Loader2, Package, Receipt, Repeat, Search, Smartphone, Truck, Wrench, X, Zap } from "lucide-react";
 import { cn } from "./ui";
@@ -120,7 +121,7 @@ function SearchDialog({ onClose }: { onClose: () => void }) {
   }, [active]);
 
   let n = -1;
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/50 p-3 pt-[8vh] sm:p-6 sm:pt-[12vh]" onMouseDown={onClose}>
       <div ref={box} role="dialog" aria-label="Search" className="flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-3 border-b border-slate-100 px-4">
@@ -176,6 +177,7 @@ function SearchDialog({ onClose }: { onClose: () => void }) {
         </div>
         <div className="hidden border-t border-slate-100 px-4 py-2 text-xs text-slate-400 sm:block">↑ ↓ to move · Enter to open · Esc to close</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -113,6 +113,8 @@ const PAGES = [
   ["receipt-wallet", `/receipt/wallet/${load._id}`],
   ["receipt-installment", `/receipt/installment/${qist.plan._id}`],
   ["receipt-installment-pay", `/receipt/installment/${qist.plan._id}?receipt=${qPay.receiptNo}`],
+  ["reorder", "/reorder"],
+  ["help", "/help"],
 ];
 const ADMIN_PAGES = [
   ["admin", "/admin"],

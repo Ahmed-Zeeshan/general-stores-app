@@ -58,7 +58,7 @@ export function PlanStatus({ plan }: { plan: Pick<PlanRow, "status" | "lateCount
 }
 
 /** Opens WhatsApp with a reminder (or a payment confirmation). False when the customer has no mobile number. */
-export function sendInstallmentWhatsApp(kind: "reminder" | "paid", p: PlanRow, shop: { shopName: string; phone?: string }, paid?: { amount: number; receiptNo?: string }) {
+export function sendInstallmentWhatsApp(kind: "reminder" | "paid", p: PlanRow, shop: { shopName: string; phone?: string }, paid?: { amount: number; receiptNo?: string }, link?: string | null) {
   const phone = waNumber(p.customerPhone);
   if (!phone) return false;
   openWhatsApp(
@@ -74,6 +74,7 @@ export function sendInstallmentWhatsApp(kind: "reminder" | "paid", p: PlanRow, s
       receiptNo: paid?.receiptNo,
       shop: shop.shopName,
       shopPhone: shop.phone,
+      link,
     }),
   );
   return true;

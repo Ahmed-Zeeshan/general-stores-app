@@ -3,13 +3,15 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Barcode, Boxes, Package, Pencil, Plus, Printer, Search, SlidersHorizontal, Smartphone, Tags, Trash2, Wand2 } from "lucide-react";
+import { Barcode, Boxes, Camera, ListPlus, Star, Package, Pencil, Plus, Printer, Search, SlidersHorizontal, Smartphone, Tags, Trash2, Wand2 } from "lucide-react";
 import { BarcodeSvg } from "@/components/barcode";
 import { CameraButton, CameraScanner, useBarcodeScanner } from "@/components/barcode-scanner";
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Spinner, Table, Td, Th, Textarea } from "@/components/ui";
 import { useCan, useSession } from "@/components/session";
 import { useToast } from "@/components/toast";
 import { useConfirm } from "@/components/confirm";
+import { StarterItemsModal } from "@/components/starter-items";
+import { compressImage } from "@/lib/image";
 import { api, formatDate, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty } from "@/lib/money";
 
@@ -22,6 +24,9 @@ type Product = {
   sku?: string;
   brand?: string;
   fits?: string;
+  hasImage?: boolean;
+  favourite?: boolean;
+  updatedAt?: string;
   unit: string;
   costPrice: number;
   salePrice: number;
@@ -72,6 +77,7 @@ function ProductsPage() {
   const params = useSearchParams();
   const [products, setProducts] = useState<Product[] | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [starterOpen, setStarterOpen] = useState(false);
   const [q, setQ] = useState(params.get("q") ?? "");
   const [cat, setCat] = useState("");
   const [filter, setFilter] = useState<"all" | "low" | "expiring">((params.get("filter") as "low" | "expiring") ?? "all");
@@ -94,6 +100,15 @@ function ProductsPage() {
     api<Product[]>(`/api/products?${sp}`).then(setProducts).catch((e) => toast.error(e.message));
   }, [q, cat, filter, allBranches, toast]);
 
+  async function toggleFavourite(p: Product) {
+    try {
+      await api(`/api/products/${p._id}/favourite`, { body: { favourite: !p.favourite } });
+      setProducts((list) => list && list.map((x) => (x._id === p._id ? { ...x, favourite: !p.favourite } : x)));
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
   const loadCats = useCallback(() => {
     api<Category[]>("/api/categories").then(setCategories).catch(() => {});
   }, []);
@@ -105,7 +120,7 @@ function ProductsPage() {
   useEffect(loadCats, [loadCats]);
 
   // Scanning a product's barcode (USB scanner or camera) finds it in the list.
-  useBarcodeScanner((code) => setQ(code), editing === null && adjusting === null && !catsOpen && !cameraOpen);
+  useBarcodeScanner((code) => setQ(code), editing === null && adjusting === null && !catsOpen && !cameraOpen && !starterOpen);
 
   async function assignMissing() {
     const missing = products?.filter((p) => !p.barcode).length ?? 0;
@@ -178,6 +193,9 @@ function ProductsPage() {
               <Link href="/labels">
                 <Button variant="outline" icon={<Printer className="h-4 w-4" />}>Print labels</Button>
               </Link>
+              <Button variant="outline" icon={<ListPlus className="h-4 w-4" />} onClick={() => setStarterOpen(true)}>
+                Ready-made items
+              </Button>
               <Button icon={<Plus className="h-4 w-4" />} onClick={() => setEditing("new")}>
                 Add product
               </Button>
@@ -253,7 +271,26 @@ function ProductsPage() {
                 return (
                   <tr key={p._id} className="hover:bg-slate-50/60">
                     <Td>
-                      <div className="font-semibold text-slate-800">{p.name}</div>
+                      <div className="flex items-center gap-2">
+                        {p.hasImage && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={`/api/products/${p._id}/image?v=${encodeURIComponent(p.updatedAt ?? "")}`} alt="" loading="lazy" className="h-9 w-9 shrink-0 rounded-lg bg-slate-50 object-contain" />
+                        )}
+                        <div className="font-semibold text-slate-800">{p.name}</div>
+                        {can.manage ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleFavourite(p)}
+                            aria-label={`${p.favourite ? "Unstar" : "Star"} ${p.name}`}
+                            title={p.favourite ? "Remove from Favourites" : "Show first on the sale screen"}
+                            className="rounded p-0.5 text-slate-300 hover:text-amber-500"
+                          >
+                            <Star className={p.favourite ? "h-4 w-4 fill-amber-400 text-amber-400" : "h-4 w-4"} />
+                          </button>
+                        ) : (
+                          p.favourite && <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                        )}
+                      </div>
                       {(p.brand || p.fits) && (
                         <div className="text-xs text-slate-500">{[p.brand, p.fits && `Fits ${p.fits}`].filter(Boolean).join(" · ")}</div>
                       )}
@@ -330,6 +367,15 @@ function ProductsPage() {
       />
       <CameraScanner open={cameraOpen} onClose={() => setCameraOpen(false)} onScan={(code) => setQ(code)} />
       <CategoriesModal open={catsOpen} onClose={() => setCatsOpen(false)} categories={categories} onChanged={loadCats} />
+      <StarterItemsModal
+        open={starterOpen}
+        onClose={() => setStarterOpen(false)}
+        onAdded={() => {
+          setStarterOpen(false);
+          load();
+          loadCats();
+        }}
+      />
     </div>
   );
 }
@@ -353,6 +399,9 @@ function ProductForm({
   const [packs, setPacks] = useState<PackRow[]>([]);
   const [trackExpiry, setTrackExpiry] = useState(false);
   const [trackSerial, setTrackSerial] = useState(false);
+  // Photo: undefined = unchanged, "" = removed, data URL = new photo.
+  const [image, setImage] = useState<string | undefined>(undefined);
+  const [favourite, setFavourite] = useState(false);
   const [saving, setSaving] = useState(false);
   const phonesOn = !!settings?.modules?.phones || !!product?.trackSerial;
 
@@ -383,6 +432,8 @@ function ProductForm({
     );
     setTrackExpiry(!!product?.trackExpiry);
     setTrackSerial(!!product?.trackSerial);
+    setImage(undefined);
+    setFavourite(!!product?.favourite);
     setPacks(
       (product?.packs ?? []).map((k) => ({
         name: k.name,
@@ -428,6 +479,8 @@ function ProductForm({
     try {
       const body = {
         ...form,
+        ...(image !== undefined ? { image } : {}),
+        favourite,
         expiryDate: form.expiryDate || null,
         trackExpiry,
         ...(phonesOn ? { trackSerial } : {}),
@@ -475,6 +528,13 @@ function ProductForm({
             ))}
           </Select>
         </Field>
+        <div className="flex items-center gap-3 sm:col-span-2">
+          <PhotoPicker current={image === undefined ? (product?.hasImage ? `/api/products/${product._id}/image?v=${encodeURIComponent(product.updatedAt ?? "")}` : null) : image || null} onChange={setImage} />
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={favourite} onChange={(e) => setFavourite(e.target.checked)} className="h-4 w-4 accent-brand-600" aria-label="Favourite" />
+            <Star className="h-4 w-4 fill-amber-400 text-amber-400" /> Favourite — show first on the sale screen
+          </label>
+        </div>
         <Field label="Brand (optional)">
           <Input value={form.brand} onChange={set("brand")} placeholder={phonesOn ? "e.g. Samsung, Anker, Faster, Audionic" : "e.g. Nestlé, Shan"} maxLength={60} aria-label="Brand" />
         </Field>
@@ -795,5 +855,43 @@ function CategoriesModal({ open, onClose, categories, onChanged }: { open: boole
         ))}
       </ul>
     </Modal>
+  );
+}
+
+/** Small product photo for the sale screen: take or choose a picture, made small before saving. */
+function PhotoPicker({ current, onChange }: { current: string | null; onChange: (v: string) => void }) {
+  const toast = useToast();
+  return (
+    <div className="flex items-center gap-2">
+      <label className="flex h-16 w-16 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-dashed border-slate-300 bg-slate-50 text-slate-400 hover:border-brand-400" title="Photo for the sale screen">
+        {current ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={current} alt="Product photo" className="h-full w-full object-contain" />
+        ) : (
+          <Camera className="h-6 w-6" />
+        )}
+        <input
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          aria-label="Product photo"
+          onChange={async (e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (!f) return;
+            try {
+              onChange(await compressImage(f, 320));
+            } catch (err) {
+              toast.error((err as Error).message);
+            }
+          }}
+        />
+      </label>
+      {current && (
+        <button type="button" onClick={() => onChange("")} className="text-xs font-semibold text-rose-600 hover:underline">
+          Remove photo
+        </button>
+      )}
+    </div>
   );
 }
