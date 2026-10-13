@@ -5,7 +5,8 @@ const PUBLIC_PAGES = ["/login", "/setup", "/offline"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  if (pathname.startsWith("/api") || PUBLIC_PAGES.includes(pathname)) return NextResponse.next();
+  // /r/… = a bill or slip a customer opens from WhatsApp (signed link, no login).
+  if (pathname.startsWith("/api") || PUBLIC_PAGES.includes(pathname) || pathname.startsWith("/r/")) return NextResponse.next();
 
   const user = await verifySession(req.cookies.get(SESSION_COOKIE)?.value);
   const redirect = (path: string) => {
