@@ -92,4 +92,24 @@ ok((await s("Shahid")).supplier?.[0]?.id === supplier._id, "owner finds supplier
 ok(!(await s("Shahid", cashier)).supplier, "cashier does not see suppliers");
 ok(Object.keys(await s("Shahid", other)).length === 0, "another shop finds nothing of this shop");
 eq((await owner.call("/api/search?q=a")).length, 0, "one letter: no search");
+
+section("Customer overview");
+const cover = (await owner.call("/api/products?q=Tempered"))[0];
+await cashier.call("/api/sales", { body: { items: [{ productId: cover._id, qty: 1 }], paymentMethod: "cash", customerId: shahid._id } });
+const warrantyPhone = await owner.call("/api/products", { body: { name: "Tecno Spark 20", unit: "pcs", costPrice: 30000, salePrice: 34000, lowStockAlert: 0, trackSerial: true, warrantyMonths: 12 } });
+const [wp] = await owner.call("/api/devices", { body: { productId: warrantyPhone._id, cost: 30000, units: [{ imei: imei(7) }] } });
+await cashier.call("/api/sales", { body: { items: [{ productId: warrantyPhone._id, qty: 1, serials: [wp._id] }], paymentMethod: "cash", customerId: shahid._id } });
+await cashier.call("/api/repairs", { body: { customerId: shahid._id, customerName: "Shahid Mehmood", customerPhone: "0321-1234567", deviceName: "Old Nokia", problem: "Battery" } });
+const usedModel = await owner.call("/api/products", { body: { name: "Samsung A12 (used)", unit: "pcs", costPrice: 0, salePrice: 25000, lowStockAlert: 0, trackSerial: true } });
+await owner.call("/api/used-phones", { body: { seller: { name: "Shahid Mehmood", cnic: "3410112345673", phone: "0321-1234567", partyId: shahid._id }, productId: usedModel._id, imei: imei(8), pta: "approved", price: 20000, method: "cash", declaration: true } });
+const ov = await owner.call(`/api/parties/${shahid._id}/overview`);
+ok(ov.stats.bills === 3 && ov.stats.bought === 45000 + 300 + 34000, "bought in all: 3 bills, Rs 79,300");
+ok(ov.phones.length === 2 && ov.stats.inWarranty === 1 && ov.phones.find((p) => p.imei === imei(7)).inWarranty, "2 phones bought, the Tecno is in warranty (12 months)");
+ok(ov.repairs.length === 1 && ov.stats.openRepairs === 1, "1 repair in the shop");
+ok(ov.installments.length === 1 && ov.stats.installmentsLeft === 33000 - 0 && ov.stats.installmentsLate === 5500, "installments: Rs 33,000 left, Rs 5,500 late");
+ok(ov.usedPhones.length === 1 && ov.usedPhones[0].price === 20000, "phone bought from him: Rs 20,000");
+ok(ov.bills.find((b) => b.method === "installments"), "the installment bill is marked as installments");
+ok((await cashier.call(`/api/parties/${shahid._id}/overview`)).usedPhones.length === 0, "cashier does not see used-phone purchases");
+await other.call(`/api/parties/${shahid._id}/overview`, { expect: 404 }).then(() => ok(true, "another shop cannot open this customer"));
+await owner.call(`/api/parties/${supplier._id}/overview`, { expect: 404 }).then(() => ok(true, "suppliers have no customer overview"));
 await done();

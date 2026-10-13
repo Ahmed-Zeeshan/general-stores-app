@@ -7,6 +7,7 @@ import { ArrowLeft, Ban, BookOpen, FileText, HandCoins, MessageCircle, Pencil, P
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Spinner, StatCard, Table, Td, Th, Textarea } from "./ui";
 import { useCan, useSession } from "./session";
 import { useConfirm } from "./confirm";
+import { CustomerTabs } from "./customer-overview";
 import { printPaymentReceipt, ReceivePaymentModal, sendPaymentWhatsApp } from "./receive-payment";
 import { useToast } from "./toast";
 import { api, formatDate, PAYMENT_LABELS } from "@/lib/client";
@@ -295,74 +296,8 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
     reversal: "Payment cancelled",
   };
 
-  return (
-    <div>
-      <Link href={t.base} className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800">
-        <ArrowLeft className="h-4 w-4" /> Back to {t.title}
-      </Link>
-
-      <Card className="overflow-hidden">
-        <div className="bg-linear-to-br from-slate-800 to-slate-900 p-6 text-white">
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10">
-                <UserRound className="h-7 w-7" />
-              </div>
-              <div>
-                <h1 className="flex flex-wrap items-center gap-2 text-2xl font-bold">
-                  {party.name}
-                  {party.priceLevel === "wholesale" && <span className="rounded-full bg-violet-500/30 px-2.5 py-0.5 text-xs font-semibold text-violet-100">Wholesale</span>}
-                </h1>
-                <div className="mt-0.5 flex flex-wrap gap-3 text-sm text-slate-300">
-                  {party.phone && (
-                    <a href={`tel:${party.phone}`} className="inline-flex items-center gap-1 hover:text-white">
-                      <Phone className="h-3.5 w-3.5" /> {party.phone}
-                    </a>
-                  )}
-                  {party.address && <span>{party.address}</span>}
-                </div>
-              </div>
-            </div>
-            <div className="sm:text-right">
-              <div className="text-sm text-slate-300">{party.balance >= 0 ? t.oweHint : "Advance / extra paid"}</div>
-              <div className={`text-4xl font-extrabold ${party.balance > 0 ? "text-amber-300" : "text-emerald-300"}`}>{formatPKR(Math.abs(party.balance))}</div>
-              {party.creditLimit > 0 && <div className="text-xs text-slate-400">Limit: {formatPKR(party.creditLimit)}</div>}
-              {type === "customer" && settings?.loyaltyEnabled && (
-                <div className="mt-1 text-sm font-semibold text-violet-200">
-                  {party.points ?? 0} loyalty points · worth {formatPKR((party.points ?? 0) * (settings.loyaltyPointValue ?? 1))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2 p-4">
-          {canPay && (
-            <Button icon={<HandCoins className="h-4 w-4" />} onClick={() => setTxn("payment")}>
-              {t.payLabel}
-            </Button>
-          )}
-          {canCharge && (
-            <Button variant="outline" icon={<Plus className="h-4 w-4" />} onClick={() => setTxn("charge")}>
-              {t.chargeLabel}
-            </Button>
-          )}
-          {type === "customer" && wa && party.balance > 0 && (
-            <Button variant="outline" icon={<MessageCircle className="h-4 w-4 text-emerald-600" />} onClick={remind}>
-              WhatsApp reminder
-            </Button>
-          )}
-          <a href={`/statement/${party._id}`} target="_blank" rel="noreferrer">
-            <Button variant="outline" icon={<FileText className="h-4 w-4" />}>Statement</Button>
-          </a>
-          {can.manage && (
-            <Button variant="ghost" icon={<Pencil className="h-4 w-4" />} onClick={() => setEditing(true)}>
-              Edit
-            </Button>
-          )}
-        </div>
-      </Card>
-
-      <Card className="mt-6">
+  const khataCard = (
+      <Card>
         <div className="border-b border-slate-100 px-5 py-4">
           <h2 className="font-bold text-slate-900">Khata history</h2>
         </div>
@@ -432,10 +367,9 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
           </Table>
         )}
       </Card>
-
-      <ReceivePaymentModal open={txn === "payment"} party={party} onClose={() => setTxn(null)} onSaved={load} />
-      {type === "customer" && (data.points?.length ?? 0) > 0 && (
-        <Card className="mt-6">
+  );
+  const pointsCard = type === "customer" ? (
+      <Card>
           <div className="border-b border-slate-100 px-5 py-4">
             <h2 className="font-bold text-slate-900">Loyalty points</h2>
           </div>
@@ -462,8 +396,82 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
             </tbody>
           </Table>
         </Card>
+  ) : null;
+
+  return (
+    <div>
+      <Link href={t.base} className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800">
+        <ArrowLeft className="h-4 w-4" /> Back to {t.title}
+      </Link>
+
+      <Card className="overflow-hidden">
+        <div className="bg-linear-to-br from-slate-800 to-slate-900 p-6 text-white">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10">
+                <UserRound className="h-7 w-7" />
+              </div>
+              <div>
+                <h1 className="flex flex-wrap items-center gap-2 text-2xl font-bold">
+                  {party.name}
+                  {party.priceLevel === "wholesale" && <span className="rounded-full bg-violet-500/30 px-2.5 py-0.5 text-xs font-semibold text-violet-100">Wholesale</span>}
+                </h1>
+                <div className="mt-0.5 flex flex-wrap gap-3 text-sm text-slate-300">
+                  {party.phone && (
+                    <a href={`tel:${party.phone}`} className="inline-flex items-center gap-1 hover:text-white">
+                      <Phone className="h-3.5 w-3.5" /> {party.phone}
+                    </a>
+                  )}
+                  {party.address && <span>{party.address}</span>}
+                </div>
+              </div>
+            </div>
+            <div className="sm:text-right">
+              <div className="text-sm text-slate-300">{party.balance >= 0 ? t.oweHint : "Advance / extra paid"}</div>
+              <div className={`text-4xl font-extrabold ${party.balance > 0 ? "text-amber-300" : "text-emerald-300"}`}>{formatPKR(Math.abs(party.balance))}</div>
+              {party.creditLimit > 0 && <div className="text-xs text-slate-400">Limit: {formatPKR(party.creditLimit)}</div>}
+              {type === "customer" && settings?.loyaltyEnabled && (
+                <div className="mt-1 text-sm font-semibold text-violet-200">
+                  {party.points ?? 0} loyalty points · worth {formatPKR((party.points ?? 0) * (settings.loyaltyPointValue ?? 1))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2 p-4">
+          {canPay && (
+            <Button icon={<HandCoins className="h-4 w-4" />} onClick={() => setTxn("payment")}>
+              {t.payLabel}
+            </Button>
+          )}
+          {canCharge && (
+            <Button variant="outline" icon={<Plus className="h-4 w-4" />} onClick={() => setTxn("charge")}>
+              {t.chargeLabel}
+            </Button>
+          )}
+          {type === "customer" && wa && party.balance > 0 && (
+            <Button variant="outline" icon={<MessageCircle className="h-4 w-4 text-emerald-600" />} onClick={remind}>
+              WhatsApp reminder
+            </Button>
+          )}
+          <a href={`/statement/${party._id}`} target="_blank" rel="noreferrer">
+            <Button variant="outline" icon={<FileText className="h-4 w-4" />}>Statement</Button>
+          </a>
+          {can.manage && (
+            <Button variant="ghost" icon={<Pencil className="h-4 w-4" />} onClick={() => setEditing(true)}>
+              Edit
+            </Button>
+          )}
+        </div>
+      </Card>
+
+      {type === "customer" ? (
+        <CustomerTabs id={party._id} khata={khataCard} points={(data.points?.length ?? 0) > 0 ? pointsCard : null} />
+      ) : (
+        <div className="mt-6">{khataCard}</div>
       )}
 
+      <ReceivePaymentModal open={txn === "payment"} party={party} onClose={() => setTxn(null)} onSaved={load} />
       <TxnModal type={type} mode={txn === "charge" ? "charge" : null} party={party} onClose={() => setTxn(null)} onSaved={() => { setTxn(null); load(); }} />
       <PartyForm type={type} open={editing} party={party} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); load(); }} />
     </div>
