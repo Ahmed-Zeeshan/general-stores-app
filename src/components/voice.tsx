@@ -158,12 +158,13 @@ export function VoiceBillModal<P extends VoiceProduct>({
 }) {
   const t = useT();
   const [lines, setLines] = useState<Line[]>([]);
+  const [seen, setSeen] = useState<string | null>(null);
   const byId = useMemo(() => new Map(products.map((p) => [p._id, p])), [products]);
-  useEffect(() => {
-    if (text) setLines(makeLines(text, products));
-    // Only when new words arrive; the products list does not change while this is open.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text]);
+  // New words: work out the lines straight away, so the list never shows empty first.
+  if (text !== seen) {
+    setSeen(text);
+    setLines(text ? makeLines(text, products) : []);
+  }
   if (text === null) return null;
 
   const set = (i: number, patch: Partial<Line>) => setLines((ls) => ls.map((l, k) => (k === i ? { ...l, ...patch } : l)));

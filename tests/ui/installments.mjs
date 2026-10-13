@@ -92,7 +92,8 @@ t = await page.locator("main").innerText().then(norm);
 ok(t.includes("Cash price") && t.includes("Rs 40,000") && t.includes("Left to pay") && t.includes("Rs 33,000"), "plan page: cash price Rs 40,000, Rs 33,000 left");
 await page.click("button:has-text('Receive installment')");
 await dlg.waitFor();
-ok((await dlg.locator('input[aria-label="Amount received"]').inputValue()) === "5500", "amount filled with the next installment (Rs 5,500)");
+// The amount is filled just after the window opens; wait for it rather than reading at once.
+ok(await page.waitForFunction(() => document.querySelector('[role=dialog] input[aria-label="Amount received"]')?.value === "5500", null, { timeout: 5000 }).then(() => true, () => false), "amount filled with the next installment (Rs 5,500)");
 await dlg.locator("button:has-text('Save Rs')").click();
 await page.waitForSelector("text=QST-000001-1: Rs 5,500 received");
 const rPop = ctx.waitForEvent("page");
