@@ -72,7 +72,7 @@ function ProductsPage() {
   const params = useSearchParams();
   const [products, setProducts] = useState<Product[] | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(params.get("q") ?? "");
   const [cat, setCat] = useState("");
   const [filter, setFilter] = useState<"all" | "low" | "expiring">((params.get("filter") as "low" | "expiring") ?? "all");
   const [editing, setEditing] = useState<Product | "new" | null>(null);

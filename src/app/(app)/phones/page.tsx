@@ -37,9 +37,10 @@ function PhonesPage() {
   const can = useCan();
   const { branches } = useSession();
   const params = useSearchParams();
-  const [status, setStatus] = useState<Status>("in_stock");
+  // Opened from search with ?q=IMEI: look in every status.
+  const [status, setStatus] = useState<Status>(params.get("q") ? "all" : "in_stock");
   const [model, setModel] = useState(params.get("product") ?? "");
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(params.get("q") ?? "");
   const [allBranches, setAllBranches] = useState(false);
   const [rows, setRows] = useState<DeviceRow[] | null>(null);
   const [models, setModels] = useState<Model[]>([]);

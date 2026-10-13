@@ -50,6 +50,12 @@ export default function SalesPage() {
   const [returns, setReturns] = useState<Ret[] | null>(null);
   const [returning, setReturning] = useState<Sale | null>(null);
   const showBranch = branch === "all";
+  // Opened from search: ?q=…&from=…&to=…
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get("q")) setQ(p.get("q")!);
+    if (p.get("from") && p.get("to")) setRange({ from: p.get("from")!, to: p.get("to")! });
+  }, []);
 
   const load = useCallback(() => {
     const qs = `from=${range.from}&to=${range.to}&branch=${branch}&q=${encodeURIComponent(q)}`;

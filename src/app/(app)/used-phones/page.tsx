@@ -35,6 +35,12 @@ export default function UsedPhonesPage() {
   const [q, setQ] = useState("");
   const [rows, setRows] = useState<UsedRow[] | null>(null);
   const [cancelling, setCancelling] = useState<UsedRow | null>(null);
+  // Opened from search: ?q=…&from=…&to=…
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get("q")) setQ(p.get("q")!);
+    if (p.get("from") && p.get("to")) setRange({ from: p.get("from")!, to: p.get("to")! });
+  }, []);
 
   const load = useCallback(() => {
     const p = new URLSearchParams({ from: range.from, to: range.to });

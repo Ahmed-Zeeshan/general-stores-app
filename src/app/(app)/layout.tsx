@@ -43,6 +43,8 @@ import { api, NetworkError } from "@/lib/client";
 import { cache, clearOfflineCache, getOutbox, onOutboxChange, syncOutbox } from "@/lib/offline";
 import type { Role } from "@/lib/session";
 import { LangSwitch, useLang, useT } from "@/lib/i18n";
+import { TasksBell, TasksProvider } from "@/components/tasks-bell";
+import { SearchButton, SearchHotkey } from "@/components/global-search";
 
 const SHOP: Role[] = ["owner", "manager", "cashier"];
 type ModuleKey = "phones" | "repairs" | "wallets" | "installments";
@@ -145,12 +147,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <Logo />
       </div>
       <div className="mx-4 mb-3 rounded-xl bg-brand-50 px-3 py-2.5">
-        <div className="truncate text-sm font-bold text-brand-900">{isAdmin ? "Admin Panel" : data.settings?.shopName ?? "My Shop"}</div>
-        <div className="text-xs text-brand-700">
-          {data.user.name} · {ROLE_LABEL[data.user.role]}
+        <div className="flex items-start gap-1">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-bold text-brand-900">{isAdmin ? "Admin Panel" : data.settings?.shopName ?? "My Shop"}</div>
+            <div className="text-xs text-brand-700">
+              {data.user.name} · {ROLE_LABEL[data.user.role]}
+            </div>
+          </div>
+          {!isAdmin && <TasksBell className="-mr-1 -mt-1" />}
         </div>
         {multiBranch && data.branch && <BranchSwitcher data={data} />}
       </div>
+      {!isAdmin && (
+        <div className="mx-4 mb-2">
+          <SearchButton />
+        </div>
+      )}
       <nav className="scrollbar-thin flex-1 space-y-1 overflow-y-auto px-3 py-2">
         {nav.map((item) => (
           <Link
@@ -199,6 +211,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <SessionContext.Provider value={{ ...data, reload: load }}>
       <ToastProvider>
+        <MaybeTasks enabled={!isAdmin}>
         <div className="min-h-screen lg:pl-72">
           <aside className="no-print fixed inset-y-0 left-0 hidden w-72 border-r border-slate-200 bg-white lg:block">{sidebar}</aside>
 
@@ -222,9 +235,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {isAdmin ? (
               <span className="w-9" />
             ) : (
-              <Link href="/pos" className="rounded-lg bg-brand-600 p-2 text-white" aria-label="New bill">
-                <ShoppingCart className="h-5 w-5" />
-              </Link>
+              <div className="flex shrink-0 items-center gap-1">
+                <SearchButton compact />
+                <TasksBell light />
+                <Link href="/pos" className="rounded-lg bg-brand-600 p-2 text-white" aria-label="New bill">
+                  <ShoppingCart className="h-5 w-5" />
+                </Link>
+              </div>
             )}
           </header>
 
@@ -232,6 +249,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <main className={pathname === "/pos" ? "" : "mx-auto max-w-7xl p-4 sm:p-6 lg:p-8"}>{children}</main>
         </div>
         <ChangePasswordModal open={pwOpen} onClose={() => setPwOpen(false)} />
+        {!isAdmin && <SearchHotkey />}
+        </MaybeTasks>
       </ToastProvider>
     </SessionContext.Provider>
   );
@@ -380,4 +399,9 @@ function OfflineSync({ tenantId, offline, onOnline }: { tenantId: string; offlin
       )}
     </div>
   );
+}
+
+/** Today's tasks are loaded only for shop users (not the super admin). */
+function MaybeTasks({ enabled, children }: { enabled: boolean; children: React.ReactNode }) {
+  return enabled ? <TasksProvider>{children}</TasksProvider> : <>{children}</>;
 }
