@@ -468,7 +468,7 @@ export default function PosPage() {
       <section className="flex min-w-0 flex-1 flex-col p-4 sm:p-6 lg:overflow-hidden">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t("New Bill")} {lang !== "ur" && <span className="urdu ml-2 text-base text-slate-400">نیا بل</span>}</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t("New Bill")} {lang === "en" && <span className="urdu ml-2 text-base text-slate-400">نیا بل</span>}</h1>
             <p className="hidden text-xs text-slate-500 sm:block">{t("Tip: scan a barcode or type and press Enter · F2 search · F9 pay · F4 hold · F6 held bills · F8 receive udhaar")}</p>
           </div>
           <div className="flex items-center gap-2">

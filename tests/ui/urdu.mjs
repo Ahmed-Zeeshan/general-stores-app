@@ -39,6 +39,31 @@ await page.keyboard.press("Escape");
 await page.reload();
 await page.waitForSelector("text=نیا بل");
 ok(true, "language remembered after reload");
+// Other screens in Urdu: headings, table headings, buttons and form labels
+await page.goto(B + "/products");
+await page.waitForSelector("h1:has-text('اشیاء')");
+await page.waitForSelector("main >> text=Lux Soap");
+let p = await page.locator("main").innerText().then(norm);
+ok(p.includes("Products & Stock") && p.includes("قیمت") && p.includes("اسٹاک"), "products page: Urdu heading with the English name beside it, Urdu table headings");
+await page.goto(B + "/expenses");
+await page.waitForSelector("text=کل اخراجات");
+p = await page.locator("main").innerText().then(norm);
+ok(p.includes("کرایہ، بل، تنخواہیں") && p.includes("خرچہ شامل کریں"), "expenses page: subtitle and button in Urdu");
+await page.locator("main button:has-text('خرچہ شامل کریں')").first().click();
+await page.waitForSelector("[role=dialog]");
+ok((await page.locator("[role=dialog]").innerText().then(norm)).includes("رقم (روپے)"), "form labels in Urdu");
+await page.keyboard.press("Escape");
+
+// Roman Urdu
+await page.click("nav >> xpath=.. >> button:has-text('Roman Urdu')");
+await page.waitForSelector("nav >> text=Naya bill");
+ok((await page.locator("nav").innerText().then(norm)).includes("Gahakon ka khata"), "Roman Urdu menu");
+await page.goto(B + "/pos");
+await page.waitForSelector("text=Raqam wusool karein");
+ok((await page.locator("body").innerText().then(norm)).includes("Bill ki cheezein"), "Roman Urdu on the bill screen");
+await page.goto(B + "/sales");
+await page.waitForSelector("h1:has-text('Sale ki history')");
+ok(true, "Roman Urdu page heading");
 await page.click("nav >> xpath=.. >> button:has-text('English')");
 await page.waitForSelector("text=New Bill");
 ok(true, "switch back to English");
@@ -48,6 +73,11 @@ await page.evaluate(() => localStorage.setItem("dukaan:lang", "ur"));
 await page.reload();
 await page.waitForTimeout(1500);
 ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), "Urdu POS fits a phone");
+for (const path of ["/products", "/expenses", "/customers", "/reports"]) {
+  await page.goto(B + path);
+  await page.waitForTimeout(1200);
+  ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `Urdu ${path} fits a phone`);
+}
 await page.screenshot({ path: `${out}/ur-mobile.png` });
 ok(errors.length === 0, "no page errors " + JSON.stringify(errors));
 await browser.close();

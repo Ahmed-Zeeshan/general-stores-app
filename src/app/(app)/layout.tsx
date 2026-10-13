@@ -181,7 +181,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </>
             ) : (
               <>
-                <span className="flex-1">{item.label}</span>
+                <span className="flex-1">{lang === "roman" ? t(item.label) : item.label}</span>
                 <span className={cn("urdu text-xs", isActive(item.href) ? "text-brand-100" : "text-slate-400")}>{item.urdu}</span>
               </>
             )}
