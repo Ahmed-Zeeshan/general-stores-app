@@ -86,8 +86,10 @@ ok(cc.status === "cancelled" && cc.paid === 200 && cc.total === 200 && cc.paymen
 eq(await stock(screen), 1, "its part went back into stock");
 const over = await cashier.call("/api/repairs", { body: { ...base, customerId: undefined, advance: 3000, problem: "Speaker" } });
 await cashier.call(`/api/repairs/${over._id}`, { method: "PATCH", body: { labour: 1200 } });
-const od = await cashier.call(`/api/repairs/${over._id}/deliver`, { body: {} });
-ok(od.status === "delivered" && od.paid === 1200 && od.payments.at(-1).amount === -1800, "advance Rs 3,000 on a Rs 1,200 bill: Rs 1,800 given back at delivery");
+await cashier.call(`/api/repairs/${over._id}/deliver`, { body: {}, expect: 403 }).then((e) => ok(/given back/.test(e.error), "cashier cannot hand back money at delivery"));
+await cashier.call(`/api/repairs/${over._id}`, { method: "PATCH", body: { labour: 100 }, expect: 403 }).then(() => ok(true, "cashier cannot lower the charges (it would give money back)"));
+const od = await owner.call(`/api/repairs/${over._id}/deliver`, { body: {} });
+ok(od.status === "delivered" && od.paid === 1200 && od.payments.at(-1).amount === -1800, "advance Rs 3,000 on a Rs 1,200 bill: Rs 1,800 given back at delivery (by the owner)");
 live = await owner.call("/api/shifts/current");
 eq(live.summary.repairsByMethod.find((m) => m.method === "cash").total, 500 + 3000 + 800 - 600 + 3000 - 1800, "drawer counts repair advances, payments and refunds");
 

@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { Types } from "mongoose";
+import { authSecret } from "./session";
 
 /**
  * Links a customer can open without logging in (a bill, a repair slip, an installment plan), sent on
@@ -12,9 +13,7 @@ export type ShareKind = (typeof SHARE_TYPES)[keyof typeof SHARE_TYPES];
 const CODE: Record<ShareKind, string> = { sale: "s", repair: "r", installment: "i" };
 
 function sig(payload: string) {
-  const secret = process.env.AUTH_SECRET;
-  if (!secret || secret.length < 16) throw new Error("AUTH_SECRET must be set (at least 16 characters).");
-  return createHmac("sha256", `share:${secret}`).update(payload).digest("base64url").slice(0, 22);
+  return createHmac("sha256", `share:${authSecret()}`).update(payload).digest("base64url").slice(0, 22);
 }
 
 /** "s-<tenant>-<id>-<signature>" */

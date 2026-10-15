@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
-import { requireBranch } from "@/lib/branches";
+import { assertBranchAccess, requireBranch } from "@/lib/branches";
 import { cleanImei } from "@/lib/imei";
 import { assertOpen, loadRepair, repairTotals, saveRepair } from "@/lib/repairs";
 import { optionalId } from "@/lib/schemas";
@@ -10,9 +10,11 @@ import { User } from "@/models";
 type Ctx = { params: Promise<{ id: string }> };
 
 export const GET = handle<Ctx>(async (_req, { params }) => {
-  const { tid } = await requireBranch();
+  const ctx = await requireBranch();
+  const { tid } = ctx;
   const { id } = await params;
   const r = await loadRepair(tid, id);
+  assertBranchAccess(ctx, r.branch, "Repair");
   return { ...r, ...repairTotals(r) };
 });
 
@@ -34,12 +36,17 @@ const Body = z.object({
 
 /** Updates the job card: diagnosis, charges, technician, promised date… (not after delivery). */
 export const PATCH = handle<Ctx>(async (req, { params }) => {
-  const { user, tid, branchId } = await requireBranch();
+  const ctx = await requireBranch();
+  const { user, tid, branchId } = ctx;
   const { id } = await params;
   const body = Body.parse(await req.json());
   const r = await loadRepair(tid, id);
+  assertBranchAccess(ctx, r.branch, "Repair");
   assertOpen(r);
   if (body.discount !== undefined && body.discount !== (r.discount ?? 0) && user.role === "cashier") throw new ApiError(403, "Only the owner or manager can give a discount.");
+  // Lowering the charges works like a discount (and can turn an advance into money given back).
+  const labourDown = body.labour !== undefined && body.labour < (r.labour ?? 0);
+  if (labourDown && user.role === "cashier") throw new ApiError(403, "Only the owner or manager can lower the repair charges.");
   const set: Record<string, unknown> = {};
   for (const k of ["deviceName", "color", "lockCode", "conditionNotes", "problem", "diagnosis", "labour", "discount"] as const) if (body[k] !== undefined) set[k] = body[k];
   if (body.imei !== undefined) set.imei = body.imei ? cleanImei(body.imei) : undefined;
@@ -59,6 +66,9 @@ export const PATCH = handle<Ctx>(async (req, { params }) => {
   const saved = await saveRepair(tid, r, { $set: set }, { note: `Changed: ${changes.join(", ")}`, userName: user.name });
   if (set.discount !== undefined && set.discount !== (r.discount ?? 0)) {
     await logActivity({ tid, user, branchId }, { action: "repair.discount", summary: `${r.jobNo}: discount Rs ${r.discount ?? 0} → Rs ${set.discount}`, refType: "repair", refId: r._id, refNo: r.jobNo, amount: Number(set.discount) });
+  }
+  if (labourDown) {
+    await logActivity({ tid, user, branchId }, { action: "repair.labour", summary: `${r.jobNo}: charges lowered Rs ${r.labour ?? 0} → Rs ${body.labour}`, refType: "repair", refId: r._id, refNo: r.jobNo, amount: Number(body.labour) });
   }
   return { ...saved, ...repairTotals(saved) };
 });

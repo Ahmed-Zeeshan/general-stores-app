@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
-import { requireBranch } from "@/lib/branches";
+import { assertBranchAccess, requireBranch } from "@/lib/branches";
 import { DEVICE_CONDITIONS, PTA_STATUS } from "@/lib/constants";
 import { checkNewUnits, cleanImei } from "@/lib/devices";
 import { Device } from "@/models";
@@ -9,9 +9,11 @@ import { Device } from "@/models";
 type Ctx = { params: Promise<{ id: string }> };
 
 export const GET = handle<Ctx>(async (_req, { params }) => {
-  const { tid } = await requireBranch();
+  const ctx = await requireBranch();
+  const { tid } = ctx;
   const { id } = await params;
   const d = await Device.findOne({ _id: id, tenant: tid }).lean();
+  assertBranchAccess(ctx, d?.branch, "Phone");
   if (!d) throw new ApiError(404, "Phone not found.");
   return d;
 });
@@ -29,10 +31,12 @@ const Body = z.object({
 
 /** Corrects a phone's details. The IMEI can be corrected only while it is in stock. */
 export const PATCH = handle<Ctx>(async (req, { params }) => {
-  const { user, tid, branchId } = await requireBranch(["owner", "manager"]);
+  const ctx = await requireBranch(["owner", "manager"]);
+  const { user, tid, branchId } = ctx;
   const { id } = await params;
   const body = Body.parse(await req.json());
   const d = await Device.findOne({ _id: id, tenant: tid }).lean();
+  assertBranchAccess(ctx, d?.branch, "Phone");
   if (!d) throw new ApiError(404, "Phone not found.");
   const set: Record<string, unknown> = {};
   const unset: Record<string, 1> = {};

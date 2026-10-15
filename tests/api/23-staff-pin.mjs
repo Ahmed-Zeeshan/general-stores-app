@@ -34,8 +34,15 @@ const acts = (await owner.call("/api/activity")).rows.map((a) => a.summary);
 ok(acts.some((s) => /Kashif took over the counter from Bilal/.test(s)) && acts.some((s) => /Wrong PIN for Kashif/.test(s)), "activity log: switches and the wrong PIN");
 await other.call("/api/auth/switch", { body: { userId: kashif._id, pin: "1234" }, expect: 404 }).then(() => ok(true, "another shop cannot switch to Kashif"));
 await new Client("anon").call("/api/auth/switch", { body: { userId: kashif._id, pin: "1234" }, expect: 401 }).then(() => ok(true, "nobody logged in: no PIN switch"));
-for (let i = 0; i < 10; i++) await counter.call("/api/auth/switch", { body: { userId: kashif._id, pin: "0000" }, expect: 401 });
-await counter.call("/api/auth/switch", { body: { userId: kashif._id, pin: "1234" }, expect: 429 }).then(() => ok(true, "10 wrong PINs: locked for a while"));
+// Guessing many PINs at once: each try is counted before it is checked, so at most 5 are ever tried.
+const guesses = await Promise.all(Array.from({ length: 12 }, (_, i) => counter.call("/api/auth/switch", { body: { userId: kashif._id, pin: String(1000 + i * 7) }, expect: [401, 404] })));
+ok(guesses.filter((g) => /Wrong PIN/.test(g.error)).length <= 5, "12 guesses at the same moment: no more than 5 are checked");
+await counter.call("/api/auth/switch", { body: { userId: kashif._id, pin: "1234" }, expect: 404 }).then(() => ok(true, "after 5 wrong PINs the PIN is switched off (even the right one)"));
+ok(!(await counter.call("/api/auth/switch")).some((p) => p.name === "Kashif"), "Kashif leaves the switch list");
+ok((await owner.call("/api/activity")).rows.some((a) => /PIN of Kashif switched off after 5 wrong tries/.test(a.summary)), "activity log: PIN switched off");
+await owner.call(`/api/users/${kashif._id}`, { method: "PUT", body: { pin: "1234" } });
+await counter.call("/api/auth/switch", { body: { userId: kashif._id, pin: "1234" } });
+eq((await me(counter)).name, "Kashif", "owner sets a new PIN: it works again");
 await owner.call(`/api/users/${sana._id}`, { method: "PUT", body: { pin: "" } });
 ok(!(await owner.call("/api/users")).users.find((u) => u.username === "sana").hasPin, "PIN removed");
 

@@ -83,6 +83,14 @@ export async function requireBranch(roles?: ShopRole[]): Promise<BranchContext> 
  * Branch filter for reports: "all" (owner/manager not locked to a branch), a specific branch,
  * or the current branch when nothing is given.
  */
+/**
+ * Staff locked to a branch, and cashiers, only see and change records of the branch they are working in
+ * (looked up by id, a record of another branch is "not found" for them).
+ */
+export function assertBranchAccess(ctx: BranchContext, branch: unknown, what = "Record") {
+  if ((ctx.locked || ctx.user.role === "cashier") && branch && String(branch) !== String(ctx.branchId)) throw new ApiError(404, `${what} not found.`);
+}
+
 export function reportBranchFilter(ctx: BranchContext, param: string | null): Types.ObjectId | null {
   if (ctx.locked || ctx.user.role === "cashier") return ctx.branchId;
   if (param === "all") return null;

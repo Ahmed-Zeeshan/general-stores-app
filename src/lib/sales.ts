@@ -55,6 +55,9 @@ export type SaleInput = z.infer<typeof SaleBody>;
  * Makes a bill: prices, offers, points, payments, stock (and phones by IMEI), khata and FBR.
  * `installment`: the unpaid part goes to an installment plan instead of the khata (no credit limit).
  */
+/** A bill sent this long after it was made is treated as made offline. */
+const OFFLINE_MIN_AGE_MS = 2 * 60_000;
+
 export async function createSale(ctx: BranchContext, body: SaleInput, opts: { installment?: boolean } = {}) {
   const { user, tid } = ctx;
 
@@ -63,12 +66,14 @@ export async function createSale(ctx: BranchContext, body: SaleInput, opts: { in
     const existing = await Sale.findOne({ tenant: tid, clientId: body.clientId }).lean();
     if (existing) return existing;
   }
-  const offline = !!body.clientId && !!body.soldAt;
   let soldAt: Date | undefined;
-  if (offline) {
-    soldAt = new Date(body.soldAt!);
+  let offline = false;
+  if (body.clientId && body.soldAt) {
+    soldAt = new Date(body.soldAt);
     const age = Date.now() - soldAt.getTime();
     if (age > 30 * 864e5 || age < -10 * 60_000) throw new ApiError(400, "Offline bill date is not valid. Check this device's date and time.");
+    // Only a bill really made earlier counts as offline (one dated "now" is an ordinary bill with ordinary limits).
+    offline = age >= OFFLINE_MIN_AGE_MS;
   }
   // Offline bills keep the branch they were made in (if the user may use it).
   let branch = ctx.branch;
@@ -173,7 +178,7 @@ export async function createSale(ctx: BranchContext, body: SaleInput, opts: { in
   if (body.redeemPoints) {
     if (!settings?.loyaltyEnabled) throw new ApiError(400, "Loyalty points are switched off in Settings.");
     if (!customer) throw new ApiError(400, "Choose the customer whose points are being used.");
-    if (!offline && body.redeemPoints < (settings.loyaltyMinRedeem ?? 0)) throw new ApiError(400, `At least ${settings.loyaltyMinRedeem} points are needed to use them.`);
+    if (body.redeemPoints < (settings.loyaltyMinRedeem ?? 0)) throw new ApiError(400, `At least ${settings.loyaltyMinRedeem} points are needed to use them.`);
     const worth = settings.loyaltyPointValue ?? 1;
     pointsRedeemed = Math.min(body.redeemPoints, worth > 0 ? Math.floor((subtotal - discount) / worth) : 0);
     pointsValue = round2(pointsRedeemed * worth);
@@ -198,28 +203,34 @@ export async function createSale(ctx: BranchContext, body: SaleInput, opts: { in
   const creditAmount = round2(Math.max(0, total - amountPaid));
 
   if (opts.installment && !customer) throw new ApiError(400, "Choose the customer who buys on installments.");
-  // Staff limits set by the owner (an offline bill was already handed over, so it is recorded).
-  if (!offline && user.role !== "owner") {
+  // Staff limits set by the owner. An offline bill was already handed over, so it is recorded, but every
+  // limit it crossed goes to the activity log for the owner to see.
+  const crossed: string[] = [];
+  const overLimit = (msg: string) => {
+    if (!offline) throw new ApiError(400, msg);
+    crossed.push(msg);
+  };
+  if (user.role !== "owner") {
     const limits = await User.findOne({ _id: user.id, tenant: tid }).select("maxDiscountPct allowUdhaar").lean();
-    if (limits?.allowUdhaar === false && creditAmount > 0) throw new ApiError(400, "You are not allowed to give udhaar or installments. Ask the owner or manager.");
+    if (limits?.allowUdhaar === false && creditAmount > 0) overLimit("You are not allowed to give udhaar or installments. Ask the owner or manager.");
     if (limits?.maxDiscountPct !== undefined && limits.maxDiscountPct !== null) {
       const gross = round2(items.reduce((s, i) => s + i.total + i.discount, 0));
       const typed = round2(manualLineDiscount + Math.min(body.discount, subtotal));
       const pct = gross > 0 ? (typed / gross) * 100 : 0;
-      if (pct > limits.maxDiscountPct + 0.01) throw new ApiError(400, `Discount ${pct.toFixed(1)}% is more than your limit of ${limits.maxDiscountPct}%. Ask the owner or manager.`);
+      if (pct > limits.maxDiscountPct + 0.01) overLimit(`Discount ${pct.toFixed(1)}% is more than your limit of ${limits.maxDiscountPct}%. Ask the owner or manager.`);
     }
   }
   if (creditAmount > 0 && !opts.installment) {
     if (!customer) throw new ApiError(400, "Amount received is less than the bill. Select a customer to add the rest to their khata (udhaar).");
-    // An offline bill has already been handed over, so it is recorded even above the limit.
-    if (!offline && customer.creditLimit > 0 && customer.balance + creditAmount > customer.creditLimit && user.role !== "owner") {
-      throw new ApiError(400, `Credit limit crossed for ${customer.name}. Limit is Rs ${customer.creditLimit}. Ask the owner.`);
+    if (customer.creditLimit > 0 && customer.balance + creditAmount > customer.creditLimit && user.role !== "owner") {
+      overLimit(`Credit limit crossed for ${customer.name}. Limit is Rs ${customer.creditLimit}. Ask the owner.`);
     }
   }
 
   // Take the points before saving, so the same points cannot be spent twice.
   if (pointsRedeemed > 0) {
-    const took = await Party.updateOne({ _id: customer!._id, tenant: tid, ...(offline ? {} : { points: { $gte: pointsRedeemed } }) }, { $inc: { points: -pointsRedeemed } });
+    // Points never go below zero, offline or not.
+    const took = await Party.updateOne({ _id: customer!._id, tenant: tid, points: { $gte: pointsRedeemed } }, { $inc: { points: -pointsRedeemed } });
     if (!took.modifiedCount) throw new ApiError(400, `${customer!.name} does not have ${pointsRedeemed} points.`);
   }
   const promoTotal = round2(applied.lines.reduce((a, l) => a + (l?.discount ?? 0), 0) + billPromo);
@@ -312,6 +323,12 @@ export async function createSale(ctx: BranchContext, body: SaleInput, opts: { in
       note: `Bill ${invoiceNo}`,
       userId: user.id,
     });
+  }
+  if (crossed.length) {
+    await logActivity(
+      { tid, user, branchId: branch._id },
+      { action: "sale.offline-limit", summary: `${invoiceNo} (${total}) made offline above ${user.name}'s limits: ${crossed.join(" ")}`, refType: "sale", refId: sale._id, amount: total },
+    );
   }
   // Only discounts typed by hand are worth recording (offers and points are automatic).
   const manualBill = round2(Math.min(body.discount, subtotal));

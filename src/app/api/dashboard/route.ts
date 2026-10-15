@@ -101,7 +101,8 @@ export const GET = handle(async () => {
     const key = fmt.format(addDays(weekStart, i));
     const row = week.find((w) => w._id === key);
     const ret = weekReturns.find((w) => w._id === key);
-    return { date: key, total: round2((row?.total ?? 0) - (ret?.total ?? 0)), profit: round2((row?.profit ?? 0) - (ret?.profit ?? 0)) };
+    // Cashiers see sales, not the shop's profit.
+    return { date: key, total: round2((row?.total ?? 0) - (ret?.total ?? 0)), profit: user.role === "cashier" ? 0 : round2((row?.profit ?? 0) - (ret?.profit ?? 0)) };
   });
 
   const s = today[0] ?? { total: 0, tax: 0, cost: 0, count: 0, credit: 0 };
@@ -139,7 +140,7 @@ export const GET = handle(async () => {
     today: {
       sales: round2(t.total),
       bills: t.count,
-      profit: round2(t.total - t.tax - t.cost),
+      profit: user.role === "cashier" ? 0 : round2(t.total - t.tax - t.cost),
       cash: round2(t.cash),
       credit: round2(t.credit),
       expenses: round2(todayExpenses[0]?.total ?? 0),

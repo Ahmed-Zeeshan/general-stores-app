@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { handle } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
-import { requireBranch } from "@/lib/branches";
+import { assertBranchAccess, requireBranch } from "@/lib/branches";
 import { syncReturnToFbr } from "@/lib/fbr";
 import { createReturn } from "@/lib/returns";
 import { Sale, SaleReturn, Tenant } from "@/models";
@@ -27,8 +27,10 @@ const Body = z.object({
 
 /** Returns all or some items of a bill. */
 export const POST = handle<Ctx>(async (req, { params }) => {
-  const { user, tid, branchId } = await requireBranch(["owner", "manager"]);
+  const ctx = await requireBranch(["owner", "manager"]);
+  const { user, tid, branchId } = ctx;
   const { id } = await params;
+  assertBranchAccess(ctx, (await Sale.findOne({ _id: id, tenant: tid }).select("branch").lean())?.branch, "Bill");
   const body = Body.parse(await req.json().catch(() => ({})));
   const ret = await createReturn({
     tid,
@@ -58,7 +60,8 @@ export const POST = handle<Ctx>(async (req, { params }) => {
 
 /** All returns of this bill. */
 export const GET = handle<Ctx>(async (_req, { params }) => {
-  const { tid } = await requireBranch();
+  const ctx = await requireBranch();
+  const { tid } = ctx;
   const { id } = await params;
   return SaleReturn.find({ tenant: tid, sale: id }).sort({ createdAt: 1 }).lean();
 });

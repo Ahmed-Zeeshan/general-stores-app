@@ -132,6 +132,7 @@ const TOPICS: Topic[] = [
       "More than one shop? Add branches; each branch has its own stock and you can move stock between them.",
       "Give each person a 4–6 digit PIN: on a shared counter, Switch user (under your name in the menu) lets the next person take over with their PIN.",
       "Limits per person: the largest discount they may give, and whether they may give udhaar.",
+      "Safety: after 5 wrong PINs in a row the PIN stops working (set a new one here); after 10 wrong passwords the account waits 15 minutes. Changing or resetting a password logs that person out everywhere. Someone leaving? Disable their account.",
     ],
     link: { href: "/settings", label: "Open Settings" },
   },

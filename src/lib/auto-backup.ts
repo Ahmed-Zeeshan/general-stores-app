@@ -40,9 +40,10 @@ export async function runAutoBackup(now = new Date()) {
     const shops = await Tenant.find({}).select("shopName").lean();
     for (const shop of shops) {
       const dir = join(backupDir(), `${slug(shop.shopName)}-${String(shop._id)}`);
-      await mkdir(dir, { recursive: true });
+      // Backups hold customers' names, phones and khata: readable only by the account running the app.
+      await mkdir(dir, { recursive: true, mode: 0o700 });
       const data = await tenantBackup(shop._id);
-      await writeFile(join(dir, `${stamp(now)}.json.gz`), gzipSync(JSON.stringify(data)));
+      await writeFile(join(dir, `${stamp(now)}.json.gz`), gzipSync(JSON.stringify(data)), { mode: 0o600 });
       status.shops! += 1;
       // Keep only the newest copies.
       const files = (await readdir(dir)).filter((f) => f.endsWith(".json.gz")).sort();
@@ -55,7 +56,7 @@ export async function runAutoBackup(now = new Date()) {
     console.error("automatic backup failed", err);
   }
   try {
-    await mkdir(backupDir(), { recursive: true });
+    await mkdir(backupDir(), { recursive: true, mode: 0o700 });
     await writeFile(statusFile(), JSON.stringify(status, null, 2));
   } catch {
     /* nothing more we can do */

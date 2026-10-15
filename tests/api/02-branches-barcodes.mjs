@@ -122,8 +122,11 @@ await owner.call("/api/users", { body: { name: "Mgr", username: "mgr1", password
 const m = new Client("mgr"); await m.login("mgr1", "secret2");
 await m.call("/api/sales", { body: { items: [{ productId: tea._id, qty: 1 }], paymentMethod: "credit", customerId: cust._id }, expect: 400 });
 ok(true, "online udhaar above credit limit blocked for manager");
-const offCredit = await m.call("/api/sales", { body: { items: [{ productId: tea._id, qty: 1 }], paymentMethod: "credit", customerId: cust._id, clientId: "offline-credit-1", soldAt: new Date().toISOString() } });
+await m.call("/api/sales", { body: { items: [{ productId: tea._id, qty: 1 }], paymentMethod: "credit", customerId: cust._id, clientId: "offline-credit-now", soldAt: new Date().toISOString() }, expect: 400 });
+ok(true, "a bill marked offline but dated now gets the normal limits (no way round them)");
+const offCredit = await m.call("/api/sales", { body: { items: [{ productId: tea._id, qty: 1 }], paymentMethod: "credit", customerId: cust._id, clientId: "offline-credit-1", soldAt: new Date(Date.now() - 10 * 60_000).toISOString() } });
 eq(offCredit.creditAmount, 1650, "offline udhaar bill (already handed over) is recorded");
+ok((await owner.call("/api/activity")).rows.some((a) => a.action === "sale.offline-limit" && /Credit limit crossed/.test(a.summary)), "and the crossed limit is in the owner's activity log");
 
 section("Udhaar report, WhatsApp log, statement");
 const ali = await owner.call("/api/parties", { body: { type: "customer", name: "Ali Raza", phone: "0300-1112223", openingBalance: 1000 } });

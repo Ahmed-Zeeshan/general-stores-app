@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
-import { requireBranch } from "@/lib/branches";
+import { assertBranchAccess, requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
 import { postWalletTxn } from "@/lib/wallets";
 import { Wallet } from "@/models";
@@ -11,10 +11,12 @@ const Body = z.object({ actual: z.coerce.number().min(0), note: z.string().trim(
 
 /** Balance check: the balance shown on the SIM / app; any difference is recorded as a correction. */
 export const POST = handle<Ctx>(async (req, { params }) => {
-  const { user, tid, branchId } = await requireBranch(["owner", "manager"]);
+  const ctx = await requireBranch(["owner", "manager"]);
+  const { user, tid, branchId } = ctx;
   const { id } = await params;
   const body = Body.parse(await req.json());
   const w = await Wallet.findOne({ _id: id, tenant: tid }).lean();
+  assertBranchAccess(ctx, w?.branch, "Wallet");
   if (!w) throw new ApiError(404, "Account not found.");
   const diff = round2(body.actual - w.balance);
   if (Math.abs(diff) < 0.005) return { wallet: w, difference: 0 };

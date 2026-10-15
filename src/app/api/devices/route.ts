@@ -28,7 +28,7 @@ export const GET = handle(async (req) => {
     const code = cleanImei(q);
     query.$or = [{ imei: code }, { imei2: code }, { imei: new RegExp(`${escapeRegex(code)}$`) }, { productName: rx }, { color: rx }, { storage: rx }, { "sale.customerName": rx }, { "source.name": rx }];
   }
-  return Device.find(query).sort({ updatedAt: -1 }).limit(Math.min(Number(url.searchParams.get("limit") ?? 1000), 5000)).select("-history").lean();
+  return Device.find(query).sort({ updatedAt: -1 }).limit(Math.max(1, Math.min(Number(url.searchParams.get("limit")) || 1000, 5000))).select(ctx.user.role === "cashier" ? "-history -cost" : "-history").lean();
 });
 
 const Unit = z.object({

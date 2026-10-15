@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
-import { requireBranch } from "@/lib/branches";
+import { assertBranchAccess, requireBranch } from "@/lib/branches";
 import { postLedger } from "@/lib/services";
 import { LedgerEntry, Party } from "@/models";
 
@@ -14,10 +14,12 @@ const Body = z.object({ reason: z.string().trim().max(200).optional() });
  * matching "reversal" entry puts the amount back, so the history is never rewritten.
  */
 export const POST = handle<Ctx>(async (req, { params }) => {
-  const { user, tid, branchId } = await requireBranch(["owner", "manager"]);
+  const ctx = await requireBranch(["owner", "manager"]);
+  const { user, tid, branchId } = ctx;
   const { id } = await params;
   const { reason } = Body.parse(await req.json().catch(() => ({})));
   const entry = await LedgerEntry.findOne({ _id: id, tenant: tid }).lean();
+  assertBranchAccess(ctx, entry?.branch, "Entry");
   if (!entry) throw new ApiError(404, "Entry not found.");
   if (entry.kind !== "payment" || entry.refType !== "payment") throw new ApiError(400, "Only payments received or made from the khata can be cancelled here.");
   // Claim it first so two clicks cannot cancel it twice.

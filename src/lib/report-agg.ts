@@ -32,7 +32,7 @@ export const PAYMENTS_EXPR = {
 export function khataPaymentsPipeline(match: Record<string, unknown>, partyType: "customer" | "supplier"): PipelineStage[] {
   return [
     { $match: { ...match, kind: { $in: ["payment", "reversal"] } } },
-    { $lookup: { from: "parties", localField: "party", foreignField: "_id", as: "p", pipeline: [{ $project: { type: 1 } }] } },
+    { $lookup: { from: "parties", localField: "party", foreignField: "_id", as: "p", pipeline: [{ $match: { tenant: match.tenant } }, { $project: { type: 1 } }] } },
     { $match: { "p.type": partyType } },
     { $group: { _id: { $ifNull: ["$method", "cash"] }, total: { $sum: { $multiply: ["$amount", -1] } }, count: { $sum: { $cond: [{ $eq: ["$kind", "payment"] }, 1, -1] } } } },
     { $match: { total: { $ne: 0 } } },

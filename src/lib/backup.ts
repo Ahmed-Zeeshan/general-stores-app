@@ -99,7 +99,8 @@ const RESTORABLE_SETTINGS = [
 export async function tenantBackup(tid: Types.ObjectId) {
   const q = { tenant: tid };
   const [tenant, users, ...rest] = await Promise.all([
-    Tenant.findById(tid).lean(),
+    // The administrator's private notes about the shop stay out of the shop's own backup.
+    Tenant.findById(tid).select("-adminNotes").lean(),
     User.find(q).lean(),
     // Product photos are left out of normal reads; a backup must keep them.
     ...SHOP_DATA.map(([, model]) => (model === Product ? model.find(q).select("+image") : model.find(q)).lean()),
@@ -133,6 +134,8 @@ type BackupFile = {
   shop?: Record<string, unknown> & { _id?: string };
   data?: Record<string, unknown>;
 };
+
+const find0 = (prepared: [Model<unknown>, Record<string, unknown>[]][], model: Model<unknown>) => prepared.find(([m]) => m === model)?.[1] ?? [];
 
 /**
  * Replaces one shop's data with a backup of that same shop.
@@ -174,6 +177,25 @@ export async function restoreTenant(tid: Types.ObjectId, file: unknown) {
     }
     total += docs.length;
     prepared.push([model as Model<unknown>, docs]);
+  }
+
+  // 1b. Checks a damaged or edited file could get past the field rules: the same record twice, a record
+  // that belongs to another shop, more branches than the shop's plan allows, oversized photos.
+  for (const [model, docs] of prepared) {
+    const ids = docs.map((d) => String(d._id));
+    if (new Set(ids).size !== ids.length) throw new ApiError(400, `Backup section "${model.collection.collectionName}" has the same record twice. Nothing was changed.`);
+    // Straight to the collection: the shop filter of the model would hide other shops' records.
+    if (ids.length && (await model.collection.countDocuments({ _id: { $in: docs.map((d) => d._id) } as never, tenant: { $ne: tid } }, { limit: 1 }))) {
+      throw new ApiError(400, "This backup contains records of another shop. Nothing was changed.");
+    }
+  }
+  const shop = await Tenant.findById(tid).select("maxBranches").lean();
+  const activeBranches = find0(prepared, Branch as Model<unknown>).filter((b) => b.active !== false).length;
+  if (shop?.maxBranches && activeBranches > shop.maxBranches) {
+    throw new ApiError(400, `This backup has ${activeBranches} branches but your plan allows ${shop.maxBranches}. Ask the administrator to raise the limit first. Nothing was changed.`);
+  }
+  if (find0(prepared, Product as Model<unknown>).some((p) => typeof p.image === "string" && p.image.length > 300_000)) {
+    throw new ApiError(400, "A product photo in this backup is too large. Nothing was changed.");
   }
 
   // 2. Replace the shop's data.

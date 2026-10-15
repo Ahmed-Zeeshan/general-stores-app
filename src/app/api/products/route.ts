@@ -20,7 +20,7 @@ export const GET = handle(async (req) => {
   const category = url.searchParams.get("category");
   const filter = url.searchParams.get("filter"); // low | expiring | inactive
   const allBranches = url.searchParams.get("branch") === "all" && !ctx.locked && ctx.user.role !== "cashier";
-  const limit = Math.min(Number(url.searchParams.get("limit") ?? 500), 5000);
+  const limit = Math.max(1, Math.min(Number(url.searchParams.get("limit")) || 500, 5000));
 
   const query: Record<string, unknown> = { tenant: tid, active: filter === "inactive" ? false : true };
   if (q) {
@@ -34,7 +34,8 @@ export const GET = handle(async (req) => {
     soon.setDate(soon.getDate() + 7);
     query.expiryDate = { $ne: null, $lte: soon };
   }
-  const products = await Product.find(query).sort({ name: 1 }).limit(limit).lean();
+  // Cashiers do not get cost prices.
+  const products = await Product.find(query).sort({ name: 1 }).limit(limit).select(ctx.user.role === "cashier" ? "-costPrice" : "").lean();
   const levels = allBranches ? null : await branchStock(tid, ctx.branchId, products.map((p) => p._id));
   let rows = products.map((p) => ({ ...p, totalStock: p.stock, stock: levels ? levels.get(String(p._id)) ?? 0 : p.stock }));
   if (filter === "low") rows = rows.filter((p) => p.stock <= p.lowStockAlert);

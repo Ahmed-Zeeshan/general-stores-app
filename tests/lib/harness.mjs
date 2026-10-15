@@ -51,7 +51,8 @@ export class Client {
     } catch {
       data = text;
     }
-    if (res.status !== expect) {
+    // `expect` may be one status or a list of allowed ones.
+    if (Array.isArray(expect) ? !expect.includes(res.status) : res.status !== expect) {
       const m = opts.method ?? (opts.body !== undefined ? "POST" : "GET");
       throw new Error(`[${this.name}] ${m} ${path} -> ${res.status} (expected ${expect}) ${typeof data === "string" ? data.slice(0, 300) : JSON.stringify(data)}`);
     }

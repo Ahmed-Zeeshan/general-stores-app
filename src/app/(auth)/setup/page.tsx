@@ -12,12 +12,16 @@ export default function SetupPage() {
   const router = useRouter();
   const toast = useToast();
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ name: "", username: "", password: "", confirm: "" });
+  const [form, setForm] = useState({ name: "", username: "", password: "", confirm: "", setupToken: "" });
+  const [needsToken, setNeedsToken] = useState(false);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value });
 
   useEffect(() => {
-    api<{ needsSetup: boolean }>("/api/setup")
-      .then((r) => !r.needsSetup && router.replace("/login"))
+    api<{ needsSetup: boolean; needsToken?: boolean }>("/api/setup")
+      .then((r) => {
+        if (!r.needsSetup) router.replace("/login");
+        setNeedsToken(!!r.needsToken);
+      })
       .catch(() => {});
   }, [router]);
 
@@ -26,7 +30,7 @@ export default function SetupPage() {
     if (form.password !== form.confirm) return toast.error("Both passwords must match.");
     setLoading(true);
     try {
-      await api("/api/setup", { body: { name: form.name, username: form.username, password: form.password } });
+      await api("/api/setup", { body: { name: form.name, username: form.username, password: form.password, setupToken: form.setupToken || undefined } });
       toast.success("Admin account created. Now add your first shop.");
       router.replace("/admin");
       router.refresh();
@@ -63,6 +67,11 @@ export default function SetupPage() {
             <Input type="password" required minLength={8} value={form.confirm} onChange={set("confirm")} autoComplete="new-password" />
           </Field>
         </div>
+        {needsToken && (
+          <Field label="Setup code *" hint="The SETUP_TOKEN written in the server's settings file (.env.local).">
+            <Input type="password" required value={form.setupToken} onChange={set("setupToken")} autoComplete="off" />
+          </Field>
+        )}
         <Button type="submit" size="lg" className="w-full" loading={loading} icon={<Check className="h-5 w-5" />}>
           Create admin account
         </Button>

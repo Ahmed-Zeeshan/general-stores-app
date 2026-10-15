@@ -1,6 +1,7 @@
 import type { Types } from "mongoose";
 import { headers } from "next/headers";
 import { ActivityLog } from "@/models";
+import { clientIp } from "./rate-limit";
 
 type Who = { tid: Types.ObjectId; user: { id: string; name: string; role: string }; branchId?: Types.ObjectId | null };
 
@@ -20,7 +21,7 @@ export async function logActivity(who: Who, entry: ActivityEntry) {
     let ip: string | undefined;
     try {
       const h = await headers();
-      ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || undefined;
+      ip = clientIp(h);
     } catch {
       /* outside a request */
     }

@@ -49,7 +49,7 @@ if (taken) {
 }
 
 if (admin) {
-  await users.updateOne({ _id: admin._id }, { $set: { username, passwordHash, active: true, updatedAt: new Date() } });
+  await users.updateOne({ _id: admin._id }, { $set: { username, passwordHash, active: true, updatedAt: new Date() }, $inc: { sessionVersion: 1 } });
   console.log("\nSuper Admin password has been reset.");
 } else {
   await users.insertOne({

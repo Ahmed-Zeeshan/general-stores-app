@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
-import { requireBranch } from "@/lib/branches";
+import { assertBranchAccess, requireBranch } from "@/lib/branches";
 import { claimDevices } from "@/lib/devices";
 import { moveStock } from "@/lib/services";
 import { Device } from "@/models";
@@ -12,10 +12,12 @@ const Body = z.object({ reason: z.string().trim().min(3, "Write why the phone is
 
 /** Takes an in-stock phone out of stock (damaged, lost, entered by mistake). Kept in the history. */
 export const POST = handle<Ctx>(async (req, { params }) => {
-  const { user, tid, branchId } = await requireBranch(["owner", "manager"]);
+  const ctx = await requireBranch(["owner", "manager"]);
+  const { user, tid, branchId } = ctx;
   const { id } = await params;
   const { reason } = Body.parse(await req.json());
   const d = await Device.findOne({ _id: id, tenant: tid }).lean();
+  assertBranchAccess(ctx, d?.branch, "Phone");
   if (!d) throw new ApiError(404, "Phone not found.");
   await claimDevices({ tid, ids: [d._id], productId: d.product, branch: d.branch, to: "removed", event: { action: "Removed from stock", note: reason }, userName: user.name });
   await moveStock({ tid, branch: d.branch, productId: d.product, qty: -1, type: "adjustment", note: `IMEI ${d.imei} removed: ${reason}`, userId: user.id, serialOk: true });

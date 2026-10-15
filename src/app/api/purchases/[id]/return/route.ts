@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { handle } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
-import { requireBranch } from "@/lib/branches";
+import { Purchase } from "@/models";
+import { assertBranchAccess, requireBranch } from "@/lib/branches";
 import { createPurchaseReturn } from "@/lib/purchase-returns";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -25,8 +26,10 @@ const Body = z.object({
 
 /** Goods sent back to the supplier. */
 export const POST = handle<Ctx>(async (req, { params }) => {
-  const { user, tid } = await requireBranch(["owner", "manager"]);
+  const ctx = await requireBranch(["owner", "manager"]);
+  const { user, tid } = ctx;
   const { id } = await params;
+  assertBranchAccess(ctx, (await Purchase.findOne({ _id: id, tenant: tid }).select("branch").lean())?.branch, "Purchase");
   const body = Body.parse(await req.json().catch(() => ({})));
   const ret = await createPurchaseReturn({ tid, purchaseId: id, lines: body.items, settlement: body.settlement, reason: body.reason, user: { id: user.id, name: user.name } });
   await logActivity(

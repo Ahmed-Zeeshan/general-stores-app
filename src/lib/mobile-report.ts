@@ -62,7 +62,7 @@ export async function mobileReport(tid: Types.ObjectId, branch: Types.ObjectId |
       WalletTxn.aggregate([
         { $match: { tenant: tid, ...b, createdAt: inRange } },
         // A cancelled entry counts against the type it cancelled.
-        { $lookup: { from: "wallettxns", localField: "reverses", foreignField: "_id", as: "orig", pipeline: [{ $project: { type: 1 } }] } },
+        { $lookup: { from: "wallettxns", localField: "reverses", foreignField: "_id", as: "orig", pipeline: [{ $match: { tenant: tid } }, { $project: { type: 1 } }] } },
         {
           $group: {
             _id: { $cond: [{ $eq: ["$type", "reversal"] }, { $ifNull: [{ $first: "$orig.type" }, "reversal"] }, "$type"] },

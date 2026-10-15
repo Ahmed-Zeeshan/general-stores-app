@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
-import { requireBranch } from "@/lib/branches";
+import { assertBranchAccess, requireBranch } from "@/lib/branches";
 import { loadPlan, savePlan, withState } from "@/lib/installments";
 import { round2 } from "@/lib/money";
 import { createReturn } from "@/lib/returns";
@@ -18,10 +18,12 @@ const Body = z.object({
 
 /** Closes a plan early: goods back to stock (optional), the unpaid balance written off. */
 export const POST = handle<Ctx>(async (req, { params }) => {
-  const { user, tid, branchId } = await requireBranch(["owner", "manager"]);
+  const ctx = await requireBranch(["owner", "manager"]);
+  const { user, tid, branchId } = ctx;
   const { id } = await params;
   const body = Body.parse(await req.json());
   const p = await loadPlan(tid, id);
+  assertBranchAccess(ctx, p.branch, "Installment plan");
   if (p.status === "cancelled") throw new ApiError(400, "This plan is already closed.");
   const totalIn = round2(p.paid + p.advance);
   if (body.refund > totalIn + 0.004) throw new ApiError(400, `The customer paid Rs ${totalIn} in all; the refund cannot be more.`);

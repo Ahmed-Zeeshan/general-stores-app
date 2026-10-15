@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ApiError, handle } from "@/lib/api";
+import { ApiError, handle, tenantBlockReason } from "@/lib/api";
 import { withState, type PlanLean } from "@/lib/installments";
 import { round2 } from "@/lib/money";
 import { readShareCode } from "@/lib/share";
@@ -16,8 +16,9 @@ export const GET = handle<Ctx>(async (_req, { params }) => {
   const ref = readShareCode(code);
   if (!ref) throw new ApiError(404, "This link is not valid.");
   const { kind, tid, id } = ref;
-  const tenant = (await Tenant.findById(tid).select("shopName phone address status").lean()) as { shopName: string; phone?: string; address?: string; status?: string } | null;
-  if (!tenant || tenant.status === "suspended") throw new ApiError(404, "This link is not valid.");
+  const tenant = (await Tenant.findById(tid).select("shopName phone address status expiresAt").lean()) as { shopName: string; phone?: string; address?: string; status?: string; expiresAt?: Date } | null;
+  // Links stop working while the shop is suspended or its plan has ended.
+  if (!tenant || tenantBlockReason(tenant)) throw new ApiError(404, "This link is not valid.");
   const shop = { name: tenant.shopName, phone: tenant.phone, address: tenant.address };
   let data: unknown;
   if (kind === "sale") {

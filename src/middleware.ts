@@ -24,5 +24,6 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|icons/|manifest.webmanifest|sw.js).*)"],
+  // API routes check the login themselves (and must not pass through here: it would cut large uploads such as a backup to restore).
+  matcher: ["/((?!api/|_next/static|_next/image|favicon.ico|icon.svg|icons/|manifest.webmanifest|sw.js).*)"],
 };

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
-import { requireBranch } from "@/lib/branches";
+import { assertBranchAccess, requireBranch } from "@/lib/branches";
 import { postWalletTxn } from "@/lib/wallets";
 import { WalletTxn } from "@/models";
 
@@ -10,10 +10,12 @@ const Body = z.object({ reason: z.string().trim().min(3, "Write why it is cancel
 
 /** Cancels a wrong entry: its balance and cash effects are undone by a "cancelled entry" record. */
 export const POST = handle<Ctx>(async (req, { params }) => {
-  const { user, tid, branchId } = await requireBranch(["owner", "manager"]);
+  const ctx = await requireBranch(["owner", "manager"]);
+  const { user, tid, branchId } = ctx;
   const { id } = await params;
   const { reason } = Body.parse(await req.json());
   const t = await WalletTxn.findOne({ _id: id, tenant: tid }).lean();
+  assertBranchAccess(ctx, t?.branch, "Entry");
   if (!t) throw new ApiError(404, "Entry not found.");
   if (t.type === "reversal") throw new ApiError(400, "A cancellation cannot be cancelled.");
   const claimed = await WalletTxn.updateOne({ _id: t._id, tenant: tid, reversed: false }, { $set: { reversed: true, reverseReason: reason } });

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
-import { requireBranch } from "@/lib/branches";
+import { assertBranchAccess, requireBranch } from "@/lib/branches";
 import { InstallmentPlan } from "@/models";
 import { loadPlan, savePlan, withState } from "@/lib/installments";
 
@@ -10,10 +10,12 @@ const Body = z.object({ reason: z.string().trim().min(3, "Write why").max(200) }
 
 /** Cancels an installment payment entered by mistake (kept in the list, marked cancelled). */
 export const POST = handle<Ctx>(async (req, { params }) => {
-  const { user, tid, branchId } = await requireBranch(["owner", "manager"]);
+  const ctx = await requireBranch(["owner", "manager"]);
+  const { user, tid, branchId } = ctx;
   const { id, pid } = await params;
   const { reason } = Body.parse(await req.json());
   const p = await loadPlan(tid, id);
+  assertBranchAccess(ctx, p.branch, "Installment plan");
   if (p.status === "cancelled") throw new ApiError(400, "This plan is closed.");
   const pay = p.payments.find((x) => String((x as { _id?: unknown })._id) === pid);
   if (!pay || pay.kind !== "payment") throw new ApiError(404, "Payment not found.");

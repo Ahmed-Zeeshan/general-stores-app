@@ -27,7 +27,8 @@ const Body = z.object({
     .string()
     .optional()
     .nullable()
-    .transform((v) => (v ? new Date(`${v}T23:59:59`) : null)),
+    // Left out = keep the plan end date; empty or null = no end date.
+    .transform((v) => (v === undefined ? undefined : v ? new Date(`${v}T23:59:59`) : null)),
   adminNotes: z.string().trim().optional(),
 });
 
@@ -38,7 +39,7 @@ export const PUT = handle<Ctx>(async (req, { params }) => {
   const before = (await Tenant.findById(id).select("status maxUsers maxBranches expiresAt").lean()) as Record<string, unknown> | null;
   const update: Record<string, unknown> = { $set: body };
   if (expiresAt) (update.$set as Record<string, unknown>).expiresAt = expiresAt;
-  else update.$unset = { expiresAt: 1 };
+  else if (expiresAt === null) update.$unset = { expiresAt: 1 };
   const tenant = await Tenant.findByIdAndUpdate(id, update, { new: true }).lean();
   if (!tenant) throw new ApiError(404, "Shop not found.");
   forgetTenant(id);

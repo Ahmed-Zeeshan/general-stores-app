@@ -39,10 +39,12 @@ export const PUT = handle<Ctx>(async (req, { params }) => {
   if (body.name) update.name = body.name;
   if (body.role) update.role = body.role;
   if (body.active !== undefined) update.active = body.active;
+  // A new password also ends every login made with the old one.
   if (body.password) update.passwordHash = await hashPassword(body.password);
   if (body.pin) {
     update.pinHash = await hashPassword(body.pin);
     update.hasPin = true;
+    update.pinFailures = 0;
   } else if (body.pin === "") {
     update.hasPin = false;
     unset.pinHash = 1;
@@ -50,7 +52,7 @@ export const PUT = handle<Ctx>(async (req, { params }) => {
   if (typeof body.maxDiscountPct === "number") update.maxDiscountPct = body.maxDiscountPct;
   else if (body.maxDiscountPct === "" || body.maxDiscountPct === null) unset.maxDiscountPct = 1;
   if (body.allowUdhaar !== undefined) update.allowUdhaar = body.allowUdhaar;
-  const updated = await User.findOneAndUpdate({ _id: id, tenant: tid }, { $set: update, $unset: unset }, { new: true }).lean();
+  const updated = await User.findOneAndUpdate({ _id: id, tenant: tid }, { $set: update, $unset: unset, ...(body.password ? { $inc: { sessionVersion: 1 } } : {}) }, { new: true }).lean();
   forgetUser(id);
   const changes = [
     body.name && body.name !== target.name && `name → ${body.name}`,

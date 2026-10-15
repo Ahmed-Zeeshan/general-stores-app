@@ -7,7 +7,7 @@ import { buildSchedule, markupOf } from "@/lib/installment-calc";
 import { withState, type PlanLean } from "@/lib/installments";
 import { round2 } from "@/lib/money";
 import { createSale, SaleBody } from "@/lib/sales";
-import { InstallmentPlan, nextNumber, Party } from "@/models";
+import { InstallmentPlan, nextNumber, Party, Sale } from "@/models";
 
 /** Plans (?status=active|completed|cancelled|all, ?due=late|today, ?q name / phone / CNIC / plan / bill). */
 export const GET = handle(async (req) => {
@@ -75,6 +75,8 @@ export const POST = handle(async (req) => {
   const firstDue = new Date(`${plan.firstDue}T12:00:00`);
   if (firstDue < new Date(Date.now() - 864e5)) throw new ApiError(400, "The first due date cannot be in the past.");
 
+  // A bill number already used cannot get a second plan on top of it.
+  if (sale.clientId && (await Sale.exists({ tenant: tid, clientId: sale.clientId }))) throw new ApiError(409, "This bill was already saved.");
   const bill = await createSale(ctx, sale, { installment: true });
   if (!bill) throw new ApiError(500, "The bill could not be saved.");
   const base = round2(bill.total - bill.amountPaid);

@@ -8,6 +8,7 @@ import { LangSwitch, useT } from "@/lib/i18n";
 import { Logo } from "@/components/logo";
 import { useToast } from "@/components/toast";
 import { api } from "@/lib/client";
+import { clearOfflineCache } from "@/lib/offline";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,6 +18,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Nobody is logged in here (logged out, or the login ran out): the shop data saved on this device for
+  // offline use goes. Offline bills not sent yet and held bills stay until someone logs in again.
+  useEffect(() => clearOfflineCache(), []);
 
   useEffect(() => {
     api<{ needsSetup: boolean }>("/api/setup")

@@ -64,8 +64,15 @@ const app = next({ dev: false, dir: process.cwd() });
 await app.prepare();
 const handle = app.getRequestHandler();
 
+// The address the request really came from (anything the browser sent in these headers is replaced).
+const realIp = (req) => {
+  req.headers["x-forwarded-for"] = (req.socket.remoteAddress ?? "").replace(/^::ffff:/, "");
+  delete req.headers["x-real-ip"];
+};
+
 createHttps({ key, cert }, (req, res) => {
   req.headers["x-forwarded-proto"] = "https";
+  realIp(req);
   handle(req, res);
 }).listen(httpsPort, "0.0.0.0", () => {
   console.log(`\nDukaan Manager is running over HTTPS:`);
@@ -75,7 +82,11 @@ createHttps({ key, cert }, (req, res) => {
 
 // Plain http stays available for computers that already use it.
 if (process.env.HTTP !== "off") {
-  createHttp((req, res) => handle(req, res)).listen(httpPort, "0.0.0.0", () => {
+  createHttp((req, res) => {
+    delete req.headers["x-forwarded-proto"];
+    realIp(req);
+    handle(req, res);
+  }).listen(httpPort, "0.0.0.0", () => {
     console.log(`Also on http://localhost:${httpPort}${lanIps.map((ip) => ` and http://${ip}:${httpPort}`).join("")}`);
   });
 }

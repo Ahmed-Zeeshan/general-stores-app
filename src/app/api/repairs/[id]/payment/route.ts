@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
-import { requireBranch } from "@/lib/branches";
+import { assertBranchAccess, requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
 import { assertOpen, loadRepair, paymentNo, repairTotals, saveRepair } from "@/lib/repairs";
 
@@ -15,10 +15,12 @@ const Body = z.object({
 
 /** Money received for the job (more advance) or given back. */
 export const POST = handle<Ctx>(async (req, { params }) => {
-  const { user, tid, branchId } = await requireBranch();
+  const ctx = await requireBranch();
+  const { user, tid, branchId } = ctx;
   const { id } = await params;
   const body = Body.parse(await req.json());
   const r = await loadRepair(tid, id);
+  assertBranchAccess(ctx, r.branch, "Repair");
   assertOpen(r);
   const t = repairTotals(r);
   const amount = round2(body.amount);

@@ -1,6 +1,6 @@
 /** Activity log actions grouped for filtering, with plain labels (shared by the API and the page). */
 export const ACTIVITY_GROUPS: Record<string, string[]> = {
-  sales: ["sale.price", "sale.discount", "sale.return", "repair.create", "repair.deliver", "repair.cancel", "repair.refund", "repair.discount"],
+  sales: ["sale.price", "sale.discount", "sale.offline-limit", "sale.return", "repair.create", "repair.deliver", "repair.cancel", "repair.refund", "repair.discount", "repair.labour"],
   money: ["payment.receive", "payment.supplier", "payment.cancel", "khata.charge", "khata.opening", "party.update", "expense.add", "expense.delete", "wallet.create", "wallet.update", "wallet.reconcile", "wallet.float_in", "wallet.float_out", "wallet.commission", "wallet.reverse", "installment.create", "installment.reverse", "installment.cancel"],
   stock: ["stock.adjust", "stock.wastage", "stock.writeoff", "stock.transfer", "product.price", "product.remove", "product.import", "purchase.create", "purchase.return", "purchase.cancel", "device.add", "device.update", "device.remove", "used.buy", "used.cancel"],
   drawer: ["drawer.open", "drawer.in", "drawer.out", "drawer.close"],
@@ -20,6 +20,8 @@ export const GROUP_LABELS: Record<string, string> = {
 export const ACTION_LABELS: Record<string, string> = {
   "sale.price": "Price changed on bill",
   "sale.discount": "Discount on bill",
+  "sale.offline-limit": "Offline bill above staff limits",
+  "repair.labour": "Repair charges lowered",
   "sale.return": "Bill return",
   "repair.create": "Repair booked",
   "repair.deliver": "Repair delivered",
@@ -79,4 +81,4 @@ export const ACTION_LABELS: Record<string, string> = {
 };
 
 /** Actions that deserve attention (shown in red). */
-export const WARNING_ACTIONS = new Set(["sale.price", "payment.cancel", "khata.charge", "product.remove", "purchase.cancel", "login.failed", "backup.restore", "expense.delete", "stock.writeoff", "stock.wastage"]);
+export const WARNING_ACTIONS = new Set(["sale.price", "sale.offline-limit", "repair.labour", "repair.refund", "payment.cancel", "khata.charge", "product.remove", "purchase.cancel", "login.failed", "backup.restore", "expense.delete", "stock.writeoff", "stock.wastage"]);

@@ -12,12 +12,26 @@ export type SessionUser = {
   tenantId: string | null;
   /** Branch the user is locked to (read fresh from the database, not stored in the cookie). */
   branchId?: string | null;
+  /** The user's session version when this login was made (see User.sessionVersion). */
+  sv?: number;
 };
 
-function secret() {
+/** Example values from the docs: anyone could sign a login with them, so they are refused. */
+const KNOWN_SECRETS = ["change-me-to-a-long-random-string"];
+
+/** The app's signing secret; refuses a missing, short or example value. */
+export function authSecret(): string {
   const s = process.env.AUTH_SECRET;
-  if (!s || s.length < 16) throw new Error("AUTH_SECRET must be set (at least 16 characters).");
-  return new TextEncoder().encode(s);
+  if (!s || s.length < 32 || KNOWN_SECRETS.includes(s) || /change-?me/i.test(s)) {
+    throw new Error(
+      "AUTH_SECRET must be a long random value of your own (at least 32 characters). Make one with: node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\"",
+    );
+  }
+  return s;
+}
+
+function secret() {
+  return new TextEncoder().encode(authSecret());
 }
 
 export async function signSession(user: SessionUser): Promise<string> {
@@ -38,6 +52,7 @@ export async function verifySession(token: string | undefined): Promise<SessionU
       username: String(payload.username),
       role: payload.role as Role,
       tenantId: payload.tenantId ? String(payload.tenantId) : null,
+      sv: Number(payload.sv ?? 0),
     };
   } catch {
     return null;

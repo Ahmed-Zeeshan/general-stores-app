@@ -43,7 +43,8 @@ const Body = z.object({
     address: z.string().trim().max(200).optional(),
     partyId: optionalId,
   }),
-  photos: z.array(z.string().startsWith("data:image/").max(MAX_PHOTO, "A photo is too large")).max(3).optional(),
+  // Only ordinary photos (not SVG or other formats that can carry scripts).
+  photos: z.array(z.string().max(MAX_PHOTO, "A photo is too large").regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/, "Not a photo.")).max(3).optional(),
   /** The phone model (product tracked by IMEI) — or a new model to create. */
   productId: optionalId,
   newModel: z.object({ name: z.string().trim().min(2).max(80), salePrice: z.coerce.number().min(0) }).optional(),

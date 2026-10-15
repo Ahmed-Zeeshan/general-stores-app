@@ -22,7 +22,8 @@ export const GET = handle(async (req) => {
   }
   const fbr = url.searchParams.get("fbr");
   if (fbr) query.fbrStatus = fbr;
-  return Sale.find(query).sort({ createdAt: -1 }).limit(1000).lean();
+  // Cashiers do not get the shop's cost prices.
+  return Sale.find(query).sort({ createdAt: -1 }).limit(1000).select(ctx.user.role === "cashier" ? "-costTotal -items.cost" : "").lean();
 });
 
 export const POST = handle(async (req) => {

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
-import { requireBranch } from "@/lib/branches";
+import { assertBranchAccess, requireBranch } from "@/lib/branches";
 import { Wallet } from "@/models";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -16,9 +16,11 @@ const Body = z.object({
 
 /** Changes an account's details (the balance changes only through entries). */
 export const PATCH = handle<Ctx>(async (req, { params }) => {
-  const { user, tid, branchId } = await requireBranch(["owner", "manager"]);
+  const ctx = await requireBranch(["owner", "manager"]);
+  const { user, tid, branchId } = ctx;
   const { id } = await params;
   const body = Body.parse(await req.json());
+  assertBranchAccess(ctx, (await Wallet.findOne({ _id: id, tenant: tid }).select("branch").lean())?.branch, "Wallet");
   const w = await Wallet.findOneAndUpdate({ _id: id, tenant: tid }, { $set: body }, { new: true }).lean();
   if (!w) throw new ApiError(404, "Account not found.");
   await logActivity({ tid, user, branchId }, { action: "wallet.update", summary: `${w.name}: ${Object.keys(body).join(", ")} changed`, refType: "wallet", refId: w._id });

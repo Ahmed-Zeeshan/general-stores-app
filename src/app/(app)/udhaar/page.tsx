@@ -11,6 +11,7 @@ import { useToast } from "@/components/toast";
 import { api, formatDate } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
 import { openWhatsApp, reminderMessage, waNumber } from "@/lib/whatsapp";
+import { toCsv } from "@/lib/csv";
 
 type Row = {
   _id: string;
@@ -73,17 +74,12 @@ export default function UdhaarReportPage() {
 
   function exportCsv() {
     const header = ["Customer", "Phone", "Balance", "0-30 days", "31-60 days", "61-90 days", "90+ days", "Oldest due", "Days overdue", "Last payment", "Last reminded"];
-    const cell = (v: unknown) => {
-      const s = v === null || v === undefined ? "" : String(v);
-      const safe = /^[=+\-@]/.test(s) && Number.isNaN(Number(s)) ? `'${s}` : s;
-      return /[",\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
-    };
-    const lines = rows.map((r) =>
-      [r.name, r.phone, r.balance, r.buckets.d0_30, r.buckets.d31_60, r.buckets.d61_90, r.buckets.d90, r.oldestDueAt?.slice(0, 10), r.daysOverdue, r.lastPaymentAt?.slice(0, 10), r.lastRemindedAt?.slice(0, 10)]
-        .map(cell)
-        .join(","),
+    // Shared helper: safe against spreadsheet formulas typed into names.
+    const csv = toCsv(
+      header,
+      rows.map((r) => [r.name, r.phone, r.balance, r.buckets.d0_30, r.buckets.d31_60, r.buckets.d61_90, r.buckets.d90, r.oldestDueAt?.slice(0, 10), r.daysOverdue, r.lastPaymentAt?.slice(0, 10), r.lastRemindedAt?.slice(0, 10)]),
     );
-    const url = URL.createObjectURL(new Blob(["﻿" + [header.join(","), ...lines].join("\r\n")], { type: "text/csv;charset=utf-8" }));
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
     a.href = url;
     a.download = `udhaar-report-${new Date().toISOString().slice(0, 10)}.csv`;

@@ -8,6 +8,7 @@ import { useToast } from "@/components/toast";
 import { api, formatDate, todayISO } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
 import { ACTION_LABELS, GROUP_LABELS, WARNING_ACTIONS } from "@/lib/activity-groups";
+import { toCsv } from "@/lib/csv";
 
 type Row = { _id: string; createdAt: string; userName?: string; role?: string; branchName?: string; action: string; summary: string; refNo?: string; amount?: number; ip?: string };
 type Data = { rows: Row[]; users: { _id: string; name: string; role: string }[]; truncated: boolean };
@@ -36,16 +37,12 @@ export default function ActivityPage() {
 
   function exportCsv() {
     if (!data) return;
-    const cell = (v: unknown) => {
-      const s = v === null || v === undefined ? "" : String(v);
-      const safe = /^[=+\-@]/.test(s) ? `'${s}` : s;
-      return /[",\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
-    };
-    const lines = [
-      ["Time", "Who", "Role", "Branch", "What", "Details", "Ref", "Amount"].join(","),
-      ...data.rows.map((r) => [new Date(r.createdAt).toLocaleString("en-PK"), r.userName, r.role, r.branchName, ACTION_LABELS[r.action] ?? r.action, r.summary, r.refNo, r.amount].map(cell).join(",")),
-    ];
-    const url = URL.createObjectURL(new Blob(["﻿" + lines.join("\n")], { type: "text/csv" }));
+    // Shared helper: safe against spreadsheet formulas typed into names and notes.
+    const csv = toCsv(
+      ["Time", "Who", "Role", "Branch", "What", "Details", "Ref", "Amount"],
+      data.rows.map((r) => [new Date(r.createdAt).toLocaleString("en-PK"), r.userName, r.role, r.branchName, ACTION_LABELS[r.action] ?? r.action, r.summary, r.refNo, r.amount]),
+    );
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const a = Object.assign(document.createElement("a"), { href: url, download: `activity-${range.from}-to-${range.to}.csv` });
     a.click();
     URL.revokeObjectURL(url);

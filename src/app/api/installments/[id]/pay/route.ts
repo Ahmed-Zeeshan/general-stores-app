@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
-import { requireBranch } from "@/lib/branches";
+import { assertBranchAccess, requireBranch } from "@/lib/branches";
 import { loadPlan, receiptNo, savePlan, withState } from "@/lib/installments";
 import { round2 } from "@/lib/money";
 
@@ -14,10 +14,12 @@ const Body = z.object({
 
 /** Receives an installment (any amount up to the balance; matched to the oldest months first). */
 export const POST = handle<Ctx>(async (req, { params }) => {
-  const { user, tid } = await requireBranch();
+  const ctx = await requireBranch();
+  const { user, tid } = ctx;
   const { id } = await params;
   const body = Body.parse(await req.json());
   const p = await loadPlan(tid, id);
+  assertBranchAccess(ctx, p.branch, "Installment plan");
   if (p.status !== "active") throw new ApiError(400, p.status === "completed" ? "This plan is fully paid." : "This plan is closed.");
   const s = withState(p);
   const amount = round2(body.amount);

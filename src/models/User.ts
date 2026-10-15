@@ -15,6 +15,10 @@ const UserSchema = new Schema(
     /** 4–6 digit PIN to switch to this user on a shared counter (hashed). */
     pinHash: { type: String, select: false },
     hasPin: { type: Boolean, default: false },
+    /** Wrong PINs in a row; the PIN is switched off after too many, until the owner sets a new one. */
+    pinFailures: { type: Number, default: 0 },
+    /** Raised when the password changes, which ends every login made with the old one. */
+    sessionVersion: { type: Number, default: 0 },
     /** Limits for staff set by the owner: largest discount on a bill (% of the bill), and udhaar allowed or not. */
     maxDiscountPct: { type: Number, min: 0, max: 100 },
     allowUdhaar: { type: Boolean, default: true },

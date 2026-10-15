@@ -57,7 +57,7 @@ Data isolation is enforced in the database layer: every shop record carries a `t
 | **Fast counter** | **Big buttons** for touch screens, **Favourites** first, **product photos** on the sale screen. **Switch user** with a 4–6 digit PIN on a shared counter. **Limits per staff member**: largest discount and whether they may give udhaar. **Reorder List**: what will run out soon (from the last 30 days of sales), how much to order from each supplier, sent on WhatsApp. |
 | **Data** | Export products / customers / suppliers / sales / expenses to Excel (CSV), **import products from CSV**, full JSON backup and **restore** (same shop only, validated first, safety copy downloaded before replacing). |
 | **Installable app (PWA)** | "Install" / "Add to Home Screen" on Chrome, Edge and Android. |
-| **Security** | bcrypt passwords, signed httpOnly session cookies, role checks on every API, login lockout after 10 wrong attempts, security headers, CSV formula-injection protection, FBR token never sent to the browser. |
+| **Security** | bcrypt passwords; signed httpOnly session cookies that end when the password is changed or reset; role and branch checks on every API (a cashier cannot get round the owner's limits, see cost prices or act on another branch); login lockout after 10 wrong passwords per account and PINs switched off after 5 wrong tries (kept in the database); requests from other websites refused; Content-Security-Policy and other security headers; backups checked in full before a restore changes anything; CSV formula-injection protection; FBR token never sent to the browser. See *Security checklist* below. |
 
 ## Getting started (local MongoDB)
 
@@ -75,7 +75,8 @@ Pick one:
 ```bash
 npm install
 cp .env.example .env.local       # Windows: copy .env.example .env.local
-# edit .env.local and set AUTH_SECRET to a long random string
+# edit .env.local: set AUTH_SECRET to the output of
+#   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 npm run dev                      # http://localhost:3000
 ```
 
@@ -148,6 +149,22 @@ Install **WhatsApp Desktop** on the shop PC (or keep **web.whatsapp.com** logged
 - Super Admin: **Shops → (shop) → Backup / Restore from backup**.
 - Restore only accepts a backup of the same shop, checks the whole file before changing anything, keeps staff logins and the admin's limits, and asks you to download a safety copy first.
 - Whole database: `mongodump --uri "mongodb://127.0.0.1:27017/dukaan" --out backup-folder` (MongoDB Database Tools).
+
+### Security checklist
+
+Before the app is used for real (and again whenever it is moved to a new computer or server):
+
+1. **`AUTH_SECRET`** in `.env.local` must be your own random value of at least 32 characters (`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`). The app refuses to log anyone in with a missing, short or example value. Anyone who knows it can make themselves a login, so never share it or commit it. Changing it logs everyone out and makes old WhatsApp bill links stop working.
+2. **Create the Super Admin straight away** (or with `npm run reset-admin`), before the app is reachable by others: until then, whoever opens it first can create it. On a server reachable from the internet also set `SETUP_TOKEN=<a secret>`; the setup page then asks for it.
+3. **Strong passwords** for the Super Admin and owners. Staff who leave: disable their account (Settings → Staff). Changing or resetting a password ends every login made with the old one.
+4. **Shop network.** `npm run start:https` and use the `https://…:3443` address on phones and other counters: on plain `http://` the login travels unencrypted over the Wi-Fi. Keep MongoDB on `127.0.0.1` (the default) and only open ports 3000/3443 in the firewall to the shop network, never to the internet.
+5. **On the internet** put the app behind Caddy or Nginx with a real domain and HTTPS, and:
+   - start the app with `HOSTNAME=127.0.0.1` so only the proxy can reach it, and set `COOKIE_SECURE=always`;
+   - let the proxy send `Strict-Transport-Security: max-age=31536000` and pass the original host (`proxy_set_header Host $host;` in Nginx; Caddy does it by itself) and the visitor's address (`X-Forwarded-For`). If the proxy changes the host name, list the public address in `TRUSTED_ORIGINS=https://shop.example.com`;
+   - turn on MongoDB authentication if the database runs on another machine.
+6. **Backups** contain customers' names, phones and khata. The automatic ones are written readable only by the account running the app; if you copy them to Google Drive or a USB stick, keep that account private (or put them in an encrypted folder).
+7. **Don't run the app as root / Administrator**, and keep it updated (`git pull && npm ci && npm run build`); `npm audit --omit=dev` should report no high or critical problems.
+8. **Activity log** (owner): look at the red entries now and then — wrong passwords and PINs, PINs switched off, offline bills above staff limits, prices changed on bills, money given back.
 
 ### FBR setup
 

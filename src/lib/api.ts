@@ -19,7 +19,8 @@ export async function currentUser(): Promise<SessionUser | null> {
   const session = await verifySession(store.get(SESSION_COOKIE)?.value);
   if (!session) return null;
   const fresh = await freshUser(session.id);
-  if (!fresh.active || fresh.tenant !== session.tenantId) return null;
+  // A password change (or reset) raises the version and ends every older login.
+  if (!fresh.active || fresh.tenant !== session.tenantId || fresh.sv !== (session.sv ?? 0)) return null;
   return { ...session, role: fresh.role as SessionUser["role"], branchId: fresh.branch };
 }
 
@@ -37,7 +38,7 @@ export function tenantBlockReason(t: { status?: string | null; expiresAt?: Date 
 // accounts take effect within 15 seconds even though the login cookie is still valid.
 const TTL = 15_000;
 const tenantCache = new Map<string, { at: number; reason: string | null }>();
-const userCache = new Map<string, { at: number; active: boolean; role: string; tenant: string | null; branch: string | null }>();
+const userCache = new Map<string, { at: number; active: boolean; role: string; tenant: string | null; branch: string | null; sv: number }>();
 export function forgetTenant(id: string) {
   tenantCache.delete(id);
 }
@@ -48,13 +49,14 @@ export function forgetUser(id: string) {
 async function freshUser(id: string) {
   const hit = userCache.get(id);
   if (hit && Date.now() - hit.at < TTL) return hit;
-  const u = await User.findById(id).select("active role tenant branch").lean();
+  const u = await User.findById(id).select("active role tenant branch sessionVersion").lean();
   const entry = {
     at: Date.now(),
     active: !!u?.active,
     role: u?.role ?? "",
     tenant: u?.tenant ? String(u.tenant) : null,
     branch: u?.branch ? String(u.branch) : null,
+    sv: u?.sessionVersion ?? 0,
   };
   userCache.set(id, entry);
   return entry;
@@ -99,17 +101,51 @@ export async function requireAnyUser(): Promise<SessionUser> {
 
 type Handler<C> = (req: Request, ctx: C) => Promise<Response | unknown>;
 
+const CHANGES = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/**
+ * A change sent by a browser must come from a page of this app, not from another website the user has
+ * open (cross-site request forgery). Browsers always send Origin on such requests; programs that send
+ * none are judged by their login like any other request. TRUSTED_ORIGINS lists extra addresses
+ * (comma separated) for setups where a proxy changes the host name.
+ */
+function fromThisSite(req: Request) {
+  if (!CHANGES.has(req.method)) return true;
+  const origin = req.headers.get("origin");
+  if (!origin) return true;
+  let host: string;
+  try {
+    host = new URL(origin).host;
+  } catch {
+    return false;
+  }
+  const own = [req.headers.get("x-forwarded-host")?.split(",")[0]?.trim(), req.headers.get("host")];
+  const extra = (process.env.TRUSTED_ORIGINS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return own.includes(host) || extra.includes(origin);
+}
+
+/** API answers hold shop data: never kept by the browser or a proxy. */
+function noStore(res: Response) {
+  if (!res.headers.has("Cache-Control")) res.headers.set("Cache-Control", "no-store");
+  return res;
+}
+
 /** Wraps a route handler: connects to DB, converts thrown errors to friendly JSON. */
 export function handle<C = unknown>(fn: Handler<C>) {
   return async (req: Request, ctx: C) => {
     try {
+      if (!fromThisSite(req)) throw new ApiError(403, "This request did not come from the app. Please open the app's own page and try again.");
       await connectDB();
       const result = await fn(req, ctx);
-      if (result instanceof Response) return result;
-      return NextResponse.json(result ?? { ok: true });
+      if (result instanceof Response) return noStore(result);
+      return noStore(NextResponse.json(result ?? { ok: true }));
     } catch (err) {
       if (err instanceof ApiError) {
-        return NextResponse.json({ error: err.message }, { status: err.status });
+        return NextResponse.json({ error: err.message }, { status: err.status, headers: { "Cache-Control": "no-store" } });
+      }
+      // Body that is not valid JSON (or was cut off).
+      if (err instanceof SyntaxError) {
+        return NextResponse.json({ error: "The data sent was not valid. Please try again." }, { status: 400 });
       }
       if (err instanceof ZodError) {
         const first = err.issues[0];

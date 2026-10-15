@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
-import { requireBranch } from "@/lib/branches";
+import { assertBranchAccess, requireBranch } from "@/lib/branches";
 import { claimDevices } from "@/lib/devices";
 import { moveStock, postLedger } from "@/lib/services";
 import { UsedPurchase } from "@/models";
@@ -11,10 +11,12 @@ const Body = z.object({ reason: z.string().trim().min(3, "Write why it is cancel
 
 /** Cancels a used-phone purchase entered by mistake (the phone must still be in stock). */
 export const POST = handle<Ctx>(async (req, { params }) => {
-  const { user, tid, branchId } = await requireBranch(["owner", "manager"]);
+  const ctx = await requireBranch(["owner", "manager"]);
+  const { user, tid, branchId } = ctx;
   const { id } = await params;
   const { reason } = Body.parse(await req.json());
   const doc = await UsedPurchase.findOne({ _id: id, tenant: tid }).lean();
+  assertBranchAccess(ctx, doc?.branch, "Purchase");
   if (!doc) throw new ApiError(404, "Not found.");
   if (doc.status === "cancelled") throw new ApiError(400, "Already cancelled.");
   await claimDevices({ tid, ids: [doc.device!], productId: doc.product, branch: doc.branch, to: "removed", event: { action: "Used purchase cancelled", refNo: doc.buyNo, note: reason }, userName: user.name });

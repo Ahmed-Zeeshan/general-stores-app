@@ -155,6 +155,7 @@ export function PartiesList({ type }: { type: PartyType }) {
 
 function PartyForm({ type, open, party, onClose, onSaved }: { type: PartyType; open: boolean; party?: Party; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
+  const can = useCan();
   const [form, setForm] = useState({ name: "", phone: "", address: "", creditLimit: "", notes: "", openingBalance: "", priceLevel: "retail" });
   const [saving, setSaving] = useState(false);
   useEffect(() => {
@@ -207,12 +208,12 @@ function PartyForm({ type, open, party, onClose, onSaved }: { type: PartyType; o
         <Field label="Phone" hint="Used for WhatsApp reminders">
           <Input inputMode="tel" value={form.phone} onChange={set("phone")} placeholder="03xx xxxxxxx" />
         </Field>
-        {type === "customer" && (
+        {type === "customer" && can.manage && (
           <Field label="Udhaar limit" hint="0 = no limit">
             <Input type="number" inputMode="decimal" min="0" value={form.creditLimit} onChange={set("creditLimit")} placeholder="0" />
           </Field>
         )}
-        {type === "customer" && (
+        {type === "customer" && can.manage && (
           <Field label="Prices" hint="Wholesale customers automatically get wholesale prices at the counter">
             <Select value={form.priceLevel} onChange={set("priceLevel")} aria-label="Price level">
               <option value="retail">Retail (normal prices)</option>
@@ -223,7 +224,7 @@ function PartyForm({ type, open, party, onClose, onSaved }: { type: PartyType; o
         <Field label="Address" className="sm:col-span-2">
           <Input value={form.address} onChange={set("address")} />
         </Field>
-        {!party && (
+        {!party && can.manage && (
           <Field label={type === "customer" ? "Old udhaar (if any)" : "Old amount you owe (if any)"} hint="From your paper register">
             <Input type="number" inputMode="decimal" value={form.openingBalance} onChange={set("openingBalance")} placeholder="0" />
           </Field>

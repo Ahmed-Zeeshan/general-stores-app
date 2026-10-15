@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { logActivity } from "@/lib/activity";
-import { requireBranch } from "@/lib/branches";
+import { assertBranchAccess, requireBranch } from "@/lib/branches";
 import { addDays, ApiError, handle } from "@/lib/api";
 import { round2 } from "@/lib/money";
 import { assertOpen, loadRepair, paymentNo, repairTotals, saveRepair } from "@/lib/repairs";
 import { postLedger } from "@/lib/services";
-import { Party } from "@/models";
+import { Party, User } from "@/models";
 
 type Ctx = { params: Promise<{ id: string }> };
 const Body = z.object({
@@ -19,17 +19,20 @@ const Body = z.object({
 
 /** Hands the phone back: collects the balance (or puts it on khata), starts the repair warranty. */
 export const POST = handle<Ctx>(async (req, { params }) => {
-  const { user, tid, branchId } = await requireBranch();
+  const ctx = await requireBranch();
+  const { user, tid, branchId } = ctx;
   const { id } = await params;
   const body = Body.parse(await req.json());
   const r = await loadRepair(tid, id);
+  assertBranchAccess(ctx, r.branch, "Repair");
   assertOpen(r);
   const t = repairTotals(r);
   const now = new Date();
   const payments: Record<string, unknown>[] = [];
   let left = t.balance;
   if (left < -0.004) {
-    // More advance than the bill: give the extra back.
+    // More advance than the bill: give the extra back (handing money back is for the owner or manager).
+    if (user.role === "cashier") throw new ApiError(403, `Rs ${-left} has to be given back to the customer. Ask the owner or manager to deliver this job.`);
     payments.push({ kind: "refund", amount: left, method: body.method, at: now, userName: user.name, receiptNo: paymentNo(r) });
     left = 0;
   } else {
@@ -41,6 +44,10 @@ export const POST = handle<Ctx>(async (req, { params }) => {
   if (left > 0.004) {
     if (!body.toKhata) throw new ApiError(400, `Rs ${left} is still to collect. Collect it, or put it on the customer's khata.`);
     if (!r.customer) throw new ApiError(400, "This job has no customer khata. Collect the full amount.");
+    if (user.role !== "owner") {
+      const me = await User.findOne({ _id: user.id, tenant: tid }).select("allowUdhaar").lean();
+      if (me?.allowUdhaar === false) throw new ApiError(400, "You are not allowed to give udhaar. Collect the full amount, or ask the owner or manager.");
+    }
     const party = await Party.findOne({ _id: r.customer, tenant: tid }).lean();
     if (party && party.creditLimit > 0 && party.balance + left > party.creditLimit && user.role !== "owner") throw new ApiError(400, `Credit limit crossed for ${party.name}. Ask the owner.`);
     creditAmount = left;
@@ -56,6 +63,9 @@ export const POST = handle<Ctx>(async (req, { params }) => {
   );
   if (creditAmount > 0) {
     await postLedger({ tid, partyId: r.customer!, kind: "sale", amount: creditAmount, refType: "repair", refId: r._id, refNo: r.jobNo, note: `Repair ${r.jobNo} (${r.deviceName})`, userId: user.id, branch: r.branch });
+  }
+  if (payments.some((p) => p.kind === "refund")) {
+    await logActivity({ tid, user, branchId }, { action: "repair.refund", summary: `${r.jobNo}: Rs ${-t.balance} given back on delivery`, refType: "repair", refId: r._id, refNo: r.jobNo, amount: -t.balance });
   }
   await logActivity({ tid, user, branchId }, { action: "repair.deliver", summary: `${r.jobNo} delivered to ${r.customerName}: bill Rs ${t.total}${creditAmount ? `, Rs ${creditAmount} on khata` : ""}`, refType: "repair", refId: r._id, refNo: r.jobNo, amount: t.total });
   return { ...saved, ...repairTotals(saved) };

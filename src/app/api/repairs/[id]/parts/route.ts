@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ApiError, handle } from "@/lib/api";
-import { branchStock, requireBranch } from "@/lib/branches";
+import { assertBranchAccess, branchStock, requireBranch } from "@/lib/branches";
 import { assertOpen, loadRepair, repairTotals, saveRepair } from "@/lib/repairs";
 import { moveStock } from "@/lib/services";
 import { Product } from "@/models";
@@ -15,10 +15,12 @@ const Body = z.object({
 
 /** Uses a spare part from stock on this job. */
 export const POST = handle<Ctx>(async (req, { params }) => {
-  const { user, tid } = await requireBranch();
+  const ctx = await requireBranch();
+  const { user, tid } = ctx;
   const { id } = await params;
   const body = Body.parse(await req.json());
   const r = await loadRepair(tid, id);
+  assertBranchAccess(ctx, r.branch, "Repair");
   assertOpen(r);
   const p = await Product.findOne({ _id: body.productId, tenant: tid, active: true }).lean();
   if (!p) throw new ApiError(404, "Part not found.");

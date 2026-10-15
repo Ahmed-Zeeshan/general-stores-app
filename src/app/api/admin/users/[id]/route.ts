@@ -25,8 +25,9 @@ export const PUT = handle<Ctx>(async (req, { params }) => {
   if (body.name) update.name = body.name;
   if (body.role) update.role = body.role;
   if (body.active !== undefined) update.active = body.active;
+  // A new password also ends every login made with the old one.
   if (body.password) update.passwordHash = await hashPassword(body.password);
-  const user = await User.findByIdAndUpdate(id, update, { new: true }).lean();
+  const user = await User.findByIdAndUpdate(id, { $set: update, ...(body.password ? { $inc: { sessionVersion: 1 } } : {}) }, { new: true }).lean();
   forgetUser(id);
   return user;
 });
