@@ -167,6 +167,10 @@ export function handle<C = unknown>(fn: Handler<C>) {
         return NextResponse.json({ error: `This ${key} already exists.` }, { status: 409 });
       }
       console.error(err);
+      // A setup problem only the person who installed the app can fix: say so plainly.
+      if (err instanceof Error && err.message.startsWith("AUTH_SECRET")) {
+        return NextResponse.json({ error: "The app is not set up correctly: AUTH_SECRET in .env.local is missing or too short (at least 32 characters). See README → Security checklist, then restart the app." }, { status: 500 });
+      }
       return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
     }
   };

@@ -55,9 +55,6 @@ export type SaleInput = z.infer<typeof SaleBody>;
  * Makes a bill: prices, offers, points, payments, stock (and phones by IMEI), khata and FBR.
  * `installment`: the unpaid part goes to an installment plan instead of the khata (no credit limit).
  */
-/** A bill sent this long after it was made is treated as made offline. */
-const OFFLINE_MIN_AGE_MS = 2 * 60_000;
-
 export async function createSale(ctx: BranchContext, body: SaleInput, opts: { installment?: boolean } = {}) {
   const { user, tid } = ctx;
 
@@ -66,14 +63,12 @@ export async function createSale(ctx: BranchContext, body: SaleInput, opts: { in
     const existing = await Sale.findOne({ tenant: tid, clientId: body.clientId }).lean();
     if (existing) return existing;
   }
+  const offline = !!body.clientId && !!body.soldAt;
   let soldAt: Date | undefined;
-  let offline = false;
-  if (body.clientId && body.soldAt) {
-    soldAt = new Date(body.soldAt);
+  if (offline) {
+    soldAt = new Date(body.soldAt!);
     const age = Date.now() - soldAt.getTime();
     if (age > 30 * 864e5 || age < -10 * 60_000) throw new ApiError(400, "Offline bill date is not valid. Check this device's date and time.");
-    // Only a bill really made earlier counts as offline (one dated "now" is an ordinary bill with ordinary limits).
-    offline = age >= OFFLINE_MIN_AGE_MS;
   }
   // Offline bills keep the branch they were made in (if the user may use it).
   let branch = ctx.branch;

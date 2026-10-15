@@ -1,4 +1,4 @@
-import { FBR, Client, ok, eq, section, done } from "../lib/harness.mjs";
+import { FBR, Client, ok, eq, section, db, done } from "../lib/harness.mjs";
 
 const admin = new Client("admin");
 const ownerA = new Client("ownerA");
@@ -234,6 +234,10 @@ const brute = new Client("brute");
 for (let i = 0; i < 10; i++) await brute.login("ahmed", "wrong" + i, 401);
 const locked = await brute.login("ahmed", "secret1", 429);
 ok(/Too many wrong attempts/.test(locked.error), "login locked after 10 failures");
+// The lock is kept in the database for 15 minutes; clear it as if the time had passed.
+await (await db()).collection("auththrottles").deleteMany({});
+await brute.login("ahmed", "secret1");
+ok(true, "after the wait the right password works again");
 
 section("Suspension & expiry");
 await admin.call(`/api/admin/tenants/${shopA._id}`, { method: "PUT", body: { status: "suspended" } });
