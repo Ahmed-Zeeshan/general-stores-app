@@ -11,6 +11,7 @@ import { useToast } from "@/components/toast";
 import { api, UNIT_LABELS } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
 import { productMatches } from "@/lib/product-search";
+import { useT } from "@/lib/i18n";
 
 type Product = { _id: string; name: string; nameUrdu?: string; barcode?: string; unit: string; salePrice: number; stock: number };
 type Line = { product: Product; copies: number };
@@ -35,6 +36,7 @@ export default function LabelsPageWrapper() {
 
 function LabelsPage() {
   const toast = useToast();
+  const tr = useT();
   const params = useSearchParams();
   const { settings } = useSession();
   const [products, setProducts] = useState<Product[] | null>(null);
@@ -77,7 +79,7 @@ function LabelsPage() {
     if (p) {
       beep();
       add(p);
-    } else toast.error(`No product has barcode ${code}.`);
+    } else toast.error(tr("No product has barcode {code}.", { code }));
   }
   useBarcodeScanner(addByCode, !cameraOpen);
 
@@ -88,7 +90,7 @@ function LabelsPage() {
       await api("/api/barcodes/assign", { body: { productIds: missing.map((l) => l.product._id) } });
       const list = await load();
       setLines((ls) => ls.map((l) => ({ ...l, product: list.find((p) => p._id === l.product._id) ?? l.product })));
-      toast.success("Barcodes created");
+      toast.success(tr("Barcodes created"));
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -124,7 +126,7 @@ function LabelsPage() {
           subtitle="Print stickers with barcode and price for your items"
           actions={
             <Button icon={<Printer className="h-4 w-4" />} disabled={!totalLabels} onClick={() => window.print()}>
-              Print {Math.min(totalLabels, MAX_LABELS)} label{totalLabels === 1 ? "" : "s"}
+              {tr(totalLabels === 1 ? "Print {n} label" : "Print {n} labels", { n: Math.min(totalLabels, MAX_LABELS) })}
             </Button>
           }
         />
@@ -133,14 +135,14 @@ function LabelsPage() {
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search product or scan barcode to add" className="pl-10" />
+                <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("Search product or scan barcode to add")} className="pl-10" />
                 {matches.length > 0 && (
                   <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
                     {matches.map((p) => (
                       <li key={p._id}>
                         <button onClick={() => add(p)} className="flex w-full justify-between px-4 py-2.5 text-left hover:bg-slate-50">
                           <span className="font-medium">{p.name}</span>
-                          <span className="text-sm text-slate-500">{p.barcode || "no barcode"}</span>
+                          <span className="text-sm text-slate-500">{p.barcode || tr("no barcode")}</span>
                         </button>
                       </li>
                     ))}
@@ -171,7 +173,7 @@ function LabelsPage() {
             {missing.length > 0 && (
               <div className="mt-4 flex flex-col gap-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
                 <span className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 shrink-0" /> {missing.length} item(s) have no barcode and will be skipped.
+                  <AlertTriangle className="h-4 w-4 shrink-0" /> {tr("{n} item(s) have no barcode and will be skipped.", { n: missing.length })}
                 </span>
                 <Button size="sm" loading={creating} icon={<Wand2 className="h-4 w-4" />} onClick={createMissing}>
                   Create barcodes
@@ -182,7 +184,7 @@ function LabelsPage() {
             {!products ? (
               <Spinner />
             ) : lines.length === 0 ? (
-              <p className="py-14 text-center text-sm text-slate-500">Add items above, or open this page from a product&apos;s barcode button.</p>
+              <p className="py-14 text-center text-sm text-slate-500">{tr("Add items above, or open this page from a product's barcode button.")}</p>
             ) : (
               <ul className="mt-4 divide-y divide-slate-100">
                 {lines.map((l) => (
@@ -190,7 +192,7 @@ function LabelsPage() {
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-semibold text-slate-800">{l.product.name}</div>
                       <div className="text-xs text-slate-500">
-                        {l.product.barcode || <span className="text-amber-700">No barcode</span>} · {formatPKR(l.product.salePrice)}/{UNIT_LABELS[l.product.unit]}
+                        {l.product.barcode || <span className="text-amber-700">{tr("No barcode")}</span>} · {formatPKR(l.product.salePrice)}/{UNIT_LABELS[l.product.unit]}
                       </div>
                     </div>
                     <Input
@@ -215,7 +217,7 @@ function LabelsPage() {
             <Field label="Label size">
               <Select value={template} onChange={(e) => setTemplate(e.target.value as TemplateKey)}>
                 {Object.entries(TEMPLATES).map(([k, v]) => (
-                  <option key={k} value={k}>{v.name}</option>
+                  <option key={k} value={k}>{tr(v.name)}</option>
                 ))}
               </Select>
             </Field>
@@ -225,7 +227,7 @@ function LabelsPage() {
               </Field>
             )}
             <div className="space-y-2">
-              <div className="text-sm font-medium text-slate-700">Show on label</div>
+              <div className="text-sm font-medium text-slate-700">{tr("Show on label")}</div>
               {(
                 [
                   ["shop", "Shop name"],
@@ -236,19 +238,19 @@ function LabelsPage() {
               ).map(([k, label]) => (
                 <label key={k} className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={show[k]} onChange={(e) => setShow({ ...show, [k]: e.target.checked })} className="h-4 w-4 accent-brand-600" />
-                  {label}
+                  {tr(label)}
                 </label>
               ))}
             </div>
             <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
               {t.kind === "roll"
-                ? "For label printers (e.g. Xprinter, Zebra, TSC): set the paper size in the printer settings to the same size, margins none, scale 100%."
-                : "For A4 sticker sheets: in the print window set margins to None and scale to 100% (Actual size)."}{" "}
-              {totalLabels} label(s){t.kind === "sheet" ? ` on ${pages} sheet(s)` : ""}.
+                ? tr("For label printers (e.g. Xprinter, Zebra, TSC): set the paper size in the printer settings to the same size, margins none, scale 100%.")
+                : tr("For A4 sticker sheets: in the print window set margins to None and scale to 100% (Actual size).")}{" "}
+              {tr(t.kind === "sheet" ? "{n} label(s) on {pages} sheet(s)." : "{n} label(s).", { n: totalLabels, pages })}
             </p>
           </Card>
         </div>
-        <h2 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Preview</h2>
+        <h2 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">{tr("Preview")}</h2>
       </div>
 
       <div className="print-area">
@@ -272,11 +274,11 @@ function LabelsPage() {
         </div>
         {labels.length > MAX_LABELS && (
           <p className="no-print mt-3 text-sm font-semibold text-amber-700">
-            Only the first {MAX_LABELS} labels are printed at a time. Print these, then reduce the list and print the rest.
+            {tr("Only the first {n} labels are printed at a time. Print these, then reduce the list and print the rest.", { n: MAX_LABELS })}
           </p>
         )}
       </div>
-      <CameraScanner open={cameraOpen} onClose={() => setCameraOpen(false)} onScan={addByCode} continuous title="Scan items" />
+      <CameraScanner open={cameraOpen} onClose={() => setCameraOpen(false)} onScan={addByCode} continuous title={tr("Scan items")} />
     </div>
   );
 }
