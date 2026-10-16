@@ -13,6 +13,7 @@ import { getPrintPrefs, printInFrame, setPrintPrefs, type PrintPrefs } from "@/l
 import { RestoreButton } from "@/components/restore";
 import { WaModePicker } from "@/components/wa-mode";
 import { DEFAULT_WA_PAYMENT_TEMPLATE, DEFAULT_WA_TEMPLATE, paymentMessage, reminderMessage } from "@/lib/whatsapp";
+import { useT } from "@/lib/i18n";
 
 type User = { _id: string; name: string; username: string; role: "owner" | "manager" | "cashier"; active: boolean; branch?: string; hasPin?: boolean; maxDiscountPct?: number; allowUdhaar?: boolean };
 type BranchRow = { _id: string; name: string; address?: string; phone?: string; isMain: boolean; active: boolean; staff: number };
@@ -27,6 +28,7 @@ const ROLE_INFO = {
 
 export default function SettingsPage() {
   const toast = useToast();
+  const t = useT();
   const { user: me, reload } = useSession();
   const [form, setForm] = useState<SettingsForm | null>(null);
   const [saving, setSaving] = useState(false);
@@ -92,7 +94,7 @@ export default function SettingsPage() {
           modules: Object.fromEntries(MODULES.map((m) => [m, !!form.modules?.[m]])),
         },
       });
-      toast.success("Settings saved");
+      toast.success(t("Settings saved"));
       reload();
       loadSettings();
     } catch (err) {
@@ -109,13 +111,13 @@ export default function SettingsPage() {
       <PageHeader title="Settings" urdu="ترتیبات" subtitle="Shop details, tax, FBR, staff accounts and data" />
       <form onSubmit={save} className="grid gap-6 lg:grid-cols-2">
         <Card className="p-6">
-          <h2 className="mb-5 flex items-center gap-2 font-bold text-slate-900"><Store className="h-5 w-5 text-brand-600" /> Shop details</h2>
+          <h2 className="mb-5 flex items-center gap-2 font-bold text-slate-900"><Store className="h-5 w-5 text-brand-600" /> {t("Shop details")}</h2>
           <div className="space-y-4">
             <Field label="Shop name"><Input required value={form.shopName} onChange={set("shopName")} /></Field>
             <Field label="Shop type">
               <Select value={form.shopType} onChange={set("shopType")}>
-                {SHOP_TYPES.map((t) => (
-                  <option key={t} value={t}>{SHOP_TYPE_LABELS[t]}</option>
+                {SHOP_TYPES.map((st) => (
+                  <option key={st} value={st}>{t(SHOP_TYPE_LABELS[st])}</option>
                 ))}
               </Select>
             </Field>
@@ -130,11 +132,11 @@ export default function SettingsPage() {
 
         <div className="space-y-6">
           <Card className="p-6">
-            <h2 className="mb-5 flex items-center gap-2 font-bold text-slate-900"><ShieldCheck className="h-5 w-5 text-brand-600" /> Sales tax</h2>
+            <h2 className="mb-5 flex items-center gap-2 font-bold text-slate-900"><ShieldCheck className="h-5 w-5 text-brand-600" /> {t("Sales tax")}</h2>
             <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="NTN"><Input value={form.ntn ?? ""} onChange={set("ntn")} placeholder="Optional" /></Field>
-                <Field label="STRN"><Input value={form.strn ?? ""} onChange={set("strn")} placeholder="Optional" /></Field>
+                <Field label="NTN"><Input value={form.ntn ?? ""} onChange={set("ntn")} placeholder={t("Optional")} /></Field>
+                <Field label="STRN"><Input value={form.strn ?? ""} onChange={set("strn")} placeholder={t("Optional")} /></Field>
               </div>
               <Toggle checked={form.taxEnabled} onChange={(v) => setForm({ ...form, taxEnabled: v })} title="Charge sales tax on bills" text="Turn on if you are registered with FBR for sales tax." />
               {form.taxEnabled && (
@@ -148,7 +150,7 @@ export default function SettingsPage() {
 
           <Card className="p-6">
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="flex items-center gap-2 font-bold text-slate-900"><ShieldCheck className="h-5 w-5 text-brand-600" /> FBR POS integration</h2>
+              <h2 className="flex items-center gap-2 font-bold text-slate-900"><ShieldCheck className="h-5 w-5 text-brand-600" /> {t("FBR POS integration")}</h2>
               {form.fbrEnabled && <Badge color={form.fbrMode === "live" ? "green" : "amber"}>{form.fbrMode === "live" ? "Live" : "Sandbox"}</Badge>}
             </div>
             <div className="space-y-4">
@@ -163,8 +165,8 @@ export default function SettingsPage() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Field label="Mode">
                       <Select value={form.fbrMode ?? "sandbox"} onChange={set("fbrMode")}>
-                        <option value="sandbox">Sandbox (testing)</option>
-                        <option value="live">Live</option>
+                        <option value="sandbox">{t("Sandbox (testing)")}</option>
+                        <option value="live">{t("Live")}</option>
                       </Select>
                     </Field>
                     <Field label="POS ID" hint="Given by FBR when you register your POS">
@@ -184,8 +186,8 @@ export default function SettingsPage() {
           </Card>
           <PrintingCard />
           <Card className="p-6">
-            <h2 className="mb-1 flex items-center gap-2 font-bold text-slate-900"><LayoutGrid className="h-5 w-5 text-brand-600" /> Features</h2>
-            <p className="mb-4 text-sm text-slate-500">Switch on what your shop needs. Mobile phone shops usually use all four; a karyana store can switch on just Easyload &amp; wallets.</p>
+            <h2 className="mb-1 flex items-center gap-2 font-bold text-slate-900"><LayoutGrid className="h-5 w-5 text-brand-600" /> {t("Features")}</h2>
+            <p className="mb-4 text-sm text-slate-500">{t("Switch on what your shop needs. Mobile phone shops usually use all four; a karyana store can switch on just Easyload & wallets.")}</p>
             <div className="space-y-3">
               {MODULES.map((m) => (
                 <Toggle
@@ -199,7 +201,7 @@ export default function SettingsPage() {
             </div>
           </Card>
           <Card className="p-6">
-            <h2 className="mb-5 flex items-center gap-2 font-bold text-slate-900"><Gift className="h-5 w-5 text-violet-600" /> Loyalty points</h2>
+            <h2 className="mb-5 flex items-center gap-2 font-bold text-slate-900"><Gift className="h-5 w-5 text-violet-600" /> {t("Loyalty points")}</h2>
             <div className="space-y-4">
               <Toggle checked={!!form.loyaltyEnabled} onChange={(v) => setForm({ ...form, loyaltyEnabled: v })} title="Give customers loyalty points" text="Customers chosen on a bill earn points on what they pay and can spend them later as a discount." />
               {form.loyaltyEnabled && (
@@ -214,19 +216,19 @@ export default function SettingsPage() {
                     <Input type="number" min="0" value={form.loyaltyMinRedeem ?? 100} onChange={(e) => setForm({ ...form, loyaltyMinRedeem: Number(e.target.value) })} aria-label="Minimum points" />
                   </Field>
                   <p className="text-xs text-slate-500 sm:col-span-3">
-                    Example: a Rs {(form.loyaltyEarnPer ?? 100) * 20} bill earns 20 points = {formatPKR(20 * (form.loyaltyPointValue ?? 1))} off a later bill. Udhaar earns points only when it is paid on the bill; returns take points back.
+                    {t("Example: a Rs {n} bill earns 20 points = {value} off a later bill. Udhaar earns points only when it is paid on the bill; returns take points back.", { n: (form.loyaltyEarnPer ?? 100) * 20, value: formatPKR(20 * (form.loyaltyPointValue ?? 1)) })}
                   </p>
                 </div>
               )}
             </div>
           </Card>
           <Card className="p-6">
-            <h2 className="mb-5 flex items-center gap-2 font-bold text-slate-900"><MessageCircle className="h-5 w-5 text-emerald-600" /> WhatsApp messages</h2>
+            <h2 className="mb-5 flex items-center gap-2 font-bold text-slate-900"><MessageCircle className="h-5 w-5 text-emerald-600" /> {t("WhatsApp messages")}</h2>
             <div className="space-y-4">
               <div>
-                <div className="mb-1.5 text-sm font-medium text-slate-700">Open messages in (this computer)</div>
+                <div className="mb-1.5 text-sm font-medium text-slate-700">{t("Open messages in (this computer)")}</div>
                 <WaModePicker />
-                <p className="mt-1 text-xs text-slate-500">Desktop opens the WhatsApp app installed on this PC; Web opens web.whatsapp.com.</p>
+                <p className="mt-1 text-xs text-slate-500">{t("Desktop opens the WhatsApp app installed on this PC; Web opens web.whatsapp.com.")}</p>
               </div>
               <Field label="Owner's WhatsApp number" hint="The end-of-day summary is sent here. Empty = the shop phone above.">
                 <Input value={form.ownerPhone ?? ""} onChange={set("ownerPhone")} inputMode="tel" placeholder="03xx-xxxxxxx" aria-label="Owner's WhatsApp number" />
@@ -258,10 +260,10 @@ export default function SettingsPage() {
       <Card className="mt-6">
         <div className="flex flex-col gap-3 border-b border-slate-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="flex items-center gap-2 font-bold text-slate-900"><Users className="h-5 w-5 text-brand-600" /> Staff accounts</h2>
+            <h2 className="flex items-center gap-2 font-bold text-slate-900"><Users className="h-5 w-5 text-brand-600" /> {t("Staff accounts")}</h2>
             {team && (
               <p className={`text-xs ${full ? "font-semibold text-amber-700" : "text-slate-500"}`}>
-                {team.activeUsers} of {team.maxUsers} users used{full && " — limit reached. Ask the administrator for more users."}
+                {t("{used} of {max} users used", { used: team.activeUsers, max: team.maxUsers })}{full && ` — ${t("limit reached. Ask the administrator for more users.")}`}
               </p>
             )}
           </div>
@@ -281,18 +283,18 @@ export default function SettingsPage() {
           <tbody>
             {team?.users.map((u) => (
               <tr key={u._id}>
-                <Td className="font-semibold">{u.name}{u._id === me.id && <span className="ml-2 text-xs text-slate-400">(you)</span>}</Td>
+                <Td className="font-semibold">{u.name}{u._id === me.id && <span className="ml-2 text-xs text-slate-400">{t("(you)")}</span>}</Td>
                 <Td className="text-slate-500">{u.username}</Td>
                 <Td>
                   <Badge color={ROLE_INFO[u.role].color}>{ROLE_INFO[u.role].label}</Badge>
                   {u.hasPin && <span className="ml-1"><Badge color="slate">PIN</Badge></span>}
                   {u.role !== "owner" && (u.maxDiscountPct !== undefined || u.allowUdhaar === false) && (
                     <div className="mt-0.5 text-xs text-slate-500">
-                      {[u.maxDiscountPct !== undefined && `discount up to ${u.maxDiscountPct}%`, u.allowUdhaar === false && "no udhaar"].filter(Boolean).join(" · ")}
+                      {[u.maxDiscountPct !== undefined && t("discount up to {n}%", { n: u.maxDiscountPct }), u.allowUdhaar === false && t("no udhaar")].filter(Boolean).join(" · ")}
                     </div>
                   )}
                 </Td>
-                {activeBranches.length > 1 && <Td className="text-slate-500">{branchName(u.branch) ?? "All branches"}</Td>}
+                {activeBranches.length > 1 && <Td className="text-slate-500">{branchName(u.branch) ?? t("All branches")}</Td>}
                 <Td>{u.active ? <Badge color="green">Active</Badge> : <Badge color="red">Disabled</Badge>}</Td>
                 <Td className="text-right">
                   <Button size="sm" variant="ghost" icon={<UserCog className="h-4 w-4" />} onClick={() => setUserModal(u)}>Edit</Button>
@@ -319,12 +321,13 @@ export default function SettingsPage() {
 }
 
 function Toggle({ checked, onChange, title, text }: { checked: boolean; onChange: (v: boolean) => void; title: string; text: string }) {
+  const t = useT();
   return (
     <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-0.5 h-5 w-5 accent-brand-600" />
       <span>
-        <span className="block font-semibold text-slate-800">{title}</span>
-        <span className="text-sm text-slate-500">{text}</span>
+        <span className="block font-semibold text-slate-800">{t(title)}</span>
+        <span className="text-sm text-slate-500">{t(text)}</span>
       </span>
     </label>
   );
@@ -332,13 +335,14 @@ function Toggle({ checked, onChange, title, text }: { checked: boolean; onChange
 
 function FbrPending({ count, onDone }: { count: number; onDone: () => void }) {
   const toast = useToast();
+  const t = useT();
   const [busy, setBusy] = useState(false);
   async function sync() {
     setBusy(true);
     try {
       const r = await api<{ tried: number; synced: number; remaining: number }>("/api/fbr/sync", { method: "POST" });
-      if (r.remaining) toast.error(`${r.synced} sent, ${r.remaining} still waiting. Check your internet, POS ID and token.`);
-      else toast.success(`${r.synced} bill(s) sent to FBR`);
+      if (r.remaining) toast.error(t("{sent} sent, {left} still waiting. Check your internet, POS ID and token.", { sent: r.synced, left: r.remaining }));
+      else toast.success(t("{n} bill(s) sent to FBR", { n: r.synced }));
       onDone();
     } catch (err) {
       toast.error((err as Error).message);
@@ -348,7 +352,7 @@ function FbrPending({ count, onDone }: { count: number; onDone: () => void }) {
   }
   return (
     <div className={`flex items-center justify-between rounded-xl p-3 text-sm ${count ? "bg-amber-50 text-amber-900" : "bg-slate-50 text-slate-600"}`}>
-      <span>{count ? `${count} bill(s) waiting to be sent to FBR` : "All bills have been sent to FBR"}</span>
+      <span>{count ? t("{n} bill(s) waiting to be sent to FBR", { n: count }) : t("All bills have been sent to FBR")}</span>
       {count > 0 && (
         <Button type="button" size="sm" variant="outline" loading={busy} icon={<RefreshCw className="h-4 w-4" />} onClick={sync}>
           Send now
@@ -362,6 +366,7 @@ const TEMPLATE = "name,nameUrdu,barcode,category,unit,costPrice,salePrice,stock,
 
 function DataCard() {
   const toast = useToast();
+  const t = useT();
   const { settings } = useSession();
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
@@ -377,7 +382,7 @@ function DataCard() {
       const csv = await file.text();
       const r = await api<{ created: number; updated: number; errors: string[]; errorCount: number }>("/api/import/products", { body: { csv } });
       setResult(r);
-      toast.success(`Import done: ${r.created} added, ${r.updated} updated`);
+      toast.success(t("Import done: {added} added, {updated} updated", { added: r.created, updated: r.updated }));
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -404,11 +409,11 @@ function DataCard() {
 
   return (
     <Card className="mt-6 p-6">
-      <h2 className="mb-1 flex items-center gap-2 font-bold text-slate-900"><Database className="h-5 w-5 text-brand-600" /> Data, import & backup</h2>
-      <p className="mb-5 text-sm text-slate-500">Download your data as Excel-friendly CSV files, add many products at once, or keep a full backup.</p>
+      <h2 className="mb-1 flex items-center gap-2 font-bold text-slate-900"><Database className="h-5 w-5 text-brand-600" /> {t("Data, import & backup")}</h2>
+      <p className="mb-5 text-sm text-slate-500">{t("Download your data as Excel-friendly CSV files, add many products at once, or keep a full backup.")}</p>
       <div className="grid gap-6 lg:grid-cols-3">
         <div>
-          <h3 className="mb-2 text-sm font-semibold text-slate-700">Export to Excel (CSV)</h3>
+          <h3 className="mb-2 text-sm font-semibold text-slate-700">{t("Export to Excel (CSV)")}</h3>
           <div className="flex flex-wrap gap-2">
             {exports.map(([type, label]) => (
               <a key={type} href={`/api/export/${type}`}>
@@ -418,8 +423,8 @@ function DataCard() {
           </div>
         </div>
         <div>
-          <h3 className="mb-2 text-sm font-semibold text-slate-700">Import products from CSV</h3>
-          <p className="mb-2 text-xs text-slate-500">Existing products (same barcode or name) are updated; new ones are added.</p>
+          <h3 className="mb-2 text-sm font-semibold text-slate-700">{t("Import products from CSV")}</h3>
+          <p className="mb-2 text-xs text-slate-500">{t("Existing products (same barcode or name) are updated; new ones are added.")}</p>
           <div className="flex flex-wrap gap-2">
             <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onFile} />
             <Button type="button" size="sm" loading={importing} icon={<FileUp className="h-4 w-4" />} onClick={() => fileRef.current?.click()}>Choose CSV file</Button>
@@ -427,7 +432,7 @@ function DataCard() {
           </div>
           {result && (
             <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm">
-              <div><b>{result.created}</b> added · <b>{result.updated}</b> updated · <b className={result.errorCount ? "text-rose-600" : ""}>{result.errorCount}</b> skipped</div>
+              <div><b>{result.created}</b> {t("added")} · <b>{result.updated}</b> {t("updated")} · <b className={result.errorCount ? "text-rose-600" : ""}>{result.errorCount}</b> {t("skipped")}</div>
               {result.errors.length > 0 && (
                 <ul className="mt-2 max-h-32 list-disc overflow-y-auto pl-5 text-xs text-rose-700">
                   {result.errors.map((e) => <li key={e}>{e}</li>)}
@@ -437,8 +442,8 @@ function DataCard() {
           )}
         </div>
         <div>
-          <h3 className="mb-2 text-sm font-semibold text-slate-700">Full backup</h3>
-          <p className="mb-2 text-xs text-slate-500">One file with all products, bills, khata, purchases and expenses. Keep it safe (e.g. USB or Google Drive).</p>
+          <h3 className="mb-2 text-sm font-semibold text-slate-700">{t("Full backup")}</h3>
+          <p className="mb-2 text-xs text-slate-500">{t("One file with all products, bills, khata, purchases and expenses. Keep it safe (e.g. USB or Google Drive).")}</p>
           <div className="flex flex-wrap gap-2">
             <a href="/api/backup">
               <Button type="button" size="sm" variant="outline" icon={<Download className="h-4 w-4" />}>Download backup</Button>
@@ -456,6 +461,7 @@ type AutoStatus = { enabled: boolean; time: string; keep: number; dir: string; l
 
 /** Nightly copies on this computer, and how to keep them in Google Drive too. */
 function AutoBackups() {
+  const t = useT();
   const [s, setS] = useState<AutoStatus | null>(null);
   useEffect(() => {
     api<AutoStatus>("/api/backup/auto")
@@ -466,25 +472,25 @@ function AutoBackups() {
   const at = (name: string) => name.replace(".json.gz", "").replace(/^(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})$/, "$1 $2:$3");
   return (
     <div className="sm:col-span-2">
-      <h3 className="mb-2 text-sm font-semibold text-slate-700">Automatic backups</h3>
+      <h3 className="mb-2 text-sm font-semibold text-slate-700">{t("Automatic backups")}</h3>
       {!s.enabled ? (
-        <p className="text-xs text-slate-500">Automatic backups are switched off on this computer (AUTO_BACKUP=off).</p>
+        <p className="text-xs text-slate-500">{t("Automatic backups are switched off on this computer (AUTO_BACKUP=off).")}</p>
       ) : (
         <>
           <p className="text-xs text-slate-500">
-            Every night at {s.time} a copy is saved on this computer; the last {s.keep} are kept.{" "}
+            {t("Every night at {time} a copy is saved on this computer; the last {n} are kept.", { time: s.time, n: s.keep })}{" "}
             {s.lastRunAt ? (
               s.lastOk === false ? (
-                <span className="font-semibold text-rose-600">The last one failed: {s.lastError}</span>
+                <span className="font-semibold text-rose-600">{t("The last one failed: {error}", { error: s.lastError ?? "" })}</span>
               ) : (
-                <span className="font-semibold text-emerald-700">Last copy: {formatDate(s.lastRunAt, true)}.</span>
+                <span className="font-semibold text-emerald-700">{t("Last copy: {date}.", { date: formatDate(s.lastRunAt, true) })}</span>
               )
             ) : (
-              "No copy yet."
+              t("No copy yet.")
             )}
           </p>
           <p className="mt-1 break-all text-xs text-slate-500">
-            Folder: <code className="rounded bg-slate-100 px-1">{s.dir}</code>
+            {t("Folder:")} <code className="rounded bg-slate-100 px-1">{s.dir}</code>
           </p>
           {s.files.length > 0 && (
             <ul className="mt-2 flex flex-wrap gap-2">
@@ -498,8 +504,8 @@ function AutoBackups() {
             </ul>
           )}
           <div className="mt-3 rounded-xl bg-sky-50 p-3 text-xs text-sky-900">
-            <b>Keep a copy online (Google Drive):</b> install <i>Google Drive for desktop</i> on this computer, then set the backup folder (BACKUP_DIR in the app&apos;s settings file) to a folder inside Google Drive, e.g.{" "}
-            <code className="rounded bg-white px-1">G:\My Drive\Dukaan Backups</code>, and restart the app. Every nightly copy then also goes to Google Drive, so it survives a broken computer. Any copy can be restored with “Restore from backup”.
+            <b>{t("Keep a copy online (Google Drive):")}</b> {t("install")} <i>Google Drive for desktop</i> {t("on this computer, then set the backup folder (BACKUP_DIR in the app's settings file) to a folder inside Google Drive, e.g.")}{" "}
+            <code className="rounded bg-white px-1">G:\My Drive\Dukaan Backups</code>{t(", and restart the app. Every nightly copy then also goes to Google Drive, so it survives a broken computer. Any copy can be restored with “Restore from backup”.")}
           </div>
         </>
       )}
@@ -521,6 +527,7 @@ function UserModal({
   onSaved: () => void;
 }) {
   const toast = useToast();
+  const t = useT();
   const [form, setForm] = useState({ name: "", username: "", password: "", role: "cashier", active: true, branch: "", pin: "", removePin: false, maxDiscountPct: "", allowUdhaar: true });
   const [saving, setSaving] = useState(false);
   const isNew = value === "new";
@@ -560,7 +567,7 @@ function UserModal({
           method: "PUT",
           body: { name: form.name, role: form.role, active: form.active, password: form.password, ...(isSelf ? {} : { branch: form.branch }), ...extra },
         });
-      toast.success("Saved");
+      toast.success(t("Saved"));
       onSaved();
     } catch (err) {
       toast.error((err as Error).message);
@@ -570,7 +577,7 @@ function UserModal({
   }
 
   return (
-    <Modal open onClose={onClose} title={isNew ? "Add staff member" : `Edit ${form.name}`} size="sm">
+    <Modal open onClose={onClose} title={isNew ? "Add staff member" : t("Edit {name}", { name: form.name })} size="sm">
       <form onSubmit={save} className="space-y-4">
         <Field label="Name"><Input required autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
         <Field label="Username" hint={isNew ? "Small letters or numbers, no spaces" : undefined}>
@@ -588,8 +595,8 @@ function UserModal({
               <label key={r} className={`flex cursor-pointer items-start gap-3 rounded-xl border-2 p-3 ${form.role === r ? "border-brand-600 bg-brand-50" : "border-slate-200"} ${isSelf ? "opacity-60" : ""}`}>
                 <input type="radio" name="role" disabled={isSelf} checked={form.role === r} onChange={() => setForm({ ...form, role: r })} className="mt-1 accent-brand-600" />
                 <span>
-                  <span className="block font-semibold">{ROLE_INFO[r].label}</span>
-                  <span className="text-xs text-slate-500">{ROLE_INFO[r].text}</span>
+                  <span className="block font-semibold">{t(ROLE_INFO[r].label)}</span>
+                  <span className="text-xs text-slate-500">{t(ROLE_INFO[r].text)}</span>
                 </span>
               </label>
             ))}
@@ -598,7 +605,7 @@ function UserModal({
         {branches.length > 1 && !isSelf && (
           <Field label="Branch" hint="Assigned staff only see and sell from their branch">
             <Select value={form.branch} onChange={(e) => setForm({ ...form, branch: e.target.value })}>
-              <option value="">All branches (can switch)</option>
+              <option value="">{t("All branches (can switch)")}</option>
               {branches.map((b) => (
                 <option key={b._id} value={b._id}>{b.name}</option>
               ))}
@@ -611,25 +618,25 @@ function UserModal({
         {!isNew && (value as User).hasPin && !form.pin && (
           <label className="flex items-center gap-2 text-sm text-slate-600">
             <input type="checkbox" checked={form.removePin} onChange={(e) => setForm({ ...form, removePin: e.target.checked })} className="h-4 w-4 accent-brand-600" aria-label="Remove PIN" />
-            Remove the PIN
+            {t("Remove the PIN")}
           </label>
         )}
         {form.role !== "owner" && (
           <div className="space-y-3 rounded-xl border border-slate-200 p-3">
-            <div className="text-sm font-semibold text-slate-700">Limits at the counter</div>
+            <div className="text-sm font-semibold text-slate-700">{t("Limits at the counter")}</div>
             <Field label="Largest discount on a bill (%)" hint="Empty = no limit. Offers and points don't count.">
-              <Input type="number" min="0" max="100" step="any" value={form.maxDiscountPct} onChange={(e) => setForm({ ...form, maxDiscountPct: e.target.value })} placeholder="No limit" aria-label="Discount limit" />
+              <Input type="number" min="0" max="100" step="any" value={form.maxDiscountPct} onChange={(e) => setForm({ ...form, maxDiscountPct: e.target.value })} placeholder={t("No limit")} aria-label="Discount limit" />
             </Field>
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input type="checkbox" checked={form.allowUdhaar} onChange={(e) => setForm({ ...form, allowUdhaar: e.target.checked })} className="h-4 w-4 accent-brand-600" aria-label="May give udhaar" />
-              May give udhaar and installments
+              {t("May give udhaar and installments")}
             </label>
           </div>
         )}
         {!isNew && !isSelf && (
           <label className="flex items-center gap-3">
             <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} className="h-5 w-5 accent-brand-600" />
-            <span className="font-medium">Account active (can log in)</span>
+            <span className="font-medium">{t("Account active (can log in)")}</span>
           </label>
         )}
         <Button type="submit" size="lg" className="w-full" loading={saving}>Save</Button>
@@ -640,6 +647,7 @@ function UserModal({
 
 function BranchesCard({ data, onChanged }: { data: BranchData; onChanged: () => void }) {
   const toast = useToast();
+  const t = useT();
   const confirm = useConfirm();
   const [editing, setEditing] = useState<BranchRow | "new" | null>(null);
   const [form, setForm] = useState({ name: "", address: "", phone: "" });
@@ -657,7 +665,7 @@ function BranchesCard({ data, onChanged }: { data: BranchData; onChanged: () => 
     try {
       if (editing === "new") await api("/api/branches", { body: form });
       else if (editing) await api(`/api/branches/${editing._id}`, { method: "PUT", body: form });
-      toast.success("Branch saved");
+      toast.success(t("Branch saved"));
       setEditing(null);
       onChanged();
     } catch (err) {
@@ -671,17 +679,17 @@ function BranchesCard({ data, onChanged }: { data: BranchData; onChanged: () => 
     if (
       !active &&
       !(await confirm({
-        title: `Close ${b.name}?`,
-        message: "Staff can no longer choose this branch. You can re-open it later.",
+        title: t("Close {name}?", { name: b.name }),
+        message: t("Staff can no longer choose this branch. You can re-open it later."),
         tone: "danger",
-        points: ["The branch must have no stock left (transfer it first) and no staff assigned.", "Its old bills stay in Sales History and Reports."],
+        points: [t("The branch must have no stock left (transfer it first) and no staff assigned."), t("Its old bills stay in Sales History and Reports.")],
         confirmLabel: "Close branch",
       }))
     )
       return;
     try {
       await api(`/api/branches/${b._id}`, { method: "PUT", body: { active } });
-      toast.success(active ? "Branch re-opened" : "Branch closed");
+      toast.success(active ? t("Branch re-opened") : t("Branch closed"));
       onChanged();
     } catch (err) {
       toast.error((err as Error).message);
@@ -692,10 +700,10 @@ function BranchesCard({ data, onChanged }: { data: BranchData; onChanged: () => 
     <Card className="mt-6">
       <div className="flex flex-col gap-3 border-b border-slate-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="flex items-center gap-2 font-bold text-slate-900"><MapPin className="h-5 w-5 text-brand-600" /> Branches</h2>
+          <h2 className="flex items-center gap-2 font-bold text-slate-900"><MapPin className="h-5 w-5 text-brand-600" /> {t("Branches")}</h2>
           <p className={`text-xs ${full ? "font-semibold text-amber-700" : "text-slate-500"}`}>
-            {data.activeBranches} of {data.maxBranches} branch{data.maxBranches === 1 ? "" : "es"} used
-            {full && data.maxBranches === 1 && " — ask the administrator if you open another branch."}
+            {t(data.maxBranches === 1 ? "{used} of {max} branch used" : "{used} of {max} branches used", { used: data.activeBranches, max: data.maxBranches })}
+            {full && data.maxBranches === 1 && ` — ${t("ask the administrator if you open another branch.")}`}
           </p>
         </div>
         <Button size="sm" icon={<Plus className="h-4 w-4" />} disabled={full} onClick={() => setEditing("new")}>Add branch</Button>
@@ -736,7 +744,7 @@ function BranchesCard({ data, onChanged }: { data: BranchData; onChanged: () => 
       </Table>
       <Modal open={editing !== null} onClose={() => setEditing(null)} title={editing === "new" ? "Add branch" : "Edit branch"} size="sm">
         <form onSubmit={save} className="space-y-4">
-          <Field label="Branch name *"><Input required minLength={2} autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Gulberg Branch" /></Field>
+          <Field label="Branch name *"><Input required minLength={2} autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t("e.g. Gulberg Branch")} /></Field>
           <Field label="Address"><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
           <Field label="Phone"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
           <Button type="submit" size="lg" className="w-full" loading={saving}>Save branch</Button>
@@ -749,6 +757,7 @@ function BranchesCard({ data, onChanged }: { data: BranchData; onChanged: () => 
 
 /** Printer settings are kept per computer: each counter can have its own printer and paper. */
 function PrintingCard() {
+  const t = useT();
   const [prefs, setPrefs] = useState<PrintPrefs | null>(null);
   useEffect(() => setPrefs(getPrintPrefs()), []);
   if (!prefs) return null;
@@ -758,21 +767,21 @@ function PrintingCard() {
   };
   return (
     <Card className="p-6">
-      <h2 className="mb-1 flex items-center gap-2 font-bold text-slate-900"><Printer className="h-5 w-5 text-slate-600" /> Printing (this computer)</h2>
-      <p className="mb-4 text-xs text-slate-500">Saved on this computer only — set it on every counter.</p>
+      <h2 className="mb-1 flex items-center gap-2 font-bold text-slate-900"><Printer className="h-5 w-5 text-slate-600" /> {t("Printing (this computer)")}</h2>
+      <p className="mb-4 text-xs text-slate-500">{t("Saved on this computer only — set it on every counter.")}</p>
       <div className="space-y-3">
         <Toggle checked={prefs.auto} onChange={(v) => update({ auto: v })} title="Print the receipt automatically" text="After every bill, without clicking Print. Use Chrome with silent printing (see README) so no print window appears." />
         <Toggle checked={prefs.udhaarCopy} onChange={(v) => update({ udhaarCopy: v })} title="Shop copy for udhaar bills" text="Prints a second copy marked “SHOP COPY” when part of the bill goes to udhaar — ask the customer to sign it." />
         <Field label="Receipt paper">
           <Select value={prefs.paper} onChange={(e) => update({ paper: e.target.value as "80" | "58" })} aria-label="Receipt paper">
-            <option value="80">80 mm (3 inch) — most thermal printers</option>
-            <option value="58">58 mm (2 inch) — small printers</option>
+            <option value="80">{t("80 mm (3 inch) — most thermal printers")}</option>
+            <option value="58">{t("58 mm (2 inch) — small printers")}</option>
           </Select>
         </Field>
         <Button type="button" variant="outline" icon={<Printer className="h-4 w-4" />} onClick={() => printInFrame("/receipt/test?print=1")}>
           Print a test receipt
         </Button>
-        <p className="text-xs text-slate-500">Cash drawer: in the printer&apos;s Windows settings turn on “open cash drawer before printing” — the drawer then opens with every receipt.</p>
+        <p className="text-xs text-slate-500">{t("Cash drawer: in the printer's Windows settings turn on “open cash drawer before printing” — the drawer then opens with every receipt.")}</p>
       </div>
     </Card>
   );

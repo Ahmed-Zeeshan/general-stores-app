@@ -9,6 +9,7 @@ import { useConfirm } from "@/components/confirm";
 import { useSession } from "@/components/session";
 import { api, formatDate, todayISO, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty, round2 } from "@/lib/money";
+import { useT } from "@/lib/i18n";
 
 type Product = { _id: string; name: string; unit: string; costPrice: number; salePrice: number; stock: number };
 type Recipe = {
@@ -116,6 +117,7 @@ export default function ProductionPage() {
 
 function MakeItems({ recipes, onDone }: { recipes: Recipe[]; onDone: () => void }) {
   const toast = useToast();
+  const t = useT();
   const confirm = useConfirm();
   const { settings } = useSession();
   // Sale price without the sales tax part, so profit is not overstated.
@@ -142,11 +144,11 @@ function MakeItems({ recipes, onDone }: { recipes: Recipe[]; onDone: () => void 
     if (!recipe || n <= 0) return;
     if (short.length && !allowShortage) {
       const ok = await confirm({
-        title: "Not enough ingredients in stock",
-        message: "Continue only if the stock count in the app is wrong (the ingredients are really there).",
+        title: t("Not enough ingredients in stock"),
+        message: t("Continue only if the stock count in the app is wrong (the ingredients are really there)."),
         tone: "warning",
-        details: short.map((x) => ({ label: x.name, value: `need ${formatQty(x.need)}, have ${formatQty(x.stock)} ${UNIT_LABELS[x.unit] ?? x.unit}` })),
-        points: ["Their stock will go below zero until you record a purchase or correct the count."],
+        details: short.map((x) => ({ label: x.name, value: t("need {need}, have {have} {unit}", { need: formatQty(x.need), have: formatQty(x.stock), unit: UNIT_LABELS[x.unit] ?? x.unit }) })),
+        points: [t("Their stock will go below zero until you record a purchase or correct the count.")],
         confirmLabel: "Make anyway",
         cancelLabel: "Go back",
       });
@@ -156,7 +158,7 @@ function MakeItems({ recipes, onDone }: { recipes: Recipe[]; onDone: () => void 
     setSaving(true);
     try {
       await api("/api/production", { body: { recipeId: recipe._id, batches: n, note, updateCost, allowShortage } });
-      toast.success(`${formatQty(outputQty)} ${UNIT_LABELS[recipe.outputProduct?.unit ?? "pcs"]} of ${recipe.outputProduct?.name} added to stock`);
+      toast.success(t("{qty} {unit} of {name} added to stock", { qty: formatQty(outputQty), unit: UNIT_LABELS[recipe.outputProduct?.unit ?? "pcs"], name: recipe.outputProduct?.name ?? "" }));
       setBatches("1");
       setNote("");
       onDone();
@@ -181,12 +183,12 @@ function MakeItems({ recipes, onDone }: { recipes: Recipe[]; onDone: () => void 
               ))}
             </Select>
           </Field>
-          <Field label="How many batches?" hint={`1 batch = ${formatQty(recipe.outputQty)} ${outUnit}`}>
+          <Field label="How many batches?" hint={t("1 batch = {qty} {unit}", { qty: formatQty(recipe.outputQty), unit: outUnit })}>
             <Input type="number" inputMode="decimal" min="0" step="any" value={batches} onChange={(e) => setBatches(e.target.value)} className="text-lg font-bold" />
           </Field>
         </div>
 
-        <h3 className="mb-2 mt-6 text-sm font-semibold text-slate-700">Ingredients needed</h3>
+        <h3 className="mb-2 mt-6 text-sm font-semibold text-slate-700">{t("Ingredients needed")}</h3>
         <Table>
           <thead>
             <tr>
@@ -202,7 +204,7 @@ function MakeItems({ recipes, onDone }: { recipes: Recipe[]; onDone: () => void 
                 <Td className="font-medium">{l.name}</Td>
                 <Td className="text-right">{formatQty(l.need)} {UNIT_LABELS[l.unit] ?? l.unit}</Td>
                 <Td className="text-right">
-                  {l.stock < l.need ? <Badge color="red">{formatQty(l.stock)} — short</Badge> : <span className="text-slate-500">{formatQty(l.stock)}</span>}
+                  {l.stock < l.need ? <Badge color="red">{t("{qty} — short", { qty: formatQty(l.stock) })}</Badge> : <span className="text-slate-500">{formatQty(l.stock)}</span>}
                 </Td>
                 <Td className="text-right">{formatPKR(l.cost)}</Td>
               </tr>
@@ -212,23 +214,23 @@ function MakeItems({ recipes, onDone }: { recipes: Recipe[]; onDone: () => void 
         {short.length > 0 && (
           <div className="mt-4 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            Not enough stock of {short.map((s) => s.name).join(", ")}. Record a purchase first, or continue anyway if the stock count is wrong.
+            {t("Not enough stock of {names}. Record a purchase first, or continue anyway if the stock count is wrong.", { names: short.map((s) => s.name).join(", ") })}
           </div>
         )}
       </Card>
 
       <Card className="h-fit p-6">
         <div className="rounded-2xl bg-brand-50 p-5 text-center">
-          <div className="text-sm text-brand-800">You will make</div>
+          <div className="text-sm text-brand-800">{t("You will make")}</div>
           <div className="text-4xl font-extrabold text-brand-900">{formatQty(outputQty)}</div>
-          <div className="font-semibold text-brand-800">{outUnit} of {recipe.outputProduct?.name}</div>
+          <div className="font-semibold text-brand-800">{t("{unit} of {name}", { unit: outUnit, name: recipe.outputProduct?.name ?? "" })}</div>
         </div>
         <dl className="mt-5 space-y-2 text-sm">
-          <div className="flex justify-between"><dt className="text-slate-500">Ingredients cost</dt><dd className="font-semibold">{formatPKR(totalCost)}</dd></div>
-          <div className="flex justify-between"><dt className="text-slate-500">Cost per {outUnit}</dt><dd className="font-semibold">{formatPKR(unitCost)}</dd></div>
+          <div className="flex justify-between"><dt className="text-slate-500">{t("Ingredients cost")}</dt><dd className="font-semibold">{formatPKR(totalCost)}</dd></div>
+          <div className="flex justify-between"><dt className="text-slate-500">{t("Cost per {unit}", { unit: outUnit })}</dt><dd className="font-semibold">{formatPKR(unitCost)}</dd></div>
           {recipe.outputProduct && (
             <div className="flex justify-between">
-              <dt className="text-slate-500">Profit per {outUnit}</dt>
+              <dt className="text-slate-500">{t("Profit per {unit}", { unit: outUnit })}</dt>
               <dd className={`font-semibold ${netPrice(recipe.outputProduct.salePrice) - unitCost < 0 ? "text-rose-600" : "text-emerald-700"}`}>
                 {formatPKR(netPrice(recipe.outputProduct.salePrice) - unitCost)}
               </dd>
@@ -237,10 +239,10 @@ function MakeItems({ recipes, onDone }: { recipes: Recipe[]; onDone: () => void 
         </dl>
         <label className="mt-4 flex items-start gap-2 text-sm text-slate-600">
           <input type="checkbox" checked={updateCost} onChange={(e) => setUpdateCost(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-600" />
-          Update {recipe.outputProduct?.name}&apos;s cost price to {formatPKR(unitCost)}
+          {t("Update {name}'s cost price to {amount}", { name: recipe.outputProduct?.name ?? "", amount: formatPKR(unitCost) })}
         </label>
         <Field label="Note (optional)" className="mt-4">
-          <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Morning batch" />
+          <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("e.g. Morning batch")} />
         </Field>
         <Button size="lg" className="mt-5 w-full" loading={saving} disabled={n <= 0} icon={<ChefHat className="h-5 w-5" />} onClick={() => save()}>
           Save production
@@ -252,11 +254,12 @@ function MakeItems({ recipes, onDone }: { recipes: Recipe[]; onDone: () => void 
 
 function RecipeList({ recipes, onEdit, onChanged }: { recipes: Recipe[]; onEdit: (r: Recipe) => void; onChanged: () => void }) {
   const toast = useToast();
+  const t = useT();
   const confirm = useConfirm();
   async function remove(r: Recipe) {
     const ok = await confirm({
-      title: `Delete recipe "${r.name}"?`,
-      message: "Past production records stay in History.",
+      title: t('Delete recipe "{name}"?', { name: r.name }),
+      message: t("Past production records stay in History."),
       tone: "danger",
       icon: "delete",
       confirmLabel: "Delete recipe",
@@ -278,7 +281,7 @@ function RecipeList({ recipes, onEdit, onChanged }: { recipes: Recipe[]; onEdit:
             <div>
               <h3 className="font-bold text-slate-900">{r.name}</h3>
               <p className="text-sm text-slate-500">
-                Makes {formatQty(r.outputQty)} {UNIT_LABELS[r.outputProduct?.unit ?? "pcs"]} of {r.outputProduct?.name ?? "(deleted item)"}
+                {t("Makes {qty} {unit} of {name}", { qty: formatQty(r.outputQty), unit: UNIT_LABELS[r.outputProduct?.unit ?? "pcs"], name: r.outputProduct?.name ?? t("(deleted item)") })}
               </p>
             </div>
             <div className="flex">
@@ -295,7 +298,7 @@ function RecipeList({ recipes, onEdit, onChanged }: { recipes: Recipe[]; onEdit:
             ))}
           </ul>
           <div className="mt-4 flex justify-between border-t border-dashed border-slate-200 pt-3 text-sm">
-            <span className="text-slate-500">Cost per {UNIT_LABELS[r.outputProduct?.unit ?? "pcs"]}</span>
+            <span className="text-slate-500">{t("Cost per {unit}", { unit: UNIT_LABELS[r.outputProduct?.unit ?? "pcs"] })}</span>
             <b>{formatPKR(r.unitCost)}</b>
           </div>
         </Card>
@@ -306,6 +309,7 @@ function RecipeList({ recipes, onEdit, onChanged }: { recipes: Recipe[]; onEdit:
 
 function ProductionHistory() {
   const toast = useToast();
+  const t = useT();
   const [range, setRange] = useState({ from: todayISO(-29), to: todayISO() });
   const [runs, setRuns] = useState<Run[] | null>(null);
   useEffect(() => {
@@ -344,7 +348,7 @@ function ProductionHistory() {
                   <Td className="text-slate-500">{formatDate(r.createdAt, true)}</Td>
                   <Td>
                     {r.recipeName}
-                    <div className="text-xs text-slate-400">{formatQty(r.batches)} batch(es){r.userName && ` · ${r.userName}`}</div>
+                    <div className="text-xs text-slate-400">{t("{n} batch(es)", { n: formatQty(r.batches) })}{r.userName && ` · ${r.userName}`}</div>
                   </Td>
                   <Td className="text-right">{formatQty(r.outputQty)} {UNIT_LABELS[r.outputUnit] ?? r.outputUnit}</Td>
                   <Td className="text-right font-semibold">{formatPKR(r.totalCost)}</Td>
@@ -361,6 +365,7 @@ function ProductionHistory() {
 
 function RecipeEditor({ value, products, onClose, onSaved }: { value: Recipe | "new" | null; products: Product[]; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
+  const t = useT();
   const [form, setForm] = useState({ name: "", output: "", outputQty: "", notes: "" });
   const [lines, setLines] = useState<{ product: string; qty: string }[]>([]);
   const [saving, setSaving] = useState(false);
@@ -389,7 +394,7 @@ function RecipeEditor({ value, products, onClose, onSaved }: { value: Recipe | "
       const body = { ...form, outputQty: Number(form.outputQty), ingredients };
       if (value === "new") await api("/api/recipes", { body });
       else await api(`/api/recipes/${(value as Recipe)._id}`, { method: "PUT", body });
-      toast.success("Recipe saved");
+      toast.success(t("Recipe saved"));
       onSaved();
     } catch (err) {
       toast.error((err as Error).message);
@@ -416,23 +421,23 @@ function RecipeEditor({ value, products, onClose, onSaved }: { value: Recipe | "
       <form id="recipe-form" onSubmit={save} className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Recipe name *" className="sm:col-span-3">
-            <Input required autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Bread Large (40 pcs batch)" />
+            <Input required autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t("e.g. Bread Large (40 pcs batch)")} />
           </Field>
           <Field label="Makes which item? *" className="sm:col-span-2" hint="Add the finished item in Products first if it is not listed">
             <Select required value={form.output} onChange={(e) => setForm({ ...form, output: e.target.value })}>
-              <option value="">Choose item…</option>
+              <option value="">{t("Choose item…")}</option>
               {products.map((p) => (
                 <option key={p._id} value={p._id}>{p.name}</option>
               ))}
             </Select>
           </Field>
-          <Field label={`One batch makes (${outUnit}) *`}>
+          <Field label={t("One batch makes ({unit}) *", { unit: outUnit })}>
             <Input required type="number" inputMode="decimal" min="0" step="any" value={form.outputQty} onChange={(e) => setForm({ ...form, outputQty: e.target.value })} />
           </Field>
         </div>
 
         <div>
-          <div className="mb-2 text-sm font-medium text-slate-700">Ingredients for one batch *</div>
+          <div className="mb-2 text-sm font-medium text-slate-700">{t("Ingredients for one batch *")}</div>
           <div className="space-y-2">
             {lines.map((l, idx) => (
               <div key={idx} className="flex gap-2">
@@ -441,7 +446,7 @@ function RecipeEditor({ value, products, onClose, onSaved }: { value: Recipe | "
                   onChange={(e) => setLines(lines.map((x, i) => (i === idx ? { ...x, product: e.target.value } : x)))}
                   className="min-w-0 flex-1"
                 >
-                  <option value="">Choose ingredient…</option>
+                  <option value="">{t("Choose ingredient…")}</option>
                   {products.filter((p) => p._id !== form.output).map((p) => (
                     <option key={p._id} value={p._id}>{p.name} ({UNIT_LABELS[p.unit]})</option>
                   ))}
@@ -451,7 +456,7 @@ function RecipeEditor({ value, products, onClose, onSaved }: { value: Recipe | "
                   inputMode="decimal"
                   min="0"
                   step="any"
-                  placeholder="Qty"
+                  placeholder={t("Qty")}
                   value={l.qty}
                   required={!!l.product}
                   onChange={(e) => setLines(lines.map((x, i) => (i === idx ? { ...x, qty: e.target.value } : x)))}
@@ -469,11 +474,11 @@ function RecipeEditor({ value, products, onClose, onSaved }: { value: Recipe | "
         </div>
 
         <div className="flex justify-between rounded-xl bg-slate-50 p-3 text-sm">
-          <span>Batch cost <b>{formatPKR(batchCost)}</b></span>
-          <span>Per {outUnit} <b>{formatPKR(perUnit)}</b></span>
+          <span>{t("Batch cost")} <b>{formatPKR(batchCost)}</b></span>
+          <span>{t("Per {unit}", { unit: outUnit })} <b>{formatPKR(perUnit)}</b></span>
         </div>
         <Field label="Notes (optional)">
-          <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="min-h-[60px]" placeholder="Method, oven temperature, etc." />
+          <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="min-h-[60px]" placeholder={t("Method, oven temperature, etc.")} />
         </Field>
       </form>
     </Modal>
