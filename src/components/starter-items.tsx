@@ -6,6 +6,7 @@ import { Button, Input, Modal, Spinner, cn } from "./ui";
 import { useToast } from "./toast";
 import { api, UNIT_LABELS } from "@/lib/client";
 import type { StarterItem } from "@/lib/starter-items";
+import { useT } from "@/lib/i18n";
 
 type Row = StarterItem & { exists: boolean };
 type Entry = { on: boolean; sale: string; cost: string; stock: string };
@@ -13,6 +14,7 @@ type Entry = { on: boolean; sale: string; cost: string; stock: string };
 /** Ready-made item list for the shop type: tick the items you sell, type your prices, add them all at once. */
 export function StarterItemsModal({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: (n: number) => void }) {
   const toast = useToast();
+  const t = useT();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [entries, setEntries] = useState<Record<string, Entry>>({});
   const [q, setQ] = useState("");
@@ -54,7 +56,7 @@ export function StarterItemsModal({ open, onClose, onAdded }: { open: boolean; o
           })),
         },
       });
-      toast.success(`${r.created} item${r.created === 1 ? "" : "s"} added`);
+      toast.success(t(r.created === 1 ? "{n} item added" : "{n} items added", { n: r.created }));
       onAdded(r.created);
     } catch (err) {
       toast.error((err as Error).message);
@@ -71,20 +73,20 @@ export function StarterItemsModal({ open, onClose, onAdded }: { open: boolean; o
       size="xl"
       footer={
         <>
-          {missingPrice.length > 0 && <span className="mr-auto self-center text-sm text-rose-600">Type the sale price for {missingPrice.length} ticked item{missingPrice.length > 1 ? "s" : ""}</span>}
+          {missingPrice.length > 0 && <span className="mr-auto self-center text-sm text-rose-600">{t(missingPrice.length > 1 ? "Type the sale price for {n} ticked items" : "Type the sale price for {n} ticked item", { n: missingPrice.length })}</span>}
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
           <Button loading={saving} disabled={!chosen.length || missingPrice.length > 0} icon={<ListPlus className="h-4 w-4" />} onClick={save}>
-            Add {chosen.length || ""} items
+            {t("Add {n} items", { n: chosen.length || "" })}
           </Button>
         </>
       }
     >
-      <p className="mb-3 text-sm text-slate-600">Tick what you sell and type your own price — the list has no prices because they change. Cost and stock are optional; you can add more items any time.</p>
+      <p className="mb-3 text-sm text-slate-600">{t("Tick what you sell and type your own price — the list has no prices because they change. Cost and stock are optional; you can add more items any time.")}</p>
       <div className="relative mb-4">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-        <Input value={q} onChange={(ev) => setQ(ev.target.value)} placeholder="Find an item…" className="pl-9" aria-label="Find an item" />
+        <Input value={q} onChange={(ev) => setQ(ev.target.value)} placeholder={t("Find an item…")} className="pl-9" aria-label="Find an item" />
       </div>
       {!rows ? (
         <Spinner />
@@ -104,7 +106,7 @@ export function StarterItemsModal({ open, onClose, onAdded }: { open: boolean; o
                           <span className="block truncate text-sm font-semibold text-slate-800">{r.name}</span>
                           <span className="block text-xs text-slate-500">
                             {r.nameUrdu && <span className="urdu mr-2">{r.nameUrdu}</span>}
-                            {r.exists ? "already added" : `per ${UNIT_LABELS[r.unit] ?? r.unit}`}
+                            {r.exists ? t("already added") : t("per {unit}", { unit: UNIT_LABELS[r.unit] ?? r.unit })}
                           </span>
                         </span>
                       </label>
@@ -116,12 +118,12 @@ export function StarterItemsModal({ open, onClose, onAdded }: { open: boolean; o
                             min="0"
                             value={x.sale}
                             onChange={(ev) => set(r.name, { sale: ev.target.value, on: ev.target.value !== "" || x.on })}
-                            placeholder="Sale Rs"
+                            placeholder={t("Sale Rs")}
                             className="h-9 w-24 text-sm"
                             aria-label={`${r.name} sale price`}
                           />
-                          <Input type="number" inputMode="decimal" min="0" value={x.cost} onChange={(ev) => set(r.name, { cost: ev.target.value })} placeholder="Cost" className="h-9 w-20 text-sm" aria-label={`${r.name} cost price`} />
-                          <Input type="number" inputMode="decimal" min="0" value={x.stock} onChange={(ev) => set(r.name, { stock: ev.target.value })} placeholder="Stock" className="h-9 w-20 text-sm" aria-label={`${r.name} stock`} />
+                          <Input type="number" inputMode="decimal" min="0" value={x.cost} onChange={(ev) => set(r.name, { cost: ev.target.value })} placeholder={t("Cost")} className="h-9 w-20 text-sm" aria-label={`${r.name} cost price`} />
+                          <Input type="number" inputMode="decimal" min="0" value={x.stock} onChange={(ev) => set(r.name, { stock: ev.target.value })} placeholder={t("Stock")} className="h-9 w-20 text-sm" aria-label={`${r.name} stock`} />
                         </div>
                       )}
                     </div>

@@ -12,6 +12,7 @@ import { api, formatDate, PAYMENT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty, round2 } from "@/lib/money";
 import { REPAIR_STATUS_LABELS, type RepairStatus } from "@/lib/constants";
 import { productMatches } from "@/lib/product-search";
+import { useT } from "@/lib/i18n";
 
 type Part = { _id: string; name: string; salePrice: number; stock: number; trackSerial?: boolean; barcode?: string };
 const STEPS: RepairStatus[] = ["received", "checking", "waiting_parts", "repairing", "ready"];
@@ -20,6 +21,7 @@ const TENDERS = ["cash", "jazzcash", "easypaisa", "card", "bank"];
 export default function RepairJobPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const toast = useToast();
+  const t = useT();
   const can = useCan();
   const { settings } = useSession();
   const [job, setJob] = useState<RepairJob | null>(null);
@@ -57,26 +59,26 @@ export default function RepairJobPage({ params }: { params: Promise<{ id: string
   const balance = job.balance ?? round2(job.total - job.paid - (job.creditAmount ?? 0));
   const shop = { shopName: settings?.shopName ?? "", phone: settings?.phone };
   const whatsapp = (kind: "booked" | "ready" | "delivered") => {
-    if (!sendRepairWhatsApp(kind, job, shop, link)) toast.error("The customer's mobile number is not a valid WhatsApp number.");
+    if (!sendRepairWhatsApp(kind, job, shop, link)) toast.error(t("The customer's mobile number is not a valid WhatsApp number."));
   };
-  const setStatus = (status: RepairStatus) => act(() => api(`/api/repairs/${id}/status`, { body: { status } }), `Status: ${REPAIR_STATUS_LABELS[status]}`);
+  const setStatus = (status: RepairStatus) => act(() => api(`/api/repairs/${id}/status`, { body: { status } }), t("Status: {status}", { status: t(REPAIR_STATUS_LABELS[status]) }));
 
   return (
     <div>
       <Link href="/repairs" className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800">
-        <ArrowLeft className="h-4 w-4" /> All repairs
+        <ArrowLeft className="h-4 w-4" /> {t("All repairs")}
       </Link>
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{job.jobNo}</h1>
             <RepairStatusBadge status={job.status} />
-            {job.warrantyOf && <Badge color="violet">Warranty claim of {job.warrantyOf}</Badge>}
+            {job.warrantyOf && <Badge color="violet">{t("Warranty claim of {no}", { no: job.warrantyOf })}</Badge>}
             {isLate(job) && <Badge color="red">Late</Badge>}
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            {job.deviceName} · {job.customerName} · booked {formatDate(job.createdAt, true)}
-            {job.userName && ` by ${job.userName}`}
+            {job.deviceName} · {job.customerName} · {t("booked {date}", { date: formatDate(job.createdAt, true) })}
+            {job.userName && ` ${t("by {name}", { name: job.userName })}`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -106,14 +108,14 @@ export default function RepairJobPage({ params }: { params: Promise<{ id: string
                   )}
                 >
                   <span className={cn("flex h-5 w-5 items-center justify-center rounded-full text-xs", s === job.status ? "bg-white/25" : "bg-slate-100")}>{i + 1}</span>
-                  {REPAIR_STATUS_LABELS[s]}
+                  {t(REPAIR_STATUS_LABELS[s])}
                 </button>
               );
             })}
           </div>
           {job.status === "ready" && (
             <p className="mt-3 flex flex-wrap items-center gap-2 text-sm text-emerald-800">
-              <CheckCircle2 className="h-4 w-4" /> Ready. Tell the customer:
+              <CheckCircle2 className="h-4 w-4" /> {t("Ready. Tell the customer:")}
               <Button size="sm" variant="outline" icon={<MessageCircle className="h-4 w-4 text-emerald-600" />} onClick={() => whatsapp("ready")}>
                 Send “ready” on WhatsApp
               </Button>
@@ -125,13 +127,13 @@ export default function RepairJobPage({ params }: { params: Promise<{ id: string
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         <div className="space-y-6">
           <Card className="p-5">
-            <h2 className="mb-3 font-bold text-slate-900">Customer & phone</h2>
+            <h2 className="mb-3 font-bold text-slate-900">{t("Customer & phone")}</h2>
             <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
               <Info label="Customer">
                 {job.customerName}
                 {job.customer && (
                   <Link href={`/customers/${job.customer}`} className="ml-2 text-xs font-semibold text-brand-700">
-                    khata
+                    {t("khata")}
                   </Link>
                 )}
               </Info>
@@ -144,37 +146,37 @@ export default function RepairJobPage({ params }: { params: Promise<{ id: string
                     <span className="font-mono">{job.lockCode}</span>
                   ) : (
                     <button type="button" className="inline-flex items-center gap-1 text-brand-700" onClick={() => setShowLock(true)}>
-                      <Eye className="h-3.5 w-3.5" /> Show
+                      <Eye className="h-3.5 w-3.5" /> {t("Show")}
                     </button>
                   )
                 ) : (
                   "—"
                 )}
               </Info>
-              <Info label="Received with">{job.accessories?.length ? job.accessories.join(", ") : "Phone only"}</Info>
+              <Info label="Received with">{job.accessories?.length ? job.accessories.map((a) => t(a)).join(", ") : t("Phone only")}</Info>
               <Info label="Condition" wide>{job.conditionNotes || "—"}</Info>
               <Info label="Problem" wide>
                 <span className="font-semibold text-slate-900">{job.problem}</span>
               </Info>
               <Info label="Ready by">
                 {job.promisedAt ? formatDate(job.promisedAt) : "—"}
-                {job.estimate ? ` · estimate ${formatPKR(job.estimate)}` : ""}
+                {job.estimate ? ` · ${t("estimate {amount}", { amount: formatPKR(job.estimate) })}` : ""}
               </Info>
-              {job.warrantyUntil && <Info label="Repair warranty">till {formatDate(job.warrantyUntil)}</Info>}
+              {job.warrantyUntil && <Info label="Repair warranty">{t("till {date}", { date: formatDate(job.warrantyUntil) })}</Info>}
             </dl>
           </Card>
 
-          <WorkCard job={job} open={open} busy={busy} onSave={(body) => act(() => api(`/api/repairs/${id}`, { method: "PATCH", body }), "Saved")} canDiscount={can.manage} />
+          <WorkCard job={job} open={open} busy={busy} onSave={(body) => act(() => api(`/api/repairs/${id}`, { method: "PATCH", body }), t("Saved"))} canDiscount={can.manage} />
 
           <PartsCard job={job} open={open} canPrice={can.manage} onChange={(r) => setJob(r)} />
 
           <Card className="p-5">
-            <h2 className="mb-3 font-bold text-slate-900">History</h2>
+            <h2 className="mb-3 font-bold text-slate-900">{t("History")}</h2>
             <ol className="space-y-1.5 border-l-2 border-slate-200 pl-4 text-sm">
               {(job.history ?? []).map((h, i) => (
                 <li key={i} className="relative">
                   <span className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full bg-brand-500 ring-2 ring-white" />
-                  {h.status && <span className="font-semibold text-slate-800">{REPAIR_STATUS_LABELS[h.status as RepairStatus] ?? h.status}</span>}
+                  {h.status && <span className="font-semibold text-slate-800">{t(REPAIR_STATUS_LABELS[h.status as RepairStatus] ?? h.status)}</span>}
                   {h.note && <span className="text-slate-600"> · {h.note}</span>}
                   <span className="block text-xs text-slate-400">
                     {formatDate(h.at, true)}
@@ -188,24 +190,24 @@ export default function RepairJobPage({ params }: { params: Promise<{ id: string
 
         <div className="order-first space-y-6 lg:order-none">
           <Card className="p-5 lg:sticky lg:top-6">
-            <h2 className="mb-3 font-bold text-slate-900">Bill</h2>
+            <h2 className="mb-3 font-bold text-slate-900">{t("Bill")}</h2>
             <div className="space-y-1.5 text-sm">
               <Row label="Parts" value={formatPKR(job.partsTotal ?? 0)} />
               <Row label="Labour / service" value={formatPKR(job.labour)} />
               {job.discount > 0 && <Row label="Discount" value={`−${formatPKR(job.discount)}`} />}
               <div className="flex justify-between border-t border-dashed border-slate-200 pt-2 text-base font-bold">
-                <span>Total</span>
+                <span>{t("Total")}</span>
                 <span>{formatPKR(job.total)}</span>
               </div>
               <Row label="Paid" value={formatPKR(job.paid)} />
               {(job.creditAmount ?? 0) > 0 && <Row label="On khata" value={formatPKR(job.creditAmount!)} />}
               <div className={cn("flex justify-between text-base font-bold", balance > 0 ? "text-amber-700" : balance < 0 ? "text-rose-600" : "text-emerald-700")}>
-                <span>{balance < 0 ? "To give back" : "Still to pay"}</span>
+                <span>{balance < 0 ? t("To give back") : t("Still to pay")}</span>
                 <span>{formatPKR(Math.abs(balance))}</span>
               </div>
               {can.manage && job.partsCost !== undefined && job.status !== "cancelled" && (
                 <p className="pt-1 text-xs text-slate-500">
-                  Profit: {formatPKR(job.total - (job.partsCost ?? 0))} (parts cost {formatPKR(job.partsCost ?? 0)})
+                  {t("Profit: {amount} (parts cost {cost})", { amount: formatPKR(job.total - (job.partsCost ?? 0)), cost: formatPKR(job.partsCost ?? 0) })}
                 </p>
               )}
             </div>
@@ -235,19 +237,19 @@ export default function RepairJobPage({ params }: { params: Promise<{ id: string
             )}
             {job.status === "delivered" && (
               <p className="mt-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
-                Delivered {formatDate(job.deliveredAt, true)}
-                {job.deliveredByName && ` by ${job.deliveredByName}`}.
+                {t("Delivered")} {formatDate(job.deliveredAt, true)}
+                {job.deliveredByName && ` ${t("by {name}", { name: job.deliveredByName })}`}.
               </p>
             )}
-            {job.status === "cancelled" && <p className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">Returned without repair — {job.cancelReason}</p>}
+            {job.status === "cancelled" && <p className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{t("Returned without repair — {reason}", { reason: job.cancelReason ?? "" })}</p>}
             {job.payments.length > 0 && (
               <div className="mt-4 border-t border-slate-100 pt-3">
-                <div className="mb-1.5 text-xs font-semibold uppercase text-slate-500">Payments</div>
+                <div className="mb-1.5 text-xs font-semibold uppercase text-slate-500">{t("Payments")}</div>
                 <ul className="space-y-1 text-sm">
                   {job.payments.map((p, i) => (
                     <li key={i} className="flex justify-between gap-2">
                       <span className="text-slate-600">
-                        {p.kind === "advance" ? "Advance" : p.kind === "refund" ? "Given back" : "Paid"} · {PAYMENT_LABELS[p.method] ?? p.method}
+                        {p.kind === "advance" ? t("Advance") : p.kind === "refund" ? t("Given back") : t("Paid")} · {t(PAYMENT_LABELS[p.method] ?? p.method)}
                         <span className="block text-xs text-slate-400">
                           {formatDate(p.at, true)}
                           {p.receiptNo && ` · ${p.receiptNo}`}
@@ -268,7 +270,7 @@ export default function RepairJobPage({ params }: { params: Promise<{ id: string
         job={job}
         onClose={() => setPaying(null)}
         onSave={async (body) => {
-          const r = await act(() => api(`/api/repairs/${id}/payment`, { body: { ...body, kind: paying } }), paying === "refund" ? "Money given back" : "Payment received");
+          const r = await act(() => api(`/api/repairs/${id}/payment`, { body: { ...body, kind: paying } }), paying === "refund" ? t("Money given back") : t("Payment received"));
           if (r) setPaying(null);
         }}
         busy={busy}
@@ -280,7 +282,7 @@ export default function RepairJobPage({ params }: { params: Promise<{ id: string
         busy={busy}
         onClose={() => setDelivering(false)}
         onSave={async (body) => {
-          const r = await act(() => api(`/api/repairs/${id}/deliver`, { body }), "Phone delivered");
+          const r = await act(() => api(`/api/repairs/${id}/deliver`, { body }), t("Phone delivered"));
           if (r) {
             setDelivering(false);
             window.open(`/receipt/repair/${id}?print=1`, "_blank");
@@ -293,7 +295,7 @@ export default function RepairJobPage({ params }: { params: Promise<{ id: string
         busy={busy}
         onClose={() => setCancelling(false)}
         onSave={async (body) => {
-          const r = await act(() => api(`/api/repairs/${id}/cancel`, { body }), "Returned without repair");
+          const r = await act(() => api(`/api/repairs/${id}/cancel`, { body }), t("Returned without repair"));
           if (r) setCancelling(false);
         }}
       />
@@ -302,18 +304,20 @@ export default function RepairJobPage({ params }: { params: Promise<{ id: string
 }
 
 function Info({ label, children, wide }: { label: string; children: React.ReactNode; wide?: boolean }) {
+  const t = useT();
   return (
     <div className={cn("flex justify-between gap-3 sm:block", wide && "sm:col-span-2")}>
-      <dt className="shrink-0 text-slate-500">{label}</dt>
+      <dt className="shrink-0 text-slate-500">{t(label)}</dt>
       <dd className="text-right text-slate-800 sm:text-left">{children}</dd>
     </div>
   );
 }
 
 function Row({ label, value }: { label: string; value: string }) {
+  const t = useT();
   return (
     <div className="flex justify-between">
-      <span className="text-slate-500">{label}</span>
+      <span className="text-slate-500">{t(label)}</span>
       <span className="font-semibold">{value}</span>
     </div>
   );
@@ -321,6 +325,7 @@ function Row({ label, value }: { label: string; value: string }) {
 
 /** Diagnosis, technician, labour, discount, warranty. */
 function WorkCard({ job, open, busy, onSave, canDiscount }: { job: RepairJob; open: boolean; busy: boolean; onSave: (body: Record<string, unknown>) => void; canDiscount: boolean }) {
+  const t = useT();
   const [f, setF] = useState({ diagnosis: "", labour: "", discount: "", warrantyDays: "", technicianId: "", promisedAt: "" });
   const [techs, setTechs] = useState<{ _id: string; name: string }[]>([]);
   useEffect(() => {
@@ -342,7 +347,7 @@ function WorkCard({ job, open, busy, onSave, canDiscount }: { job: RepairJob; op
   }, []);
   return (
     <Card className="p-5">
-      <h2 className="mb-3 font-bold text-slate-900">Work & charges</h2>
+      <h2 className="mb-3 font-bold text-slate-900">{t("Work & charges")}</h2>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -368,9 +373,9 @@ function WorkCard({ job, open, busy, onSave, canDiscount }: { job: RepairJob; op
         </Field>
         <Field label="Technician">
           <Select disabled={!open} value={f.technicianId} onChange={(e) => setF({ ...f, technicianId: e.target.value })} aria-label="Technician">
-            <option value="">Not assigned</option>
-            {techs.map((t) => (
-              <option key={t._id} value={t._id}>{t.name}</option>
+            <option value="">{t("Not assigned")}</option>
+            {techs.map((tc) => (
+              <option key={tc._id} value={tc._id}>{tc.name}</option>
             ))}
           </Select>
         </Field>
@@ -397,6 +402,7 @@ function WorkCard({ job, open, busy, onSave, canDiscount }: { job: RepairJob; op
 /** Spare parts used on the job: taken from stock, charged on the bill. */
 function PartsCard({ job, open, canPrice, onChange }: { job: RepairJob; open: boolean; canPrice: boolean; onChange: (j: RepairJob) => void }) {
   const toast = useToast();
+  const t = useT();
   const [parts, setParts] = useState<Part[]>([]);
   const [q, setQ] = useState("");
   const [pick, setPick] = useState<Part | null>(null);
@@ -424,7 +430,7 @@ function PartsCard({ job, open, canPrice, onChange }: { job: RepairJob; open: bo
       setQ("");
       setQty("1");
       setPrice("");
-      toast.success("Part added (taken from stock)");
+      toast.success(t("Part added (taken from stock)"));
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -435,7 +441,7 @@ function PartsCard({ job, open, canPrice, onChange }: { job: RepairJob; open: bo
     setBusy(true);
     try {
       onChange(await api<RepairJob>(`/api/repairs/${job._id}/parts/${partId}`, { method: "DELETE" }));
-      toast.success("Part removed (back in stock)");
+      toast.success(t("Part removed (back in stock)"));
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -445,9 +451,9 @@ function PartsCard({ job, open, canPrice, onChange }: { job: RepairJob; open: bo
 
   return (
     <Card className="p-5">
-      <h2 className="mb-3 font-bold text-slate-900">Parts used</h2>
+      <h2 className="mb-3 font-bold text-slate-900">{t("Parts used")}</h2>
       {(job.parts ?? []).length === 0 ? (
-        <p className="text-sm text-slate-500">No parts used yet.</p>
+        <p className="text-sm text-slate-500">{t("No parts used yet.")}</p>
       ) : (
         <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
           {job.parts!.map((p) => (
@@ -475,7 +481,7 @@ function PartsCard({ job, open, canPrice, onChange }: { job: RepairJob; open: bo
             <div className="flex flex-col gap-2 rounded-xl bg-slate-50 p-3 sm:flex-row sm:items-end">
               <div className="min-w-0 flex-1">
                 <div className="font-semibold text-slate-800">{pick.name}</div>
-                <div className="text-xs text-slate-500">In stock: {formatQty(pick.stock)}</div>
+                <div className="text-xs text-slate-500">{t("In stock: {qty}", { qty: formatQty(pick.stock) })}</div>
               </div>
               <Field label="Qty">
                 <Input type="number" min="0" step="any" value={qty} onChange={(e) => setQty(e.target.value)} className="w-20" aria-label="Part quantity" />
@@ -494,7 +500,7 @@ function PartsCard({ job, open, canPrice, onChange }: { job: RepairJob; open: bo
             </div>
           ) : (
             <div className="relative">
-              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Add a part from stock: search name or scan" aria-label="Search parts" />
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Add a part from stock: search name or scan")} aria-label="Search parts" />
               {matches.length > 0 && (
                 <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
                   {matches.map((p) => (
@@ -502,7 +508,7 @@ function PartsCard({ job, open, canPrice, onChange }: { job: RepairJob; open: bo
                       <button type="button" onClick={() => setPick(p)} className="flex w-full justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-slate-50">
                         <span>{p.name}</span>
                         <span className={p.stock > 0 ? "text-slate-500" : "text-rose-600"}>
-                          {formatPKR(p.salePrice)} · stock {formatQty(p.stock)}
+                          {formatPKR(p.salePrice)} · {t("stock {qty}", { qty: formatQty(p.stock) })}
                         </span>
                       </button>
                     </li>
@@ -518,6 +524,7 @@ function PartsCard({ job, open, canPrice, onChange }: { job: RepairJob; open: bo
 }
 
 function PaymentModal({ kind, job, onClose, onSave, busy }: { kind: "payment" | "refund" | null; job: RepairJob; onClose: () => void; onSave: (b: { amount: number; method: string; ref?: string }) => void; busy: boolean }) {
+  const t = useT();
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("cash");
   const [ref, setRef] = useState("");
@@ -527,7 +534,7 @@ function PaymentModal({ kind, job, onClose, onSave, busy }: { kind: "payment" | 
     setRef("");
   }, [kind]);
   return (
-    <Modal open={!!kind} onClose={onClose} title={kind === "refund" ? `Give money back — ${job.jobNo}` : `Take payment — ${job.jobNo}`} size="sm">
+    <Modal open={!!kind} onClose={onClose} title={kind === "refund" ? t("Give money back — {no}", { no: job.jobNo }) : t("Take payment — {no}", { no: job.jobNo })} size="sm">
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -535,13 +542,13 @@ function PaymentModal({ kind, job, onClose, onSave, busy }: { kind: "payment" | 
         }}
         className="space-y-4"
       >
-        <Field label="Amount (Rs)" hint={kind === "refund" ? `Paid so far: ${formatPKR(job.paid)}` : undefined}>
+        <Field label="Amount (Rs)" hint={kind === "refund" ? t("Paid so far: {amount}", { amount: formatPKR(job.paid) }) : undefined}>
           <Input autoFocus required type="number" min="1" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Amount" />
         </Field>
         <Field label={kind === "refund" ? "Given back by" : "Paid by"}>
           <Select value={method} onChange={(e) => setMethod(e.target.value)} aria-label="Method">
             {TENDERS.map((m) => (
-              <option key={m} value={m}>{PAYMENT_LABELS[m] ?? m}</option>
+              <option key={m} value={m}>{t(PAYMENT_LABELS[m] ?? m)}</option>
             ))}
           </Select>
         </Field>
@@ -559,6 +566,7 @@ function PaymentModal({ kind, job, onClose, onSave, busy }: { kind: "payment" | 
 }
 
 function DeliverModal({ open, job, balance, busy, onClose, onSave }: { open: boolean; job: RepairJob; balance: number; busy: boolean; onClose: () => void; onSave: (b: Record<string, unknown>) => void }) {
+  const t = useT();
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("cash");
   const [toKhata, setToKhata] = useState(false);
@@ -570,13 +578,13 @@ function DeliverModal({ open, job, balance, busy, onClose, onSave }: { open: boo
   const collect = Math.min(Number(amount) || 0, Math.max(0, balance));
   const left = round2(Math.max(0, balance) - collect);
   return (
-    <Modal open={open} onClose={onClose} title={`Deliver ${job.deviceName} — ${job.jobNo}`} size="sm">
+    <Modal open={open} onClose={onClose} title={t("Deliver {device} — {no}", { device: job.deviceName, no: job.jobNo })} size="sm">
       <div className="space-y-4">
         <div className="rounded-2xl bg-slate-900 p-4 text-center text-white">
-          <div className="text-sm text-slate-300">{balance < 0 ? "Give back to the customer" : "To collect now"}</div>
+          <div className="text-sm text-slate-300">{balance < 0 ? t("Give back to the customer") : t("To collect now")}</div>
           <div className="text-3xl font-extrabold">{formatPKR(Math.abs(balance))}</div>
           <div className="text-xs text-slate-400">
-            Bill {formatPKR(job.total)} · paid {formatPKR(job.paid)}
+            {t("Bill {total} · paid {paid}", { total: formatPKR(job.total), paid: formatPKR(job.paid) })}
           </div>
         </div>
         {balance > 0 && (
@@ -587,7 +595,7 @@ function DeliverModal({ open, job, balance, busy, onClose, onSave }: { open: boo
             <Field label="Paid by">
               <Select value={method} onChange={(e) => setMethod(e.target.value)} aria-label="Paid by">
                 {TENDERS.map((m) => (
-                  <option key={m} value={m}>{PAYMENT_LABELS[m] ?? m}</option>
+                  <option key={m} value={m}>{t(PAYMENT_LABELS[m] ?? m)}</option>
                 ))}
               </Select>
             </Field>
@@ -595,14 +603,14 @@ function DeliverModal({ open, job, balance, busy, onClose, onSave }: { open: boo
               (job.customer ? (
                 <label className="flex cursor-pointer items-start gap-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
                   <input type="checkbox" checked={toKhata} onChange={(e) => setToKhata(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-600" aria-label="Put on khata" />
-                  Put the remaining {formatPKR(left)} on {job.customerName}&apos;s khata (udhaar)
+                  {t("Put the remaining {amount} on {name}'s khata (udhaar)", { amount: formatPKR(left), name: job.customerName })}
                 </label>
               ) : (
-                <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{formatPKR(left)} still unpaid. Collect the full amount (this job has no khata customer).</p>
+                <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{t("{amount} still unpaid. Collect the full amount (this job has no khata customer).", { amount: formatPKR(left) })}</p>
               ))}
           </>
         )}
-        {balance < 0 && <p className="text-sm text-slate-600">The advance was more than the bill; the extra is given back when you deliver.</p>}
+        {balance < 0 && <p className="text-sm text-slate-600">{t("The advance was more than the bill; the extra is given back when you deliver.")}</p>}
         <Button
           size="lg"
           className="w-full"
@@ -619,6 +627,7 @@ function DeliverModal({ open, job, balance, busy, onClose, onSave }: { open: boo
 }
 
 function CancelModal({ open, job, busy, onClose, onSave }: { open: boolean; job: RepairJob; busy: boolean; onClose: () => void; onSave: (b: Record<string, unknown>) => void }) {
+  const t = useT();
   const [reason, setReason] = useState("");
   const [charge, setCharge] = useState("");
   const [method, setMethod] = useState("cash");
@@ -630,7 +639,7 @@ function CancelModal({ open, job, busy, onClose, onSave }: { open: boolean; job:
   const keep = Number(charge) || 0;
   const back = round2(job.paid - keep);
   return (
-    <Modal open={open} onClose={onClose} title={`Return without repair — ${job.jobNo}`} size="sm">
+    <Modal open={open} onClose={onClose} title={t("Return without repair — {no}", { no: job.jobNo })} size="sm">
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -638,18 +647,18 @@ function CancelModal({ open, job, busy, onClose, onSave }: { open: boolean; job:
         }}
         className="space-y-4"
       >
-        <p className="text-sm text-slate-600">The phone goes back to the customer unrepaired. Parts used go back into stock.</p>
+        <p className="text-sm text-slate-600">{t("The phone goes back to the customer unrepaired. Parts used go back into stock.")}</p>
         <Field label="Why?">
-          <Textarea required minLength={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Customer did not want the repair, part not available" aria-label="Reason" />
+          <Textarea required minLength={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t("e.g. Customer did not want the repair, part not available")} aria-label="Reason" />
         </Field>
-        <Field label="Checking charge kept (Rs)" hint={`Paid so far: ${formatPKR(job.paid)}`}>
+        <Field label="Checking charge kept (Rs)" hint={t("Paid so far: {amount}", { amount: formatPKR(job.paid) })}>
           <Input type="number" min="0" value={charge} onChange={(e) => setCharge(e.target.value)} aria-label="Checking charge" />
         </Field>
         {back > 0 && (
-          <Field label={`Give back ${formatPKR(back)} by`}>
+          <Field label={t("Give back {amount} by", { amount: formatPKR(back) })}>
             <Select value={method} onChange={(e) => setMethod(e.target.value)} aria-label="Refund method">
               {TENDERS.map((m) => (
-                <option key={m} value={m}>{PAYMENT_LABELS[m] ?? m}</option>
+                <option key={m} value={m}>{t(PAYMENT_LABELS[m] ?? m)}</option>
               ))}
             </Select>
           </Field>

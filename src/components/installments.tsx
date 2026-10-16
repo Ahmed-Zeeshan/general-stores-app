@@ -10,6 +10,7 @@ import { cnicOrNull } from "@/lib/cnic";
 import { buildSchedule, markupOf } from "@/lib/installment-calc";
 import { formatPKR, round2 } from "@/lib/money";
 import { installmentMessage, openWhatsApp, waNumber } from "@/lib/whatsapp";
+import { useT } from "@/lib/i18n";
 
 export type PlanRow = {
   _id: string;
@@ -107,6 +108,7 @@ export function InstallmentSaleModal({
   onDone: (r: { plan: PlanRow; sale: { _id: string; invoiceNo: string; total: number } }) => void;
 }) {
   const toast = useToast();
+  const t = useT();
   const [advance, setAdvance] = useState("");
   const [advanceMethod, setAdvanceMethod] = useState("cash");
   const [months, setMonths] = useState("6");
@@ -132,9 +134,9 @@ export function InstallmentSaleModal({
   const cnicOk = !!cnicOrNull(cnic);
 
   async function save() {
-    if (!customer) return toast.error("Choose the customer first.");
-    if (!cnicOk) return toast.error("Enter the customer's 13-digit CNIC.");
-    if (g.name && !cnicOrNull(g.cnic)) return toast.error("Enter the guarantor's 13-digit CNIC.");
+    if (!customer) return toast.error(t("Choose the customer first."));
+    if (!cnicOk) return toast.error(t("Enter the customer's 13-digit CNIC."));
+    if (g.name && !cnicOrNull(g.cnic)) return toast.error(t("Enter the guarantor's 13-digit CNIC."));
     setSaving(true);
     try {
       const r = await api<{ plan: PlanRow; sale: { _id: string; invoiceNo: string; total: number } }>("/api/installments", {
@@ -151,7 +153,7 @@ export function InstallmentSaleModal({
           },
         },
       });
-      toast.success(`${r.plan.planNo} saved — ${m} installments`);
+      toast.success(t("{no} saved — {n} installments", { no: r.plan.planNo, n: m }));
       onDone(r);
     } catch (err) {
       toast.error((err as Error).message);
@@ -178,15 +180,15 @@ export function InstallmentSaleModal({
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-4">
           <div className="rounded-2xl bg-slate-900 p-4 text-white">
-            <div className="text-sm text-slate-300">Bill (cash price)</div>
+            <div className="text-sm text-slate-300">{t("Bill (cash price)")}</div>
             <div className="text-3xl font-extrabold">{formatPKR(total)}</div>
           </div>
           <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 p-3 text-sm">
-            <span>{customer ? <b>{customer.name}</b> : <span className="text-rose-600">Choose the customer (needed)</span>}</span>
+            <span>{customer ? <b>{customer.name}</b> : <span className="text-rose-600">{t("Choose the customer (needed)")}</span>}</span>
             <Button size="sm" variant="outline" onClick={onChooseCustomer}>{customer ? "Change" : "Choose customer"}</Button>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Customer CNIC *" error={cnic && !cnicOk ? "13 digits" : undefined}>
+            <Field label="Customer CNIC *" error={cnic && !cnicOk ? t("13 digits") : undefined}>
               <Input value={cnic} onChange={(e) => setCnic(e.target.value)} onBlur={() => cnicOk && setCnic(cnicOrNull(cnic)!)} placeholder="34101-1234567-1" aria-label="Customer CNIC" />
             </Field>
             <Field label="Address">
@@ -198,14 +200,14 @@ export function InstallmentSaleModal({
             <Field label="Advance paid by">
               <Select value={advanceMethod} onChange={(e) => setAdvanceMethod(e.target.value)} aria-label="Advance method">
                 {TENDERS.map(([v, l]) => (
-                  <option key={v} value={v}>{l}</option>
+                  <option key={v} value={v}>{t(l)}</option>
                 ))}
               </Select>
             </Field>
             <Field label="Months">
               <Select value={months} onChange={(e) => setMonths(e.target.value)} aria-label="Months">
                 {[2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 18, 24].map((n) => (
-                  <option key={n} value={n}>{n} months</option>
+                  <option key={n} value={n}>{t("{n} months", { n })}</option>
                 ))}
               </Select>
             </Field>
@@ -214,8 +216,8 @@ export function InstallmentSaleModal({
             </Field>
             <Field label="Markup">
               <Select value={markupType} onChange={(e) => setMarkupType(e.target.value as "percent" | "amount")} aria-label="Markup type">
-                <option value="percent">% of the rest</option>
-                <option value="amount">Fixed (Rs)</option>
+                <option value="percent">{t("% of the rest")}</option>
+                <option value="amount">{t("Fixed (Rs)")}</option>
               </Select>
             </Field>
             <Field label={markupType === "percent" ? "Markup %" : "Markup Rs"}>
@@ -223,7 +225,7 @@ export function InstallmentSaleModal({
             </Field>
           </div>
           <details className="rounded-xl border border-slate-200 p-3 text-sm" open={!!g.name}>
-            <summary className="cursor-pointer font-semibold text-slate-700">Guarantor (zamin) — optional</summary>
+            <summary className="cursor-pointer font-semibold text-slate-700">{t("Guarantor (zamin) — optional")}</summary>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <Field label="Name">
                 <Input value={g.name} onChange={(e) => setG({ ...g, name: e.target.value })} aria-label="Guarantor name" />
@@ -235,26 +237,26 @@ export function InstallmentSaleModal({
                 <Input value={g.phone} onChange={(e) => setG({ ...g, phone: e.target.value })} aria-label="Guarantor mobile" />
               </Field>
               <Field label="Relation">
-                <Input value={g.relation} onChange={(e) => setG({ ...g, relation: e.target.value })} placeholder="Brother, friend…" aria-label="Guarantor relation" />
+                <Input value={g.relation} onChange={(e) => setG({ ...g, relation: e.target.value })} placeholder={t("Brother, friend…")} aria-label="Guarantor relation" />
               </Field>
             </div>
           </details>
         </div>
         <div>
           <div className="space-y-1.5 rounded-2xl bg-slate-50 p-4 text-sm">
-            <div className="flex justify-between"><span className="text-slate-500">Cash price</span><b>{formatPKR(total)}</b></div>
-            <div className="flex justify-between"><span className="text-slate-500">Advance</span><b>−{formatPKR(adv)}</b></div>
-            <div className="flex justify-between"><span className="text-slate-500">Markup</span><b>+{formatPKR(markup)}</b></div>
-            <div className="flex justify-between border-t border-dashed border-slate-200 pt-2 text-base font-bold"><span>In installments</span><span>{formatPKR(financed)}</span></div>
-            <div className="flex justify-between text-slate-500"><span>Customer pays in all</span><span>{formatPKR(adv + financed)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">{t("Cash price")}</span><b>{formatPKR(total)}</b></div>
+            <div className="flex justify-between"><span className="text-slate-500">{t("Advance")}</span><b>−{formatPKR(adv)}</b></div>
+            <div className="flex justify-between"><span className="text-slate-500">{t("Markup")}</span><b>+{formatPKR(markup)}</b></div>
+            <div className="flex justify-between border-t border-dashed border-slate-200 pt-2 text-base font-bold"><span>{t("In installments")}</span><span>{formatPKR(financed)}</span></div>
+            <div className="flex justify-between text-slate-500"><span>{t("Customer pays in all")}</span><span>{formatPKR(adv + financed)}</span></div>
           </div>
           {schedule.length > 0 && (
             <table className="mt-4 w-full text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase text-slate-500">
-                  <th className="py-1">No.</th>
-                  <th className="py-1">Due date</th>
-                  <th className="py-1 text-right">Amount</th>
+                  <th className="py-1">{t("No.")}</th>
+                  <th className="py-1">{t("Due date")}</th>
+                  <th className="py-1 text-right">{t("Amount")}</th>
                 </tr>
               </thead>
               <tbody>

@@ -1,6 +1,7 @@
 import { DICT_KHATA } from "./dict/khata";
 import { DICT_SELLING } from "./dict/selling";
 import { DICT_SHELL } from "./dict/shell";
+import { DICT_STOCK } from "./dict/stock";
 /**
  * Interface text in Urdu and Roman Urdu: English text → [Urdu, Roman Urdu].
  * Shared components (page headings, buttons, table headings, form labels, dialog titles, tabs,
@@ -482,4 +483,4 @@ const BASE: Record<string, [string, string]> = {
 };
 
 /** All phrases: the common list above, then the phrases of each part of the app (src/lib/dict). */
-export const DICT: Record<string, [string, string]> = { ...DICT_SHELL, ...DICT_KHATA, ...DICT_SELLING, ...BASE };
+export const DICT: Record<string, [string, string]> = { ...DICT_SHELL, ...DICT_KHATA, ...DICT_SELLING, ...DICT_STOCK, ...BASE };

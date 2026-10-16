@@ -9,12 +9,14 @@ import { PlanStatus, type PlanRow } from "@/components/installments";
 import { useToast } from "@/components/toast";
 import { api, formatDate } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
+import { useT } from "@/lib/i18n";
 
 type Tab = "active" | "late" | "today" | "completed" | "cancelled" | "all";
 type Summary = { active: number; outstanding: number; overdue: number; latePlans: number };
 
 export default function InstallmentsPage() {
   const toast = useToast();
+  const t = useT();
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("active");
   const [q, setQ] = useState("");
@@ -87,7 +89,7 @@ export default function InstallmentsPage() {
           />
           <div className="relative xl:w-72">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, mobile, CNIC, IMEI, plan no…" className="pl-9" aria-label="Search installments" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Name, mobile, CNIC, IMEI, plan no…")} className="pl-9" aria-label="Search installments" />
           </div>
         </div>
         {!data ? (
@@ -135,13 +137,13 @@ export default function InstallmentsPage() {
                     ) : p.lateCount > 0 ? (
                       <div>
                         <Badge color="red">
-                          {p.lateCount} late · <Count n={p.daysLate} one="{n} day" many="{n} days" />
+                          {t("{n} late", { n: p.lateCount })} · <Count n={p.daysLate} one="{n} day" many="{n} days" />
                         </Badge>
-                        <div className="text-xs font-semibold text-rose-600">{formatPKR(p.overdue)} overdue</div>
+                        <div className="text-xs font-semibold text-rose-600">{t("{amount} overdue", { amount: formatPKR(p.overdue) })}</div>
                       </div>
                     ) : p.next ? (
                       <div>
-                        <div className={p.dueToday ? "font-semibold text-amber-700" : "text-slate-700"}>{p.dueToday ? "Today" : formatDate(p.next.dueDate)}</div>
+                        <div className={p.dueToday ? "font-semibold text-amber-700" : "text-slate-700"}>{p.dueToday ? t("Today") : formatDate(p.next.dueDate)}</div>
                         <div className="text-xs text-slate-500">{formatPKR(p.next.amount)}</div>
                       </div>
                     ) : (
@@ -150,7 +152,7 @@ export default function InstallmentsPage() {
                   </Td>
                   <Td className="text-right">
                     <div className="font-semibold">{formatPKR(p.paid)}</div>
-                    <div className="text-xs text-slate-500">of {formatPKR(p.financed)}</div>
+                    <div className="text-xs text-slate-500">{t("of {n}", { n: formatPKR(p.financed) })}</div>
                   </Td>
                   <Td className="text-right font-bold text-slate-900">{p.status === "active" ? formatPKR(p.balance) : "—"}</Td>
                   <Td className="text-right">

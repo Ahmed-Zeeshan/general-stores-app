@@ -5,6 +5,7 @@ import { AlertTriangle, CheckCircle2, Download, FileUp, RotateCcw } from "lucide
 import { Button, Field, Input, Modal } from "./ui";
 import { useToast } from "./toast";
 import { api } from "@/lib/client";
+import { useT } from "@/lib/i18n";
 
 type Summary = { createdAt?: string; shopName?: string; counts: [string, number][]; file: unknown };
 
@@ -34,6 +35,7 @@ const LABELS: Record<string, string> = {
  */
 export function RestoreButton({ shopName, restoreUrl, backupUrl, onDone }: { shopName: string; restoreUrl: string; backupUrl: string; onDone?: () => void }) {
   const toast = useToast();
+  const t = useT();
   const fileRef = useRef<HTMLInputElement>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [safetyDone, setSafetyDone] = useState(false);
@@ -60,7 +62,7 @@ export function RestoreButton({ shopName, restoreUrl, backupUrl, onDone }: { sho
       setConfirmText("");
       setResult(null);
     } catch {
-      toast.error("This file is not a Dukaan Manager backup.");
+      toast.error(t("This file is not a Dukaan Manager backup."));
     }
   }
 
@@ -70,7 +72,7 @@ export function RestoreButton({ shopName, restoreUrl, backupUrl, onDone }: { sho
     try {
       const r = await api<{ restored: number }>(restoreUrl, { body: { backup: summary.file, confirm: confirmText } });
       setResult(r.restored);
-      toast.success("Backup restored");
+      toast.success(t("Backup restored"));
       onDone?.();
     } catch (err) {
       toast.error((err as Error).message);
@@ -95,11 +97,11 @@ export function RestoreButton({ shopName, restoreUrl, backupUrl, onDone }: { sho
           <div className="space-y-5">
             <div className="rounded-xl bg-slate-50 p-4 text-sm">
               <div className="font-semibold text-slate-800">{summary.shopName}</div>
-              <div className="text-slate-500">Backup made {summary.createdAt ? new Date(summary.createdAt).toLocaleString("en-PK") : "(date unknown)"}</div>
+              <div className="text-slate-500">{t("Backup made {date}", { date: summary.createdAt ? new Date(summary.createdAt).toLocaleString("en-PK") : t("(date unknown)") })}</div>
               <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1">
                 {summary.counts.map(([label, n]) => (
                   <div key={label} className="flex justify-between">
-                    <span className="text-slate-500">{label}</span>
+                    <span className="text-slate-500">{t(label)}</span>
                     <b>{n}</b>
                   </div>
                 ))}
@@ -108,18 +110,21 @@ export function RestoreButton({ shopName, restoreUrl, backupUrl, onDone }: { sho
             <div className="flex gap-3 rounded-xl bg-rose-50 p-4 text-sm text-rose-900">
               <AlertTriangle className="h-5 w-5 shrink-0" />
               <div>
-                Everything in <b>{shopName}</b> (products, stock, bills, khata, purchases, expenses) will be <b>replaced</b> with this backup. Staff logins are kept.
+                {/* One sentence, so Urdu keeps its own word order; the shop name stays in bold. */}
+                {t("Everything in {shop} (products, stock, bills, khata, purchases, expenses) will be replaced with this backup. Staff logins are kept.")
+                  .split("{shop}")
+                  .map((part, i) => (i === 0 ? part : [<b key={i}>{shopName}</b>, part]))}
               </div>
             </div>
             <div>
-              <div className="mb-2 text-sm font-semibold text-slate-700">Step 1 — keep a copy of today&apos;s data</div>
+              <div className="mb-2 text-sm font-semibold text-slate-700">{t("Step 1 — keep a copy of today's data")}</div>
               <a href={backupUrl} onClick={() => setSafetyDone(true)}>
                 <Button type="button" variant={safetyDone ? "secondary" : "primary"} icon={safetyDone ? <CheckCircle2 className="h-4 w-4" /> : <Download className="h-4 w-4" />}>
                   {safetyDone ? "Safety copy downloaded" : "Download safety copy"}
                 </Button>
               </a>
             </div>
-            <Field label={`Step 2 — type the shop name "${shopName}" to confirm`}>
+            <Field label={t('Step 2 — type the shop name "{name}" to confirm', { name: shopName })}>
               <Input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} disabled={!safetyDone} placeholder={shopName} />
             </Field>
             <Button
@@ -138,8 +143,8 @@ export function RestoreButton({ shopName, restoreUrl, backupUrl, onDone }: { sho
         {result !== null && (
           <div className="py-6 text-center">
             <CheckCircle2 className="mx-auto h-14 w-14 text-brand-500" />
-            <p className="mt-3 text-lg font-bold text-slate-900">Restore complete</p>
-            <p className="text-sm text-slate-500">{result} records restored.</p>
+            <p className="mt-3 text-lg font-bold text-slate-900">{t("Restore complete")}</p>
+            <p className="text-sm text-slate-500">{t("{n} records restored.", { n: result })}</p>
             <Button className="mt-6" onClick={close}>Done</Button>
           </div>
         )}

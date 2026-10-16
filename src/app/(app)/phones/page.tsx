@@ -13,6 +13,9 @@ import { api, formatDate } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
 import { CONDITION_LABELS, PTA_LABELS, cleanImei, type ImeiLine } from "@/lib/imei";
 import { DEVICE_CONDITIONS, PTA_STATUS } from "@/lib/constants";
+import { useT } from "@/lib/i18n";
+
+type Tr = ReturnType<typeof useT>;
 
 type Model = { _id: string; name: string; costPrice: number; salePrice: number; trackSerial?: boolean; warrantyMonths?: number; stock: number };
 type Status = "in_stock" | "sold" | "returned" | "removed" | "all";
@@ -34,6 +37,7 @@ export default function PhonesPageWrapper() {
 
 function PhonesPage() {
   const toast = useToast();
+  const t = useT();
   const can = useCan();
   const { branches } = useSession();
   const params = useSearchParams();
@@ -100,7 +104,7 @@ function PhonesPage() {
         <div className="mb-6 grid gap-4 sm:grid-cols-3">
           <StatCard label="Phones in stock" value={inStock.length} icon={<Smartphone className="h-5 w-5" />} hint={(() => {
               const n = new Set(inStock.map((d) => d.product)).size;
-              return `${n} model${n === 1 ? "" : "s"}`;
+              return t(n === 1 ? "{n} model" : "{n} models", { n });
             })()} />
           {can.manage && <StatCard label="Stock value (cost)" value={formatPKR(inStock.reduce((a, d) => a + (d.cost ?? 0), 0))} icon={<Wallet className="h-5 w-5" />} tone="violet" />}
           <StatCard
@@ -128,19 +132,19 @@ function PhonesPage() {
           />
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <Select value={model} onChange={(e) => setModel(e.target.value)} aria-label="Model" className="sm:w-56">
-              <option value="">All models</option>
+              <option value="">{t("All models")}</option>
               {models.map((m) => (
                 <option key={m._id} value={m._id}>{m.name}</option>
               ))}
             </Select>
             <div className="relative sm:w-64">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="IMEI, colour, customer…" className="pl-9" aria-label="Search phones" />
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("IMEI, colour, customer…")} className="pl-9" aria-label="Search phones" />
             </div>
             {multiBranch && can.manage && (
               <label className="flex items-center gap-2 whitespace-nowrap text-sm text-slate-600">
                 <input type="checkbox" checked={allBranches} onChange={(e) => setAllBranches(e.target.checked)} className="h-4 w-4 accent-brand-600" />
-                All branches
+                {t("All branches")}
               </label>
             )}
           </div>
@@ -194,7 +198,7 @@ function PhonesPage() {
                     )}
                     {(allBranches || status !== "in_stock") && multiBranch && <div className="text-xs text-slate-400">{branchName(d.branch)}</div>}
                   </Td>
-                  <Td className="text-right font-semibold">{d.status === "sold" && d.sale?.price ? formatPKR(d.sale.price) : d.price ? formatPKR(d.price) : <span className="font-normal text-slate-400">Model price</span>}</Td>
+                  <Td className="text-right font-semibold">{d.status === "sold" && d.sale?.price ? formatPKR(d.sale.price) : d.price ? formatPKR(d.price) : <span className="font-normal text-slate-400">{t("Model price")}</span>}</Td>
                   {can.manage && <Td className="text-right text-slate-500">{formatPKR(d.cost ?? 0)}</Td>}
                   <Td className="text-slate-500">{formatDate(d.status === "sold" ? d.sale?.at : d.createdAt)}</Td>
                   <Td className="text-right">
@@ -239,6 +243,7 @@ function ImeiCheck({ onOpen }: { onOpen: (d: DeviceRow) => void }) {
   const [busy, setBusy] = useState(false);
   const [camera, setCamera] = useState(false);
   const toast = useToast();
+  const t = useT();
   async function check(raw?: string) {
     const imei = cleanImei(raw ?? value);
     if (imei.length < 4) return;
@@ -264,7 +269,7 @@ function ImeiCheck({ onOpen }: { onOpen: (d: DeviceRow) => void }) {
       >
         <div className="relative flex-1">
           <ScanBarcode className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-          <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="Scan or type an IMEI to check" className="h-12 pl-11 font-mono" aria-label="Check IMEI" />
+          <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder={t("Scan or type an IMEI to check")} className="h-12 pl-11 font-mono" aria-label="Check IMEI" />
         </div>
         <div className="flex gap-2">
           <CameraButton onClick={() => setCamera(true)} />
@@ -273,16 +278,16 @@ function ImeiCheck({ onOpen }: { onOpen: (d: DeviceRow) => void }) {
           </Button>
         </div>
       </form>
-      <CameraScanner open={camera} onClose={() => setCamera(false)} onScan={(c) => check(c)} title="Scan the IMEI barcode" />
+      <CameraScanner open={camera} onClose={() => setCamera(false)} onScan={(c) => check(c)} title={t("Scan the IMEI barcode")} />
       {result && (
         <div className="mt-4">
           <div className="mb-2 flex flex-wrap items-center gap-3">
             <span className="font-mono font-semibold text-slate-800">{result.imei}</span>
             <CheckDigit ok={result.checkOk} />
           </div>
-          <p className="mb-2 text-xs text-slate-500">Tip: dial *#06# on any phone to see its IMEI.</p>
+          <p className="mb-2 text-xs text-slate-500">{t("Tip: dial *#06# on any phone to see its IMEI.")}</p>
           {result.records.length === 0 ? (
-            <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">This IMEI has never been in your shop.</p>
+            <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">{t("This IMEI has never been in your shop.")}</p>
           ) : (
             <div className="space-y-3">
               {result.records.map((d) => (
@@ -296,24 +301,26 @@ function ImeiCheck({ onOpen }: { onOpen: (d: DeviceRow) => void }) {
   );
 }
 
-function warrantyBadge(until?: string) {
+function warrantyBadge(t: Tr, until?: string) {
   if (!until) return null;
   const active = new Date(until) >= new Date();
-  return <Badge color={active ? "green" : "slate"}>{active ? `In warranty till ${formatDate(until)}` : `Warranty ended ${formatDate(until)}`}</Badge>;
+  return <Badge color={active ? "green" : "slate"}>{active ? t("In warranty till {date}", { date: formatDate(until) }) : t("Warranty ended {date}", { date: formatDate(until) })}</Badge>;
 }
 
-function sourceText(d: DeviceRow) {
+function sourceText(t: Tr, d: DeviceRow) {
   const s = d.source;
-  if (!s) return "Added";
-  if (s.type === "purchase") return `Bought on ${s.refNo}${s.name ? ` from ${s.name}` : ""}`;
-  if (s.type === "used_buy") return `Bought used${s.name ? ` from ${s.name}` : ""}${s.refNo ? ` (${s.refNo})` : ""}`;
-  if (s.type === "repossess") return `Taken back${s.refNo ? ` (${s.refNo})` : ""}`;
-  return "Added to stock";
+  if (!s) return t("Added");
+  const from = s.name ? ` ${t("from {no}", { no: s.name })}` : "";
+  if (s.type === "purchase") return `${t("Bought on {ref}", { ref: String(s.refNo) })}${from}`;
+  if (s.type === "used_buy") return `${t("Bought used")}${from}${s.refNo ? ` (${s.refNo})` : ""}`;
+  if (s.type === "repossess") return `${t("Taken back")}${s.refNo ? ` (${s.refNo})` : ""}`;
+  return t("Added to stock");
 }
 
 /** One record of a phone: where it came from, where it went, and its history. */
 function DeviceStory({ d, onOpen }: { d: DeviceRow; onOpen?: () => void }) {
   const can = useCan();
+  const t = useT();
   return (
     <div className="rounded-2xl border border-slate-200 p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -336,15 +343,15 @@ function DeviceStory({ d, onOpen }: { d: DeviceRow; onOpen?: () => void }) {
           <dd><Imei d={d} /></dd>
         </div>
         <div className="flex justify-between gap-3 sm:block">
-          <dt className="text-slate-500">Came in</dt>
+          <dt className="text-slate-500">{t("Came in")}</dt>
           <dd>
-            {sourceText(d)} · {formatDate(d.createdAt)}
-            {can.manage && d.cost ? <span className="text-slate-500"> · cost {formatPKR(d.cost)}</span> : null}
+            {sourceText(t, d)} · {formatDate(d.createdAt)}
+            {can.manage && d.cost ? <span className="text-slate-500"> · {t("cost {amount}", { amount: formatPKR(d.cost) })}</span> : null}
           </dd>
         </div>
         {d.sale && (
           <div className="flex justify-between gap-3 sm:col-span-2 sm:block">
-            <dt className="text-slate-500">Sold</dt>
+            <dt className="text-slate-500">{t("Sold")}</dt>
             <dd className="flex flex-wrap items-center gap-2">
               {d.sale.id ? (
                 <a href={`/receipt/${d.sale.id}`} target="_blank" className="font-semibold text-brand-700 hover:underline">
@@ -353,10 +360,10 @@ function DeviceStory({ d, onOpen }: { d: DeviceRow; onOpen?: () => void }) {
               ) : (
                 d.sale.invoiceNo
               )}
-              {d.sale.customerName && <span>to {d.sale.customerName}</span>}
+              {d.sale.customerName && <span>{t("to {name}", { name: d.sale.customerName })}</span>}
               <span className="text-slate-500">{formatDate(d.sale.at)}</span>
               {d.sale.price ? <span className="font-semibold">{formatPKR(d.sale.price)}</span> : null}
-              {warrantyBadge(d.sale.warrantyUntil)}
+              {warrantyBadge(t, d.sale.warrantyUntil)}
             </dd>
           </div>
         )}
@@ -384,6 +391,7 @@ function DeviceStory({ d, onOpen }: { d: DeviceRow; onOpen?: () => void }) {
 /** Add phones that are already in the shop (opening stock) with their IMEIs. */
 function AddPhonesModal({ open, models, initialModel, onClose, onSaved }: { open: boolean; models: Model[]; initialModel: string; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
+  const t = useT();
   const [productId, setProductId] = useState("");
   const [cost, setCost] = useState("");
   const [condition, setCondition] = useState<(typeof DEVICE_CONDITIONS)[number]>("new");
@@ -408,14 +416,14 @@ function AddPhonesModal({ open, models, initialModel, onClose, onSaved }: { open
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (!lines.length) return toast.error("Scan or type at least one IMEI.");
-    if (lines.some((l) => l.blocking)) return toast.error("Fix the IMEIs marked in red first.");
+    if (!lines.length) return toast.error(t("Scan or type at least one IMEI."));
+    if (lines.some((l) => l.blocking)) return toast.error(t("Fix the IMEIs marked in red first."));
     setSaving(true);
     try {
       const added = await api<DeviceRow[]>("/api/devices", {
         body: { productId, cost: Number(cost) || 0, units: lines.map((l) => ({ imei: l.imei, imei2: l.imei2, color: color || undefined, storage: storage || undefined, condition, pta })) },
       });
-      toast.success(`${added.length} phone${added.length === 1 ? "" : "s"} added to stock`);
+      toast.success(t(added.length === 1 ? "{n} phone added to stock" : "{n} phones added to stock", { n: added.length }));
       onSaved();
     } catch (err) {
       toast.error((err as Error).message);
@@ -434,14 +442,14 @@ function AddPhonesModal({ open, models, initialModel, onClose, onSaved }: { open
         <>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button type="submit" form="add-phones" loading={saving} disabled={!models.length}>
-            Add {lines.length || ""} phone{lines.length === 1 ? "" : "s"}
+            {t(lines.length === 1 ? "Add {n} phone" : "Add {n} phones", { n: lines.length || "" })}
           </Button>
         </>
       }
     >
       {models.length === 0 ? (
         <p className="text-sm text-slate-600">
-          No phone models yet. Add one in <Link href="/products" className="font-semibold text-brand-700">Products</Link> and tick &quot;Track each piece by IMEI&quot;.
+          {t("No phone models yet. Add one in")} <Link href="/products" className="font-semibold text-brand-700">{t("Products")}</Link> {t('and tick "Track each piece by IMEI".')}
         </p>
       ) : (
         <form id="add-phones" onSubmit={save} className="grid gap-4 sm:grid-cols-2">
@@ -465,20 +473,20 @@ function AddPhonesModal({ open, models, initialModel, onClose, onSaved }: { open
           <Field label="Condition">
             <Select value={condition} onChange={(e) => setCondition(e.target.value as typeof condition)} aria-label="Condition">
               {DEVICE_CONDITIONS.map((c) => (
-                <option key={c} value={c}>{CONDITION_LABELS[c]}</option>
+                <option key={c} value={c}>{t(CONDITION_LABELS[c])}</option>
               ))}
             </Select>
           </Field>
           <Field label="PTA">
             <Select value={pta} onChange={(e) => setPta(e.target.value as typeof pta)} aria-label="PTA status">
               {PTA_STATUS.map((c) => (
-                <option key={c} value={c}>{PTA_LABELS[c]}</option>
+                <option key={c} value={c}>{t(PTA_LABELS[c])}</option>
               ))}
             </Select>
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Colour (optional)">
-              <Input value={color} onChange={(e) => setColor(e.target.value)} placeholder="Black" aria-label="Colour" />
+              <Input value={color} onChange={(e) => setColor(e.target.value)} placeholder={t("Black")} aria-label="Colour" />
             </Field>
             <Field label="Storage (optional)">
               <Input value={storage} onChange={(e) => setStorage(e.target.value)} placeholder="8/256GB" aria-label="Storage" />
@@ -489,12 +497,12 @@ function AddPhonesModal({ open, models, initialModel, onClose, onSaved }: { open
             <ImeiInput
               value={text}
               autoFocus
-              onChange={(t, l) => {
-                setText(t);
+              onChange={(v, l) => {
+                setText(v);
                 setLines(l);
               }}
             />
-            <p className="mt-2 text-xs text-slate-500">For phones bought from a supplier, use Purchases → New purchase instead (the supplier khata is updated too).</p>
+            <p className="mt-2 text-xs text-slate-500">{t("For phones bought from a supplier, use Purchases → New purchase instead (the supplier khata is updated too).")}</p>
           </div>
         </form>
       )}
@@ -505,6 +513,7 @@ function AddPhonesModal({ open, models, initialModel, onClose, onSaved }: { open
 /** One phone: its story, plus correct details or remove it (owner / manager). */
 function DeviceModal({ device, onClose, onChanged }: { device: DeviceRow | null; onClose: () => void; onChanged: () => void }) {
   const toast = useToast();
+  const t = useT();
   const can = useCan();
   const [d, setD] = useState<DeviceRow | null>(null);
   const [editing, setEditing] = useState(false);
@@ -535,7 +544,7 @@ function DeviceModal({ device, onClose, onChanged }: { device: DeviceRow | null;
       if (d.status === "in_stock") Object.assign(body, { imei: form.imei, imei2: form.imei2 });
       setD(await api<DeviceRow>(`/api/devices/${d._id}`, { method: "PATCH", body }));
       setEditing(false);
-      toast.success("Phone details saved");
+      toast.success(t("Phone details saved"));
       onChanged();
     } catch (err) {
       toast.error((err as Error).message);
@@ -550,7 +559,7 @@ function DeviceModal({ device, onClose, onChanged }: { device: DeviceRow | null;
     try {
       setD(await api<DeviceRow>(`/api/devices/${d._id}/remove`, { body: { reason } }));
       setRemoving(false);
-      toast.success("Phone removed from stock");
+      toast.success(t("Phone removed from stock"));
       onChanged();
     } catch (err) {
       toast.error((err as Error).message);
@@ -591,7 +600,7 @@ function DeviceModal({ device, onClose, onChanged }: { device: DeviceRow | null;
               </Field>
             </>
           ) : (
-            <p className="text-xs text-slate-500 sm:col-span-2">The IMEI of a sold or returned phone cannot be changed.</p>
+            <p className="text-xs text-slate-500 sm:col-span-2">{t("The IMEI of a sold or returned phone cannot be changed.")}</p>
           )}
           <Field label="Colour">
             <Input value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} aria-label="Colour" />
@@ -602,14 +611,14 @@ function DeviceModal({ device, onClose, onChanged }: { device: DeviceRow | null;
           <Field label="Condition">
             <Select value={form.condition} onChange={(e) => setForm({ ...form, condition: e.target.value })} aria-label="Condition">
               {DEVICE_CONDITIONS.map((c) => (
-                <option key={c} value={c}>{CONDITION_LABELS[c]}</option>
+                <option key={c} value={c}>{t(CONDITION_LABELS[c])}</option>
               ))}
             </Select>
           </Field>
           <Field label="PTA">
             <Select value={form.pta} onChange={(e) => setForm({ ...form, pta: e.target.value })} aria-label="PTA status">
               {PTA_STATUS.map((c) => (
-                <option key={c} value={c}>{PTA_LABELS[c]}</option>
+                <option key={c} value={c}>{t(PTA_LABELS[c])}</option>
               ))}
             </Select>
           </Field>
@@ -617,7 +626,7 @@ function DeviceModal({ device, onClose, onChanged }: { device: DeviceRow | null;
             <Input type="number" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} aria-label="Phone price" />
           </Field>
           <Field label="Notes" className="sm:col-span-2">
-            <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="min-h-[60px]" placeholder="e.g. small scratch on back, box missing" />
+            <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="min-h-[60px]" placeholder={t("e.g. small scratch on back, box missing")} />
           </Field>
           <div className="flex justify-end gap-2 sm:col-span-2">
             <Button variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
@@ -628,10 +637,10 @@ function DeviceModal({ device, onClose, onChanged }: { device: DeviceRow | null;
       {d && removing && (
         <form onSubmit={remove} className="space-y-4">
           <p className="text-sm text-slate-600">
-            Take <b>{d.productName}</b> (IMEI {d.imei}) out of stock. It stays in the history. Use this for a damaged, lost or wrongly entered phone — not for a sale.
+            {t("Take")} <b>{d.productName}</b> {t("(IMEI {imei}) out of stock. It stays in the history. Use this for a damaged, lost or wrongly entered phone — not for a sale.", { imei: d.imei })}
           </p>
           <Field label="Why is it removed?">
-            <Textarea required minLength={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Screen broken in the shop" aria-label="Reason" />
+            <Textarea required minLength={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t("e.g. Screen broken in the shop")} aria-label="Reason" />
           </Field>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setRemoving(false)}>Cancel</Button>

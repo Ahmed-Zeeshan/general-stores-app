@@ -7,6 +7,7 @@ import { useBarcodeScanner } from "./barcode-scanner";
 import { api } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
 import { CONDITION_LABELS, cleanImei, parseImeiLines, type ImeiLine } from "@/lib/imei";
+import { useT } from "@/lib/i18n";
 
 export type DeviceRow = {
   _id: string;
@@ -68,6 +69,7 @@ export function ImeiInput({
   expected?: number;
   autoFocus?: boolean;
 }) {
+  const t = useT();
   const lines = useMemo(() => parseImeiLines(value), [value]);
   const blocking = lines.filter((l) => l.blocking).length;
   const warnings = lines.filter((l) => l.problem && !l.blocking).length;
@@ -77,25 +79,25 @@ export function ImeiInput({
         autoFocus={autoFocus}
         value={value}
         onChange={(e) => onChange(e.target.value, parseImeiLines(e.target.value))}
-        placeholder={"Scan or type one phone per line\n356789012345678\n356789012345686, 356789012345694   ← IMEI 2 after a comma"}
+        placeholder={`${t("Scan or type one phone per line")}\n356789012345678\n356789012345686, 356789012345694   ← ${t("IMEI 2 after a comma")}`}
         className="min-h-[120px] font-mono text-sm"
         aria-label="IMEIs"
         spellCheck={false}
       />
       <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
         <span className={cn("font-semibold", expected !== undefined && lines.length !== expected ? "text-amber-700" : "text-slate-600")}>
-          {lines.length} phone{lines.length === 1 ? "" : "s"}
-          {expected !== undefined && ` of ${expected}`}
+          {t(lines.length === 1 ? "{n} phone" : "{n} phones", { n: lines.length })}
+          {expected !== undefined && ` ${t("of {n}", { n: expected })}`}
         </span>
-        {blocking > 0 && <span className="font-semibold text-rose-600">{blocking} to fix</span>}
-        {warnings > 0 && <span className="text-amber-700">{warnings} with a wrong check digit (allowed — re-check)</span>}
+        {blocking > 0 && <span className="font-semibold text-rose-600">{t("{n} to fix", { n: blocking })}</span>}
+        {warnings > 0 && <span className="text-amber-700">{t("{n} with a wrong check digit (allowed — re-check)", { n: warnings })}</span>}
       </div>
       {lines.some((l) => l.problem) && (
         <ul className="mt-1 space-y-0.5 text-xs">
           {lines.map((l, i) =>
             l.problem ? (
               <li key={i} className={l.blocking ? "text-rose-600" : "text-amber-700"}>
-                Line {i + 1}: {l.imei || "(empty)"} — {l.problem}
+                {t("Line {n}: {imei} — {problem}", { n: i + 1, imei: l.imei || t("(empty)"), problem: t(l.problem) })}
               </li>
             ) : null,
           )}
@@ -128,6 +130,7 @@ export function DevicePicker({
   title?: string;
   onPick: (devices: DeviceRow[]) => void;
 }) {
+  const tr = useT();
   const [rows, setRows] = useState<DeviceRow[] | null>(null);
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
@@ -172,14 +175,14 @@ export function DevicePicker({
     <Modal
       open={open}
       onClose={onClose}
-      title={title ?? `Choose ${product?.name ?? "phone"}`}
+      title={title ?? tr("Choose {name}", { name: product?.name ?? tr("phone") })}
       size="md"
       footer={
         multiple ? (
           <>
             <Button variant="outline" onClick={onClose}>Cancel</Button>
             <Button disabled={!picked.length} onClick={() => onPick(available.filter((d) => picked.includes(d._id)))}>
-              Choose {picked.length || ""} phone{picked.length === 1 ? "" : "s"}
+              {tr(picked.length === 1 ? "Choose {n} phone" : "Choose {n} phones", { n: picked.length || "" })}
             </Button>
           </>
         ) : undefined
@@ -197,7 +200,7 @@ export function DevicePicker({
               choose(shown[0]);
             }
           }}
-          placeholder="Scan the IMEI, or search IMEI / colour"
+          placeholder={tr("Scan the IMEI, or search IMEI / colour")}
           className="pl-10"
           aria-label="Search IMEI"
         />
@@ -208,7 +211,7 @@ export function DevicePicker({
         ) : shown.length === 0 ? (
           <div className="py-8 text-center text-sm text-slate-500">
             <Smartphone className="mx-auto mb-2 h-8 w-8 text-slate-300" />
-            {available.length === 0 ? "No phones of this model in stock here." : "No phone matches. Check the IMEI."}
+            {available.length === 0 ? tr("No phones of this model in stock here.") : tr("No phone matches. Check the IMEI.")}
           </div>
         ) : (
           <ul className="max-h-[50vh] divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-200">
@@ -243,13 +246,14 @@ export function DevicePicker({
 
 /** Small status line for an IMEI check result. */
 export function CheckDigit({ ok }: { ok: boolean }) {
+  const t = useT();
   return ok ? (
     <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
-      <CheckCircle2 className="h-3.5 w-3.5" /> IMEI check digit OK
+      <CheckCircle2 className="h-3.5 w-3.5" /> {t("IMEI check digit OK")}
     </span>
   ) : (
     <span className="inline-flex items-center gap-1 text-xs text-amber-700">
-      <AlertTriangle className="h-3.5 w-3.5" /> Check digit does not match — the IMEI may be typed wrong or the phone may be a copy
+      <AlertTriangle className="h-3.5 w-3.5" /> {t("Check digit does not match — the IMEI may be typed wrong or the phone may be a copy")}
     </span>
   );
 }

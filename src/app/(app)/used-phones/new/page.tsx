@@ -15,6 +15,7 @@ import { compressImage } from "@/lib/image";
 import { cleanImei, PTA_LABELS } from "@/lib/imei";
 import { formatPKR } from "@/lib/money";
 import { PTA_STATUS } from "@/lib/constants";
+import { useT } from "@/lib/i18n";
 
 type Model = { _id: string; name: string; salePrice: number; trackSerial?: boolean };
 
@@ -32,6 +33,7 @@ const ACCESSORIES = ["Box", "Charger", "Cable", "Earphones", "Purchase receipt"]
 
 export default function BuyUsedPhonePage() {
   const toast = useToast();
+  const t = useT();
   const router = useRouter();
   const [models, setModels] = useState<Model[]>([]);
   const [seller, setSeller] = useState({ name: "", cnic: "", phone: "", address: "" });
@@ -99,9 +101,9 @@ export default function BuyUsedPhonePage() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (!cnicOk) return toast.error("Enter the seller's 13-digit CNIC.");
-    if (inStock) return toast.error("This IMEI is already in stock.");
-    if (!declared) return toast.error("Read the declaration to the seller and tick it.");
+    if (!cnicOk) return toast.error(t("Enter the seller's 13-digit CNIC."));
+    if (inStock) return toast.error(t("This IMEI is already in stock."));
+    if (!declared) return toast.error(t("Read the declaration to the seller and tick it."));
     setSaving(true);
     try {
       const r = await api<{ _id: string; buyNo: string }>("/api/used-phones", {
@@ -126,7 +128,7 @@ export default function BuyUsedPhonePage() {
           declaration: true,
         },
       });
-      toast.success(`${r.buyNo} saved — the phone is in stock`);
+      toast.success(t("{no} saved — the phone is in stock", { no: r.buyNo }));
       window.open(`/receipt/used/${r._id}?print=1`, "_blank");
       router.push("/used-phones");
     } catch (err) {
@@ -138,20 +140,20 @@ export default function BuyUsedPhonePage() {
   return (
     <form onSubmit={save}>
       <Link href="/used-phones" className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800">
-        <ArrowLeft className="h-4 w-4" /> Back to used phones
+        <ArrowLeft className="h-4 w-4" /> {t("Back to used phones")}
       </Link>
       <PageHeader title="Buy a Used Phone" urdu="پرانا فون خریدیں" subtitle="Check the CNIC and the phone carefully. The seller signs the printed agreement." />
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         <div className="space-y-6">
           <Card className="p-5">
             <h2 className="mb-4 flex items-center gap-2 font-bold text-slate-900">
-              <UserRound className="h-5 w-5 text-brand-600" /> Seller
+              <UserRound className="h-5 w-5 text-brand-600" /> {t("Seller")}
             </h2>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Full name (as on CNIC) *">
                 <Input required minLength={3} value={seller.name} onChange={(e) => setSeller({ ...seller, name: e.target.value })} aria-label="Seller name" />
               </Field>
-              <Field label="CNIC *" error={seller.cnic && !cnicOk ? "13 digits, e.g. 35202-1234567-1" : undefined}>
+              <Field label="CNIC *" error={seller.cnic && !cnicOk ? t("13 digits, e.g. 35202-1234567-1") : undefined}>
                 <Input
                   required
                   inputMode="numeric"
@@ -172,7 +174,7 @@ export default function BuyUsedPhonePage() {
             <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
               {party ? (
                 <span className="inline-flex items-center gap-2 rounded-xl bg-brand-50 px-3 py-1.5 text-brand-800">
-                  Linked to khata: <b>{party.name}</b>
+                  {t("Linked to khata:")} <b>{party.name}</b>
                   <button type="button" onClick={() => setParty(null)} aria-label="Unlink customer">
                     <X className="h-4 w-4" />
                   </button>
@@ -184,7 +186,7 @@ export default function BuyUsedPhonePage() {
               )}
             </div>
             <div className="mt-4">
-              <div className="mb-1.5 text-sm font-medium text-slate-700">Photos of the seller / CNIC / phone (up to 3)</div>
+              <div className="mb-1.5 text-sm font-medium text-slate-700">{t("Photos of the seller / CNIC / phone (up to 3)")}</div>
               <div className="flex flex-wrap gap-3">
                 {photos.map((p, i) => (
                   <div key={i} className="relative">
@@ -197,30 +199,30 @@ export default function BuyUsedPhonePage() {
                 ))}
                 {photos.length < 3 && (
                   <button type="button" onClick={() => photoInput.current?.click()} className="flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-slate-300 text-xs text-slate-500 hover:border-brand-400">
-                    <ImagePlus className="h-6 w-6" /> Add photo
+                    <ImagePlus className="h-6 w-6" /> {t("Add photo")}
                   </button>
                 )}
               </div>
               <input ref={photoInput} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={addPhoto} aria-label="Add photos" />
               <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
-                <Camera className="h-3.5 w-3.5" /> On a phone or tablet this opens the camera.
+                <Camera className="h-3.5 w-3.5" /> {t("On a phone or tablet this opens the camera.")}
               </p>
             </div>
           </Card>
 
           <Card className="p-5">
             <h2 className="mb-4 flex items-center gap-2 font-bold text-slate-900">
-              <Smartphone className="h-5 w-5 text-brand-600" /> Phone
+              <Smartphone className="h-5 w-5 text-brand-600" /> {t("Phone")}
             </h2>
             <div className="grid gap-4 sm:grid-cols-2">
               {newModel ? (
                 <Field label="Model *" hint={models.length ? undefined : "Saved as a new phone model (tracked by IMEI)"}>
-                  <Input required value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder="e.g. Samsung Galaxy S21 128GB" aria-label="New model name" />
+                  <Input required value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder={t("e.g. {n}", { n: "Samsung Galaxy S21 128GB" })} aria-label="New model name" />
                 </Field>
               ) : (
                 <Field label="Model *">
                   <Select required value={productId} onChange={(e) => setProductId(e.target.value)} aria-label="Phone model">
-                    <option value="">Choose the model</option>
+                    <option value="">{t("Choose the model")}</option>
                     {models.map((m) => (
                       <option key={m._id} value={m._id}>{m.name}</option>
                     ))}
@@ -230,7 +232,7 @@ export default function BuyUsedPhonePage() {
               <div className="flex items-end">
                 {models.length > 0 && (
                   <button type="button" className="mb-3 text-sm font-semibold text-brand-700" onClick={() => setNewModel(!newModel)}>
-                    {newModel ? "Choose an existing model" : "+ Model not in the list"}
+                    {newModel ? t("Choose an existing model") : t("+ Model not in the list")}
                   </button>
                 )}
               </div>
@@ -247,17 +249,17 @@ export default function BuyUsedPhonePage() {
                 <div className="space-y-2 sm:col-span-2">
                   <CheckDigit ok={history.checkOk} />
                   {history.records.length === 0 ? (
-                    <p className="text-xs text-slate-500">This IMEI has never been in your shop.</p>
+                    <p className="text-xs text-slate-500">{t("This IMEI has never been in your shop.")}</p>
                   ) : (
                     history.records.map((r) => (
                       <div key={r._id} className={`flex items-start gap-2 rounded-xl p-3 text-sm ${r.status === "in_stock" ? "bg-rose-50 text-rose-800" : "bg-amber-50 text-amber-900"}`}>
                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                         <span>
                           {r.status === "in_stock"
-                            ? `This IMEI is already in your stock (${r.productName}). It cannot be bought again.`
+                            ? t("This IMEI is already in your stock ({name}). It cannot be bought again.", { name: r.productName })
                             : r.sale
-                              ? `Your shop sold this phone (${r.productName}) on ${formatDate(r.sale.at)}${r.sale.customerName ? ` to ${r.sale.customerName}` : ""} — bill ${r.sale.invoiceNo}.`
-                              : `This IMEI was in your shop before (${r.productName}, ${r.status}).`}
+                              ? t("Your shop sold this phone ({name}) on {date}{to} — bill {no}.", { name: r.productName, date: formatDate(r.sale.at), to: r.sale.customerName ? ` ${t("to {name}", { name: r.sale.customerName })}` : "", no: r.sale.invoiceNo })
+                              : t("This IMEI was in your shop before ({name}, {status}).", { name: r.productName, status: r.status })}
                         </span>
                       </div>
                     ))
@@ -273,7 +275,7 @@ export default function BuyUsedPhonePage() {
               <Field label="PTA">
                 <Select value={phone.pta} onChange={(e) => setPhone({ ...phone, pta: e.target.value as typeof phone.pta })} aria-label="PTA status">
                   {PTA_STATUS.map((p) => (
-                    <option key={p} value={p}>{PTA_LABELS[p]}</option>
+                    <option key={p} value={p}>{t(PTA_LABELS[p])}</option>
                   ))}
                 </Select>
               </Field>
@@ -282,21 +284,21 @@ export default function BuyUsedPhonePage() {
               </Field>
             </div>
             <div className="mt-4">
-              <div className="mb-2 text-sm font-medium text-slate-700">Checked</div>
+              <div className="mb-2 text-sm font-medium text-slate-700">{t("Checked")}</div>
               <div className="grid gap-2 sm:grid-cols-2">
                 {CHECKS.map(([k, label]) => (
                   <label key={k} className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
                     <input type="checkbox" checked={checks[k]} onChange={(e) => setChecks({ ...checks, [k]: e.target.checked })} className="h-4 w-4 accent-brand-600" />
-                    {label}
+                    {t(label)}
                   </label>
                 ))}
               </div>
-              <div className="mb-2 mt-4 text-sm font-medium text-slate-700">Came with</div>
+              <div className="mb-2 mt-4 text-sm font-medium text-slate-700">{t("Came with")}</div>
               <div className="flex flex-wrap gap-2">
                 {ACCESSORIES.map((a) => (
                   <label key={a} className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm">
                     <input type="checkbox" checked={accessories.includes(a)} onChange={(e) => setAccessories(e.target.checked ? [...accessories, a] : accessories.filter((x) => x !== a))} className="h-4 w-4 accent-brand-600" />
-                    {a}
+                    {t(a)}
                   </label>
                 ))}
               </div>
@@ -309,21 +311,21 @@ export default function BuyUsedPhonePage() {
 
         <div className="space-y-6">
           <Card className="p-5 lg:sticky lg:top-6">
-            <h2 className="mb-4 font-bold text-slate-900">Price</h2>
+            <h2 className="mb-4 font-bold text-slate-900">{t("Price")}</h2>
             <div className="space-y-4">
               <Field label="Paid to the seller (Rs) *">
                 <Input required type="number" min="1" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} className="text-lg font-bold" aria-label="Price paid" />
               </Field>
-              <Field label="Sell it for (Rs)" hint={price && asking ? `Profit when sold: ${formatPKR(profit)}` : "Its price on the bill; empty = model price"}>
+              <Field label="Sell it for (Rs)" hint={price && asking ? t("Profit when sold: {amount}", { amount: formatPKR(profit) }) : "Its price on the bill; empty = model price"}>
                 <Input type="number" min="0" inputMode="decimal" value={asking} onChange={(e) => setAsking(e.target.value)} aria-label="Sale price" />
               </Field>
               <Field label="Paid by">
                 <Select value={method} onChange={(e) => setMethod(e.target.value)} aria-label="Paid by">
-                  <option value="cash">Cash from drawer</option>
+                  <option value="cash">{t("Cash from drawer")}</option>
                   <option value="jazzcash">JazzCash</option>
                   <option value="easypaisa">Easypaisa</option>
-                  <option value="bank">Bank transfer</option>
-                  {party && <option value="khata">Put in {party.name}&apos;s khata (trade-in)</option>}
+                  <option value="bank">{t("Bank transfer")}</option>
+                  {party && <option value="khata">{t("Put in {name}'s khata (trade-in)", { name: party.name })}</option>}
                 </Select>
               </Field>
               {method !== "cash" && method !== "khata" && (
@@ -334,12 +336,12 @@ export default function BuyUsedPhonePage() {
               <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
                 <input type="checkbox" checked={declared} onChange={(e) => setDeclared(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-brand-600" aria-label="Seller declaration" />
                 <span>
-                  <b>Seller&apos;s declaration:</b> this phone is my own property, it is not stolen, snatched or under any dispute or installment, and I sell it with my own will.
+                  <b>{t("Seller's declaration:")}</b> this phone is my own property, it is not stolen, snatched or under any dispute or installment, and I sell it with my own will.
                   <span className="urdu mt-1 block text-right">یہ فون میری ملکیت ہے، چوری یا چھینا ہوا نہیں ہے، اور میں اپنی مرضی سے فروخت کر رہا ہوں۔</span>
                 </span>
               </label>
               <div className="flex items-center gap-2 text-xs text-slate-500">
-                <ShieldCheck className="h-4 w-4 text-brand-600" /> The agreement prints for the seller to sign with a thumb impression.
+                <ShieldCheck className="h-4 w-4 text-brand-600" /> {t("The agreement prints for the seller to sign with a thumb impression.")}
               </div>
               <Button type="submit" size="lg" className="w-full" loading={saving} icon={<Save className="h-5 w-5" />}>
                 Save & print agreement
@@ -349,7 +351,7 @@ export default function BuyUsedPhonePage() {
           </Card>
         </div>
       </div>
-      <CameraScanner open={camera} onClose={() => setCamera(false)} onScan={(c) => setImei(cleanImei(c))} title="Scan the IMEI barcode (box or *#06#)" />
+      <CameraScanner open={camera} onClose={() => setCamera(false)} onScan={(c) => setImei(cleanImei(c))} title={t("Scan the IMEI barcode (box or *#06#)")} />
       <CustomerPicker
         open={pickParty}
         onClose={() => setPickParty(false)}

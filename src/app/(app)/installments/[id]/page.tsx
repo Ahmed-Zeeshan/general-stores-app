@@ -10,6 +10,7 @@ import { useShareLink } from "@/components/send-whatsapp";
 import { useToast } from "@/components/toast";
 import { api, formatDate, PAYMENT_LABELS } from "@/lib/client";
 import { formatPKR, round2 } from "@/lib/money";
+import { useT } from "@/lib/i18n";
 
 const TENDERS = ["cash", "jazzcash", "easypaisa", "card", "bank"];
 const STATE_BADGE = {
@@ -22,6 +23,7 @@ const STATE_BADGE = {
 export default function InstallmentPlanPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const toast = useToast();
+  const t = useT();
   const can = useCan();
   const { settings } = useSession();
   const [plan, setPlan] = useState<PlanRow | null>(null);
@@ -41,7 +43,7 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
   if (!plan) return <Spinner />;
   const shop = { shopName: settings?.shopName ?? "", phone: settings?.phone };
   const remind = async () => {
-    if (!sendInstallmentWhatsApp("reminder", plan, shop, undefined, link)) return toast.error("The customer's mobile number is not a valid WhatsApp number.");
+    if (!sendInstallmentWhatsApp("reminder", plan, shop, undefined, link)) return toast.error(t("The customer's mobile number is not a valid WhatsApp number."));
     await api(`/api/installments/${id}/remind`, { method: "POST" }).catch(() => {});
     load();
   };
@@ -51,7 +53,7 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
   return (
     <div>
       <Link href="/installments" className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800">
-        <ArrowLeft className="h-4 w-4" /> All installment plans
+        <ArrowLeft className="h-4 w-4" /> {t("All installment plans")}
       </Link>
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
@@ -60,12 +62,12 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
             <PlanStatus plan={plan} />
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            {plan.customerName} · bill{" "}
+            {plan.customerName} · {t("bill")}{" "}
             <Link href={`/sales?q=${plan.invoiceNo}`} className="font-semibold text-brand-700">
               {plan.invoiceNo}
             </Link>{" "}
             · {formatDate(plan.createdAt, true)}
-            {plan.userName && ` by ${plan.userName}`}
+            {plan.userName && ` ${t("by {name}", { name: plan.userName })}`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -88,8 +90,8 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
       {plan.status === "active" && plan.lateCount > 0 && (
         <div className="mb-6 flex flex-col gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-800 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <b>{formatPKR(plan.overdue)} late</b> — <Count n={plan.lateCount} one="{n} installment" many="{n} installments" />, oldest <Count n={plan.daysLate} one="{n} day ago" many="{n} days ago" />.
-            {plan.lastReminderAt && <span className="text-sm"> Last reminder {formatDate(plan.lastReminderAt)}.</span>}
+            <b>{t("{amount} late", { amount: formatPKR(plan.overdue) })}</b> — <Count n={plan.lateCount} one="{n} installment" many="{n} installments" />, {t("oldest")} <Count n={plan.daysLate} one="{n} day ago" many="{n} days ago" />.
+            {plan.lastReminderAt && <span className="text-sm"> {t("Last reminder {date}.", { date: formatDate(plan.lastReminderAt) })}</span>}
           </div>
           <Button size="sm" variant="outline" icon={<MessageCircle className="h-4 w-4 text-emerald-600" />} onClick={remind}>
             Send reminder
@@ -98,14 +100,14 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
       )}
       {plan.status === "cancelled" && (
         <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-          <b>Closed.</b> {plan.cancelReason}
-          {plan.writtenOff ? ` · ${formatPKR(plan.writtenOff)} not collected.` : ""}
+          <b>{t("Closed.")}</b> {plan.cancelReason}
+          {plan.writtenOff ? ` · ${t("{amount} not collected.", { amount: formatPKR(plan.writtenOff) })}` : ""}
         </div>
       )}
       {lastPaid && (
         <div className="mb-6 flex flex-col gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <b>{formatPKR(lastPaid.amount)}</b> received — receipt {lastPaid.receiptNo}.
+            <b>{formatPKR(lastPaid.amount)}</b> {t("received — receipt {no}.", { no: lastPaid.receiptNo })}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" icon={<Printer className="h-4 w-4" />} onClick={() => window.open(`/receipt/installment/${plan._id}?receipt=${lastPaid.receiptNo}&print=1`, "_blank")}>
@@ -116,7 +118,7 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
               variant="outline"
               icon={<MessageCircle className="h-4 w-4 text-emerald-600" />}
               onClick={() => {
-                if (!sendInstallmentWhatsApp("paid", plan, shop, lastPaid, link)) toast.error("The customer's mobile number is not a valid WhatsApp number.");
+                if (!sendInstallmentWhatsApp("paid", plan, shop, lastPaid, link)) toast.error(t("The customer's mobile number is not a valid WhatsApp number."));
               }}
             >
               WhatsApp confirmation
@@ -129,7 +131,7 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
         <Money label="Cash price" value={plan.cashPrice} />
         <Money label="Advance" value={plan.advance} />
         <Money label={`Markup${plan.markupType === "percent" ? ` (${plan.markupValue}%)` : ""}`} value={plan.markup} />
-        <Money label="In installments" value={plan.financed} hint={`${plan.months} months`} />
+        <Money label="In installments" value={plan.financed} hint={t("{n} months", { n: plan.months })} />
         <Money label="Received" value={plan.paid} tone="green" />
         <Money label="Left to pay" value={plan.status === "active" ? plan.balance : 0} tone={plan.status === "active" && plan.balance > 0 ? "amber" : undefined} />
       </div>
@@ -138,7 +140,7 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
         <div className="space-y-6">
           <Card>
             <div className="border-b border-slate-100 p-4">
-              <h2 className="font-bold text-slate-900">Monthly installments</h2>
+              <h2 className="font-bold text-slate-900">{t("Monthly installments")}</h2>
             </div>
             <Table>
               <thead>
@@ -168,11 +170,11 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
 
           <Card>
             <div className="border-b border-slate-100 p-4">
-              <h2 className="font-bold text-slate-900">Money received</h2>
-              <p className="text-xs text-slate-500">The advance ({formatPKR(plan.advance)}) is on the bill itself.</p>
+              <h2 className="font-bold text-slate-900">{t("Money received")}</h2>
+              <p className="text-xs text-slate-500">{t("The advance ({amount}) is on the bill itself.", { amount: formatPKR(plan.advance) })}</p>
             </div>
             {payments.length === 0 ? (
-              <p className="p-6 text-center text-sm text-slate-500">No installment received yet.</p>
+              <p className="p-6 text-center text-sm text-slate-500">{t("No installment received yet.")}</p>
             ) : (
               <Table>
                 <thead>
@@ -188,8 +190,8 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
                   {payments.map((p) => (
                     <tr key={p._id} className={cn(p.reversed && "text-slate-400 line-through")}>
                       <Td>
-                        <div className="font-semibold">{p.receiptNo ?? (p.kind === "refund" ? "Refund" : "Cancelled")}</div>
-                        {p.kind === "reversal" && <div className="text-xs text-rose-600 no-underline">Cancels a payment — {p.note}</div>}
+                        <div className="font-semibold">{p.receiptNo ?? (p.kind === "refund" ? t("Refund") : t("Cancelled"))}</div>
+                        {p.kind === "reversal" && <div className="text-xs text-rose-600 no-underline">{t("Cancels a payment — {note}", { note: p.note ?? "" })}</div>}
                         {p.kind === "refund" && <div className="text-xs text-slate-500">{p.note}</div>}
                       </Td>
                       <Td>
@@ -197,7 +199,7 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
                         {p.userName && <div className="text-xs text-slate-500">{p.userName}</div>}
                       </Td>
                       <Td>
-                        {PAYMENT_LABELS[p.method] ?? p.method}
+                        {t(PAYMENT_LABELS[p.method] ?? p.method)}
                         {p.ref && <div className="text-xs text-slate-500">{p.ref}</div>}
                       </Td>
                       <Td className={cn("text-right font-semibold", p.amount < 0 && "text-rose-600")}>{formatPKR(p.amount)}</Td>
@@ -221,12 +223,12 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
 
         <div className="space-y-6">
           <Card className="p-5">
-            <h2 className="mb-3 font-bold text-slate-900">Customer</h2>
+            <h2 className="mb-3 font-bold text-slate-900">{t("Customer")}</h2>
             <dl className="space-y-2 text-sm">
               <Info label="Name">
                 {plan.customerName}
                 <Link href={`/customers/${plan.customer}`} className="ml-2 text-xs font-semibold text-brand-700">
-                  profile
+                  {t("profile")}
                 </Link>
               </Info>
               <Info label="Mobile">{plan.customerPhone || "—"}</Info>
@@ -235,7 +237,7 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
             </dl>
             {plan.guarantor?.name && (
               <>
-                <h3 className="mb-2 mt-5 font-bold text-slate-900">Guarantor (zamin)</h3>
+                <h3 className="mb-2 mt-5 font-bold text-slate-900">{t("Guarantor (zamin)")}</h3>
                 <dl className="space-y-2 text-sm">
                   <Info label="Name">
                     {plan.guarantor.name}
@@ -248,14 +250,14 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
             )}
           </Card>
           <Card className="p-5">
-            <h2 className="mb-2 font-bold text-slate-900">Goods</h2>
+            <h2 className="mb-2 font-bold text-slate-900">{t("Goods")}</h2>
             <p className="text-sm text-slate-700">{plan.itemsText}</p>
             {plan.notes && <p className="mt-2 text-sm text-slate-500">{plan.notes}</p>}
           </Card>
           {can.manage && plan.status !== "cancelled" && (
             <Card className="p-5">
-              <h2 className="mb-1 font-bold text-slate-900">Close this plan</h2>
-              <p className="mb-3 text-sm text-slate-500">When the customer stops paying: take the goods back into stock and stop the installments.</p>
+              <h2 className="mb-1 font-bold text-slate-900">{t("Close this plan")}</h2>
+              <p className="mb-3 text-sm text-slate-500">{t("When the customer stops paying: take the goods back into stock and stop the installments.")}</p>
               <Button variant="outline" className="w-full hover:text-rose-600" icon={<Ban className="h-4 w-4" />} onClick={() => setClosing(true)}>
                 Close plan
               </Button>
@@ -272,7 +274,7 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
           setPaying(false);
           setPlan(r);
           setLastPaid({ amount: r.paidNow, receiptNo: r.receiptNo });
-          toast.success(r.status === "completed" ? `${r.receiptNo}: fully paid — plan completed` : `${r.receiptNo}: ${formatPKR(r.paidNow)} received`);
+          toast.success(r.status === "completed" ? t("{no}: fully paid — plan completed", { no: r.receiptNo }) : t("{no}: {amount} received", { no: r.receiptNo, amount: formatPKR(r.paidNow) }));
         }}
       />
       <ReverseModal
@@ -283,7 +285,7 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
           setReversing(null);
           setPlan(r);
           setLastPaid(null);
-          toast.success("Payment cancelled");
+          toast.success(t("Payment cancelled"));
         }}
       />
       <CloseModal
@@ -294,7 +296,7 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
           setClosing(false);
           setPlan(r);
           setLastPaid(null);
-          toast.success(`${r.planNo} closed`);
+          toast.success(t("{no} closed", { no: r.planNo }));
         }}
       />
     </div>
@@ -302,9 +304,10 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
 }
 
 function Money({ label, value, hint, tone }: { label: string; value: number; hint?: string; tone?: "green" | "amber" }) {
+  const t = useT();
   return (
     <div className={cn("rounded-2xl border p-3", tone === "green" ? "border-emerald-200 bg-emerald-50" : tone === "amber" ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white")}>
-      <div className="text-xs font-medium text-slate-500">{label}</div>
+      <div className="text-xs font-medium text-slate-500">{t(label)}</div>
       <div className="text-lg font-extrabold text-slate-900">{formatPKR(value)}</div>
       {hint && <div className="text-xs text-slate-500">{hint}</div>}
     </div>
@@ -312,9 +315,10 @@ function Money({ label, value, hint, tone }: { label: string; value: number; hin
 }
 
 function Info({ label, children }: { label: string; children: React.ReactNode }) {
+  const t = useT();
   return (
     <div className="flex gap-3">
-      <dt className="w-20 shrink-0 text-slate-500">{label}</dt>
+      <dt className="w-20 shrink-0 text-slate-500">{t(label)}</dt>
       <dd className="min-w-0 break-words font-medium text-slate-800">{children}</dd>
     </div>
   );
@@ -322,6 +326,7 @@ function Info({ label, children }: { label: string; children: React.ReactNode })
 
 function PayModal({ open, plan, onClose, onDone }: { open: boolean; plan: PlanRow; onClose: () => void; onDone: (r: PlanRow & { receiptNo: string; paidNow: number }) => void }) {
   const toast = useToast();
+  const t = useT();
   const suggested = plan.overdue > 0 ? plan.overdue : (plan.next?.amount ?? plan.balance);
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("cash");
@@ -351,7 +356,7 @@ function PayModal({ open, plan, onClose, onDone }: { open: boolean; plan: PlanRo
     <Modal
       open={open}
       onClose={onClose}
-      title={`Receive installment — ${plan.customerName}`}
+      title={t("Receive installment — {name}", { name: plan.customerName })}
       size="sm"
       footer={
         <>
@@ -359,7 +364,7 @@ function PayModal({ open, plan, onClose, onDone }: { open: boolean; plan: PlanRo
             Cancel
           </Button>
           <Button loading={saving} disabled={n <= 0 || n > plan.balance + 0.004} icon={<HandCoins className="h-4 w-4" />} onClick={save}>
-            Save {n > 0 ? formatPKR(n) : ""}
+            {n > 0 ? t("Save {amount}", { amount: formatPKR(n) }) : `${t("Save")} `}
           </Button>
         </>
       }
@@ -367,18 +372,18 @@ function PayModal({ open, plan, onClose, onDone }: { open: boolean; plan: PlanRo
       <div className="mb-4 space-y-1 rounded-2xl bg-slate-50 p-4 text-sm">
         {plan.overdue > 0 && (
           <div className="flex justify-between text-rose-700">
-            <span>Late</span>
+            <span>{t("Late")}</span>
             <b>{formatPKR(plan.overdue)}</b>
           </div>
         )}
         {plan.next && (
           <div className="flex justify-between">
-            <span className="text-slate-500">Next ({formatDate(plan.next.dueDate)})</span>
+            <span className="text-slate-500">{t("Next ({date})", { date: formatDate(plan.next.dueDate) })}</span>
             <b>{formatPKR(plan.next.amount)}</b>
           </div>
         )}
         <div className="flex justify-between border-t border-dashed border-slate-200 pt-1">
-          <span className="text-slate-500">Left on the plan</span>
+          <span className="text-slate-500">{t("Left on the plan")}</span>
           <b>{formatPKR(plan.balance)}</b>
         </div>
       </div>
@@ -388,7 +393,7 @@ function PayModal({ open, plan, onClose, onDone }: { open: boolean; plan: PlanRo
       <div className="mt-2 flex flex-wrap gap-2">
         {Array.from(new Set([suggested, plan.balance].filter((x) => x > 0))).map((x) => (
           <button key={x} type="button" onClick={() => setAmount(String(x))} className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-200">
-            {x === plan.balance ? `All ${formatPKR(x)}` : formatPKR(x)}
+            {x === plan.balance ? t("All {amount}", { amount: formatPKR(x) }) : formatPKR(x)}
           </button>
         ))}
       </div>
@@ -397,7 +402,7 @@ function PayModal({ open, plan, onClose, onDone }: { open: boolean; plan: PlanRo
           <Select value={method} onChange={(e) => setMethod(e.target.value)} aria-label="Paid by">
             {TENDERS.map((m) => (
               <option key={m} value={m}>
-                {PAYMENT_LABELS[m] ?? m}
+                {t(PAYMENT_LABELS[m] ?? m)}
               </option>
             ))}
           </Select>
@@ -414,6 +419,7 @@ function PayModal({ open, plan, onClose, onDone }: { open: boolean; plan: PlanRo
 
 function ReverseModal({ payment, planId, onClose, onDone }: { payment: NonNullable<PlanRow["payments"]>[number] | null; planId: string; onClose: () => void; onDone: (r: PlanRow) => void }) {
   const toast = useToast();
+  const t = useT();
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   useEffect(() => setReason(""), [payment]);
@@ -432,7 +438,7 @@ function ReverseModal({ payment, planId, onClose, onDone }: { payment: NonNullab
     <Modal
       open={!!payment}
       onClose={onClose}
-      title={`Cancel payment ${payment?.receiptNo ?? ""}`}
+      title={t("Cancel payment {no}", { no: payment?.receiptNo ?? "" })}
       size="sm"
       footer={
         <>
@@ -447,7 +453,7 @@ function ReverseModal({ payment, planId, onClose, onDone }: { payment: NonNullab
     >
       {payment && (
         <p className="mb-3 text-sm text-slate-600">
-          {formatPKR(payment.amount)} received on {formatDate(payment.at, true)} will be removed and the months will show as unpaid again. Use this for a payment entered by mistake.
+          {t("{amount} received on {date} will be removed and the months will show as unpaid again. Use this for a payment entered by mistake.", { amount: formatPKR(payment.amount), date: formatDate(payment.at, true) })}
         </p>
       )}
       <Field label="Reason">
@@ -459,6 +465,7 @@ function ReverseModal({ payment, planId, onClose, onDone }: { payment: NonNullab
 
 function CloseModal({ open, plan, onClose, onDone }: { open: boolean; plan: PlanRow; onClose: () => void; onDone: (r: PlanRow) => void }) {
   const toast = useToast();
+  const t = useT();
   const [reason, setReason] = useState("");
   const [takeBack, setTakeBack] = useState(true);
   const [refund, setRefund] = useState("");
@@ -487,7 +494,7 @@ function CloseModal({ open, plan, onClose, onDone }: { open: boolean; plan: Plan
     <Modal
       open={open}
       onClose={onClose}
-      title={`Close ${plan.planNo}`}
+      title={t("Close {no}", { no: plan.planNo })}
       size="md"
       footer={
         <>
@@ -501,21 +508,21 @@ function CloseModal({ open, plan, onClose, onDone }: { open: boolean; plan: Plan
       }
     >
       <p className="mb-4 text-sm text-slate-600">
-        The customer has paid {formatPKR(totalIn)} so far (advance + installments).
-        {plan.status === "active" && ` ${formatPKR(plan.balance)} is still unpaid and will not be collected.`}
+        {t("The customer has paid {amount} so far (advance + installments).", { amount: formatPKR(totalIn) })}
+        {plan.status === "active" && ` ${t("{amount} is still unpaid and will not be collected.", { amount: formatPKR(plan.balance) })}`}
       </p>
       <Field label="Reason">
-        <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder="Customer stopped paying, phone returned…" aria-label="Reason" />
+        <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder={t("Customer stopped paying, phone returned…")} aria-label="Reason" />
       </Field>
       <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3 text-sm">
         <input type="checkbox" checked={takeBack} onChange={(e) => setTakeBack(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-600" aria-label="Take the goods back" />
         <span>
-          <b>Take the goods back into stock</b>
+          <b>{t("Take the goods back into stock")}</b>
           <span className="block text-slate-500">{plan.itemsText}</span>
         </span>
       </label>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <Field label="Give money back (optional)" error={r > totalIn ? `Not more than ${formatPKR(totalIn)}` : undefined}>
+        <Field label="Give money back (optional)" error={r > totalIn ? t("Not more than {amount}", { amount: formatPKR(totalIn) }) : undefined}>
           <Input type="number" min="0" value={refund} onChange={(e) => setRefund(e.target.value)} placeholder="0" aria-label="Refund" />
         </Field>
         {r > 0 && (
@@ -523,7 +530,7 @@ function CloseModal({ open, plan, onClose, onDone }: { open: boolean; plan: Plan
             <Select value={method} onChange={(e) => setMethod(e.target.value)} aria-label="Refund method">
               {TENDERS.map((m) => (
                 <option key={m} value={m}>
-                  {PAYMENT_LABELS[m] ?? m}
+                  {t(PAYMENT_LABELS[m] ?? m)}
                 </option>
               ))}
             </Select>

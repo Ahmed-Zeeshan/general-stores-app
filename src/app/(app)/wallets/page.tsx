@@ -10,6 +10,7 @@ import { useToast } from "@/components/toast";
 import { api, formatDate, todayISO } from "@/lib/client";
 import { formatPKR, round2 } from "@/lib/money";
 import { OPERATORS, OPERATOR_LABELS, PACKAGE_KIND_LABELS, PROVIDER_LABELS, WALLET_KINDS, WALLET_PROVIDERS, WALLET_TXN_LABELS, type WalletTxnType } from "@/lib/constants";
+import { useT } from "@/lib/i18n";
 
 type WalletRow = { _id: string; name: string; kind: "load" | "wallet" | "bank"; provider: string; number?: string; balance: number; lowAlert: number; commissionPct: number; feePct: number; active: boolean };
 type PackageRow = { _id: string; operator: string; name: string; kind: string; data?: string; minutes?: string; sms?: string; validityDays?: number; price: number; commission?: number; code?: string; active: boolean };
@@ -42,6 +43,7 @@ const QUICK = [100, 200, 500, 1000];
 
 export default function WalletsPage() {
   const toast = useToast();
+  const t = useT();
   const can = useCan();
   const [wallets, setWallets] = useState<WalletRow[] | null>(null);
   const [packages, setPackages] = useState<PackageRow[]>([]);
@@ -104,7 +106,7 @@ export default function WalletsPage() {
         <div className="mb-4 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            Low balance: {low.map((w) => `${w.name} (${formatPKR(w.balance)})`).join(", ")}. Top up soon.
+            {t("Low balance: {list}. Top up soon.", { list: low.map((w) => `${w.name} (${formatPKR(w.balance)})`).join(", ") })}
           </span>
         </div>
       )}
@@ -129,7 +131,7 @@ export default function WalletsPage() {
                   <div className="min-w-0">
                     <div className="truncate font-semibold text-slate-800">{w.name}</div>
                     <div className="text-xs text-slate-500">
-                      {PROVIDER_LABELS[w.provider] ?? w.provider}
+                      {t(PROVIDER_LABELS[w.provider] ?? w.provider)}
                       {w.number && ` · ${w.number}`}
                     </div>
                   </div>
@@ -165,7 +167,7 @@ export default function WalletsPage() {
           <DateRange from={range.from} to={range.to} onChange={setRange} />
           <div className="relative lg:w-64">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Number, name, TID, entry no." className="pl-9" aria-label="Search entries" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Number, name, TID, entry no.")} className="pl-9" aria-label="Search entries" />
           </div>
         </div>
         {!day ? (
@@ -187,33 +189,33 @@ export default function WalletsPage() {
               </tr>
             </thead>
             <tbody>
-              {day.rows.map((t) => (
-                <tr key={t._id} className={cn(t.reversed && "opacity-60")}>
+              {day.rows.map((x) => (
+                <tr key={x._id} className={cn(x.reversed && "opacity-60")}>
                   <Td>
-                    <div className={cn("font-semibold text-slate-800", t.reversed && "line-through")}>{t.txnNo}</div>
+                    <div className={cn("font-semibold text-slate-800", x.reversed && "line-through")}>{x.txnNo}</div>
                     <div className="text-xs text-slate-500">
-                      {formatDate(t.createdAt, true)}
-                      {t.userName && ` · ${t.userName}`}
+                      {formatDate(x.createdAt, true)}
+                      {x.userName && ` · ${x.userName}`}
                     </div>
                   </Td>
                   <Td>
-                    <div>{WALLET_TXN_LABELS[t.type]}{t.packageName && `: ${t.packageName}`}</div>
-                    <div className="text-xs text-slate-500">{t.walletName}</div>
-                    {t.reversed && <Badge color="red">Cancelled</Badge>}
+                    <div>{t(WALLET_TXN_LABELS[x.type])}{x.packageName && `: ${x.packageName}`}</div>
+                    <div className="text-xs text-slate-500">{x.walletName}</div>
+                    {x.reversed && <Badge color="red">Cancelled</Badge>}
                   </Td>
                   <Td>
-                    <div>{t.customerNumber ?? t.customerName ?? "—"}</div>
-                    {(t.ref || t.note) && <div className="max-w-[220px] truncate text-xs text-slate-500">{[t.ref, t.note].filter(Boolean).join(" · ")}</div>}
+                    <div>{x.customerNumber ?? x.customerName ?? "—"}</div>
+                    {(x.ref || x.note) && <div className="max-w-[220px] truncate text-xs text-slate-500">{[x.ref, x.note].filter(Boolean).join(" · ")}</div>}
                   </Td>
-                  <Td className="text-right font-semibold">{formatPKR(t.amount)}</Td>
-                  <Td className="text-right text-emerald-700">{t.fee + t.commission ? formatPKR(round2(t.fee + t.commission)) : "—"}</Td>
-                  <Td className={cn("text-right", t.cashEffect < 0 && "text-rose-600")}>{t.cashEffect ? formatPKR(t.cashEffect) : "—"}</Td>
-                  <Td className="text-right text-slate-500">{formatPKR(t.balanceAfter)}</Td>
+                  <Td className="text-right font-semibold">{formatPKR(x.amount)}</Td>
+                  <Td className="text-right text-emerald-700">{x.fee + x.commission ? formatPKR(round2(x.fee + x.commission)) : "—"}</Td>
+                  <Td className={cn("text-right", x.cashEffect < 0 && "text-rose-600")}>{x.cashEffect ? formatPKR(x.cashEffect) : "—"}</Td>
+                  <Td className="text-right text-slate-500">{formatPKR(x.balanceAfter)}</Td>
                   <Td className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button size="sm" variant="ghost" icon={<Printer className="h-4 w-4" />} onClick={() => window.open(`/receipt/wallet/${t._id}?print=1`, "_blank")} aria-label={`Print ${t.txnNo}`} />
-                      {can.manage && !t.reversed && t.type !== "reversal" && (
-                        <Button size="sm" variant="ghost" className="hover:text-rose-600" icon={<Ban className="h-4 w-4" />} onClick={() => setCancelling(t)} aria-label={`Cancel ${t.txnNo}`} />
+                      <Button size="sm" variant="ghost" icon={<Printer className="h-4 w-4" />} onClick={() => window.open(`/receipt/wallet/${x._id}?print=1`, "_blank")} aria-label={`Print ${x.txnNo}`} />
+                      {can.manage && !x.reversed && x.type !== "reversal" && (
+                        <Button size="sm" variant="ghost" className="hover:text-rose-600" icon={<Ban className="h-4 w-4" />} onClick={() => setCancelling(x)} aria-label={`Cancel ${x.txnNo}`} />
                       )}
                     </div>
                   </Td>
@@ -235,6 +237,7 @@ export default function WalletsPage() {
 /** The counter form: Easyload, package, cash in / out, bill. */
 function EntryPanel({ wallets, packages, canManage, onSaved, onCommission }: { wallets: WalletRow[]; packages: PackageRow[]; canManage: boolean; onSaved: () => void; onCommission: (w: WalletRow) => void }) {
   const toast = useToast();
+  const t = useT();
   const [type, setType] = useState<EntryType>("load");
   const forType = useMemo(() => wallets.filter((w) => (type === "load" || type === "package" ? w.kind === "load" : w.kind !== "load")), [wallets, type]);
   const [walletId, setWalletId] = useState("");
@@ -261,15 +264,15 @@ function EntryPanel({ wallets, packages, canManage, onSaved, onCommission }: { w
   const commission = type === "load" && w ? round2((amt * w.commissionPct) / 100) : type === "package" && pkg ? pkg.commission ?? round2((pkg.price * (w?.commissionPct ?? 0)) / 100) : 0;
   const feeN = Number(fee) || 0;
   const cashLine =
-    type === "cash_out" ? `Give the customer ${formatPKR(Math.max(0, amt - feeN))}` : `Take from the customer ${formatPKR(amt + (type === "load" || type === "package" ? 0 : feeN))}`;
+    type === "cash_out" ? t("Give the customer {amount}", { amount: formatPKR(Math.max(0, amt - feeN)) }) : t("Take from the customer {amount}", { amount: formatPKR(amt + (type === "load" || type === "package" ? 0 : feeN)) });
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (!w) return toast.error("Choose the SIM / account.");
-    if (type === "package" && !pkg) return toast.error("Choose the package.");
+    if (!w) return toast.error(t("Choose the SIM / account."));
+    if (type === "package" && !pkg) return toast.error(t("Choose the package."));
     setSaving(true);
     try {
-      const t = await api<Txn>("/api/wallet-txns", {
+      const r = await api<Txn>("/api/wallet-txns", {
         body: {
           walletId,
           type,
@@ -281,8 +284,8 @@ function EntryPanel({ wallets, packages, canManage, onSaved, onCommission }: { w
           ref: ref || undefined,
         },
       });
-      toast.success(`${t.txnNo}: ${WALLET_TXN_LABELS[t.type]} ${formatPKR(t.amount)} saved`);
-      setLast(t);
+      toast.success(t("{no}: {type} {amount} saved", { no: r.txnNo, type: t(WALLET_TXN_LABELS[r.type]), amount: formatPKR(r.amount) }));
+      setLast(r);
       setAmount("");
       setFee("");
       setNumber("");
@@ -312,7 +315,7 @@ function EntryPanel({ wallets, packages, canManage, onSaved, onCommission }: { w
       />
       {forType.length === 0 ? (
         <p className="mt-4 text-sm text-slate-500">
-          {type === "load" || type === "package" ? "Add an Easyload SIM first (Add SIM / account → Easyload SIM)." : "Add a JazzCash / Easypaisa or bank account first."}
+          {type === "load" || type === "package" ? t("Add an Easyload SIM first (Add SIM / account → Easyload SIM).") : t("Add a JazzCash / Easypaisa or bank account first.")}
         </p>
       ) : (
         <form onSubmit={save} className="mt-4 grid gap-4 lg:grid-cols-[1fr_300px]">
@@ -327,14 +330,14 @@ function EntryPanel({ wallets, packages, canManage, onSaved, onCommission }: { w
               </Select>
             </Field>
             <Field label={type === "bill" ? "Consumer / reference no." : "Customer mobile number"}>
-              <Input inputMode={type === "bill" ? "text" : "tel"} required={type === "load" || type === "package"} value={number} onChange={(e) => setNumber(e.target.value)} placeholder={type === "bill" ? "e.g. 0412345678901" : "03xx xxxxxxx"} aria-label="Customer number" />
+              <Input inputMode={type === "bill" ? "text" : "tel"} required={type === "load" || type === "package"} value={number} onChange={(e) => setNumber(e.target.value)} placeholder={type === "bill" ? t("e.g. {n}", { n: "0412345678901" }) : "03xx xxxxxxx"} aria-label="Customer number" />
             </Field>
             {type === "package" ? (
               <div className="sm:col-span-2">
-                <div className="mb-1.5 text-sm font-medium text-slate-700">Package</div>
+                <div className="mb-1.5 text-sm font-medium text-slate-700">{t("Package")}</div>
                 {operatorPkgs.length === 0 ? (
                   <p className="text-sm text-slate-500">
-                    No {w ? OPERATOR_LABELS[w.provider] ?? "" : ""} packages yet. <Link href="/wallets/packages" className="font-semibold text-brand-700">Add packages</Link>
+                    {t("No {operator} packages yet.", { operator: w ? OPERATOR_LABELS[w.provider] ?? "" : "" })} <Link href="/wallets/packages" className="font-semibold text-brand-700">{t("Add packages")}</Link>
                   </p>
                 ) : (
                   <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -350,7 +353,7 @@ function EntryPanel({ wallets, packages, canManage, onSaved, onCommission }: { w
                           <span className="whitespace-nowrap font-bold text-brand-700">{formatPKR(p.price)}</span>
                         </div>
                         <div className="mt-1 text-xs text-slate-500">
-                          {[p.data, p.minutes, p.sms, p.validityDays ? `${p.validityDays} ${p.validityDays === 1 ? "day" : "days"}` : null].filter(Boolean).join(" · ") || PACKAGE_KIND_LABELS[p.kind]}
+                          {[p.data, p.minutes, p.sms, p.validityDays ? t(p.validityDays === 1 ? "{n} day" : "{n} days", { n: p.validityDays }) : null].filter(Boolean).join(" · ") || t(PACKAGE_KIND_LABELS[p.kind])}
                         </div>
                         {p.code && <div className="mt-0.5 text-[11px] text-slate-400">{p.code}</div>}
                       </button>
@@ -372,7 +375,7 @@ function EntryPanel({ wallets, packages, canManage, onSaved, onCommission }: { w
                     ))}
                   </div>
                 ) : (
-                  <Field label={type === "cash_out" ? "Fee kept (Rs)" : "Fee charged (Rs)"} hint={w?.feePct ? `Usual: ${w.feePct}%` : undefined}>
+                  <Field label={type === "cash_out" ? "Fee kept (Rs)" : "Fee charged (Rs)"} hint={w?.feePct ? t("Usual: {n}%", { n: w.feePct }) : undefined}>
                     <Input type="number" min="0" value={fee} onChange={(e) => setFee(e.target.value)} aria-label="Fee" />
                   </Field>
                 )}
@@ -388,8 +391,8 @@ function EntryPanel({ wallets, packages, canManage, onSaved, onCommission }: { w
                 </Field>
                 <Field label={type === "cash_out" ? "Customer gets" : "Customer pays"}>
                   <Select value={method} onChange={(e) => setMethod(e.target.value)} aria-label="Customer pays by">
-                    <option value="cash">Cash (drawer)</option>
-                    <option value="bank">Bank / other account</option>
+                    <option value="cash">{t("Cash (drawer)")}</option>
+                    <option value="bank">{t("Bank / other account")}</option>
                   </Select>
                 </Field>
               </>
@@ -398,35 +401,35 @@ function EntryPanel({ wallets, packages, canManage, onSaved, onCommission }: { w
           <div className="flex flex-col justify-between gap-3 rounded-2xl bg-slate-50 p-4">
             <div className="space-y-1.5 text-sm">
               <div className="flex justify-between">
-                <span className="text-slate-500">{type === "cash_out" ? "Into account" : "From account"}</span>
+                <span className="text-slate-500">{type === "cash_out" ? t("Into account") : t("From account")}</span>
                 <b>{formatPKR(amt)}</b>
               </div>
               {(type === "load" || type === "package") && (
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Commission</span>
+                  <span className="text-slate-500">{t("Commission")}</span>
                   <b className="text-emerald-700">{formatPKR(commission)}</b>
                 </div>
               )}
               {feeN > 0 && type !== "load" && type !== "package" && (
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Fee (profit)</span>
+                  <span className="text-slate-500">{t("Fee (profit)")}</span>
                   <b className="text-emerald-700">{formatPKR(feeN)}</b>
                 </div>
               )}
               {method === "cash" && amt > 0 && <div className="rounded-xl bg-white p-2 text-center text-base font-bold text-slate-900">{cashLine}</div>}
-              {w && <div className="text-xs text-slate-500">{w.name} balance after: {formatPKR(round2(w.balance + (type === "cash_out" ? amt : -amt)))}</div>}
+              {w && <div className="text-xs text-slate-500">{t("{name} balance after: {amount}", { name: w.name, amount: formatPKR(round2(w.balance + (type === "cash_out" ? amt : -amt))) })}</div>}
             </div>
             <Button type="submit" size="lg" loading={saving} disabled={!w || (type === "package" ? !pkg : !(amt > 0))}>
-              Save {WALLET_TXN_LABELS[type]}
+              {t("Save {type}", { type: t(WALLET_TXN_LABELS[type]) })}
             </Button>
             {last && (
               <button type="button" onClick={() => window.open(`/receipt/wallet/${last._id}?print=1`, "_blank")} className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-brand-700">
-                <Printer className="h-3.5 w-3.5" /> Print slip for {last.txnNo}
+                <Printer className="h-3.5 w-3.5" /> {t("Print slip for {no}", { no: last.txnNo })}
               </button>
             )}
             {canManage && w && (
               <button type="button" onClick={() => onCommission(w)} className="text-xs text-slate-500 hover:text-slate-700">
-                Commission credited by {PROVIDER_LABELS[w.provider] ?? "the company"}? Record it
+                {t("Commission credited by {company}? Record it", { company: PROVIDER_LABELS[w.provider] ?? t("the company") })}
               </button>
             )}
           </div>
@@ -438,6 +441,7 @@ function EntryPanel({ wallets, packages, canManage, onSaved, onCommission }: { w
 
 function WalletForm({ wallet, onClose, onSaved }: { wallet: WalletRow | "new" | null; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
+  const t = useT();
   const isNew = wallet === "new";
   const [f, setF] = useState({ name: "", kind: "load", provider: "jazz", number: "", lowAlert: "", commissionPct: "", feePct: "", openingBalance: "", active: true });
   const [saving, setSaving] = useState(false);
@@ -453,7 +457,7 @@ function WalletForm({ wallet, onClose, onSaved }: { wallet: WalletRow | "new" | 
       const body = { name: f.name, number: f.number, lowAlert: Number(f.lowAlert) || 0, commissionPct: Number(f.commissionPct) || 0, feePct: Number(f.feePct) || 0 };
       if (isNew) await api("/api/wallets", { body: { ...body, kind: f.kind, provider: f.provider, openingBalance: Number(f.openingBalance) || 0 } });
       else await api(`/api/wallets/${(wallet as WalletRow)._id}`, { method: "PATCH", body: { ...body, active: f.active } });
-      toast.success(isNew ? "Account added" : "Saved");
+      toast.success(isNew ? t("Account added") : t("Saved"));
       onSaved();
     } catch (err) {
       toast.error((err as Error).message);
@@ -462,28 +466,28 @@ function WalletForm({ wallet, onClose, onSaved }: { wallet: WalletRow | "new" | 
     }
   }
   return (
-    <Modal open={!!wallet} onClose={onClose} title={isNew ? "Add SIM / account" : `Edit ${(wallet as WalletRow | null)?.name ?? ""}`} size="md">
+    <Modal open={!!wallet} onClose={onClose} title={isNew ? "Add SIM / account" : t("Edit {name}", { name: (wallet as WalletRow | null)?.name ?? "" })} size="md">
       <form onSubmit={save} className="grid gap-4 sm:grid-cols-2">
         {isNew && (
           <>
             <Field label="Type">
               <Select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value, provider: e.target.value === "load" ? "jazz" : e.target.value === "bank" ? "bank" : "jazzcash" })} aria-label="Account type">
                 {WALLET_KINDS.map((k) => (
-                  <option key={k} value={k}>{k === "load" ? "Easyload / packages SIM" : k === "wallet" ? "Mobile wallet (JazzCash, Easypaisa…)" : "Bank account"}</option>
+                  <option key={k} value={k}>{k === "load" ? t("Easyload / packages SIM") : k === "wallet" ? t("Mobile wallet (JazzCash, Easypaisa…)") : t("Bank account")}</option>
                 ))}
               </Select>
             </Field>
             <Field label="Company">
               <Select value={f.provider} onChange={(e) => setF({ ...f, provider: e.target.value })} aria-label="Company">
                 {(f.kind === "load" ? OPERATORS : f.kind === "bank" ? (["bank"] as const) : WALLET_PROVIDERS.filter((p) => !(OPERATORS as readonly string[]).includes(p) && p !== "bank")).map((p) => (
-                  <option key={p} value={p}>{PROVIDER_LABELS[p]}</option>
+                  <option key={p} value={p}>{t(PROVIDER_LABELS[p])}</option>
                 ))}
               </Select>
             </Field>
           </>
         )}
         <Field label="Name">
-          <Input required minLength={2} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="e.g. Jazz Easyload SIM" aria-label="Account name" />
+          <Input required minLength={2} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder={t("e.g. Jazz Easyload SIM")} aria-label="Account name" />
         </Field>
         <Field label="SIM / account number">
           <Input value={f.number} onChange={(e) => setF({ ...f, number: e.target.value })} aria-label="Account number" />
@@ -507,7 +511,7 @@ function WalletForm({ wallet, onClose, onSaved }: { wallet: WalletRow | "new" | 
         )}
         {!isNew && (
           <label className="flex items-center gap-2 text-sm sm:col-span-2">
-            <input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} className="h-4 w-4 accent-brand-600" /> In use
+            <input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} className="h-4 w-4 accent-brand-600" /> {t("In use")}
           </label>
         )}
         <div className="flex justify-end gap-2 sm:col-span-2">
@@ -521,6 +525,7 @@ function WalletForm({ wallet, onClose, onSaved }: { wallet: WalletRow | "new" | 
 
 function FloatModal({ target, onClose, onSaved }: { target: { w: WalletRow; kind: "float_in" | "float_out" | "commission" } | null; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
+  const t = useT();
   const [amount, setAmount] = useState("");
   const [paid, setPaid] = useState("");
   const [method, setMethod] = useState("cash");
@@ -539,7 +544,7 @@ function FloatModal({ target, onClose, onSaved }: { target: { w: WalletRow; kind
     setSaving(true);
     try {
       await api("/api/wallet-txns", { body: { walletId: w._id, type: kind, amount: Number(amount), ...(kind === "float_in" && paid !== "" ? { paid: Number(paid) } : {}), method: kind === "commission" ? "other" : method, note: note || undefined } });
-      toast.success(kind === "float_in" ? "Topped up" : kind === "float_out" ? "Withdrawn" : "Commission recorded");
+      toast.success(kind === "float_in" ? t("Topped up") : kind === "float_out" ? t("Withdrawn") : t("Commission recorded"));
       onSaved();
     } catch (err) {
       toast.error((err as Error).message);
@@ -547,24 +552,24 @@ function FloatModal({ target, onClose, onSaved }: { target: { w: WalletRow; kind
       setSaving(false);
     }
   }
-  const title = kind === "float_in" ? `Top up ${w.name}` : kind === "float_out" ? `Withdraw from ${w.name}` : `Commission credited to ${w.name}`;
+  const title = t(kind === "float_in" ? "Top up {name}" : kind === "float_out" ? "Withdraw from {name}" : "Commission credited to {name}", { name: w.name });
   return (
     <Modal open onClose={onClose} title={title} size="sm">
       <form onSubmit={save} className="space-y-4">
-        <Field label={kind === "float_in" ? "Balance received (Rs)" : "Amount (Rs)"} hint={`Now: ${formatPKR(w.balance)}`}>
+        <Field label={kind === "float_in" ? "Balance received (Rs)" : "Amount (Rs)"} hint={t("Now: {amount}", { amount: formatPKR(w.balance) })}>
           <Input autoFocus required type="number" min="1" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Amount" />
         </Field>
         {kind === "float_in" && (
           <Field label="You paid (Rs)" hint="Less than received if the company gives a bonus — the difference is your commission">
-            <Input type="number" min="0" value={paid} placeholder={amount || "same"} onChange={(e) => setPaid(e.target.value)} aria-label="Paid" />
+            <Input type="number" min="0" value={paid} placeholder={amount || t("same")} onChange={(e) => setPaid(e.target.value)} aria-label="Paid" />
           </Field>
         )}
         {kind !== "commission" && (
           <Field label={kind === "float_in" ? "Paid from" : "Money goes to"}>
             <Select value={method} onChange={(e) => setMethod(e.target.value)} aria-label="Paid from">
-              <option value="cash">Cash drawer</option>
-              <option value="bank">Bank</option>
-              <option value="other">Other</option>
+              <option value="cash">{t("Cash drawer")}</option>
+              <option value="bank">{t("Bank")}</option>
+              <option value="other">{t("Other")}</option>
             </Select>
           </Field>
         )}
@@ -579,6 +584,7 @@ function FloatModal({ target, onClose, onSaved }: { target: { w: WalletRow; kind
 
 function CheckModal({ wallet, onClose, onSaved }: { wallet: WalletRow | null; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
+  const t = useT();
   const [actual, setActual] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -593,7 +599,7 @@ function CheckModal({ wallet, onClose, onSaved }: { wallet: WalletRow | null; on
     setSaving(true);
     try {
       const r = await api<{ difference: number }>(`/api/wallets/${wallet!._id}/reconcile`, { body: { actual: Number(actual), note: note || undefined } });
-      toast.success(r.difference ? `Balance corrected by ${formatPKR(r.difference)}` : "Balance matches");
+      toast.success(r.difference ? t("Balance corrected by {amount}", { amount: formatPKR(r.difference) }) : t("Balance matches"));
       onSaved();
     } catch (err) {
       toast.error((err as Error).message);
@@ -602,15 +608,15 @@ function CheckModal({ wallet, onClose, onSaved }: { wallet: WalletRow | null; on
     }
   }
   return (
-    <Modal open onClose={onClose} title={`Balance check — ${wallet.name}`} size="sm">
+    <Modal open onClose={onClose} title={t("Balance check — {name}", { name: wallet.name })} size="sm">
       <form onSubmit={save} className="space-y-4">
         <p className="text-sm text-slate-600">
-          Records say <b>{formatPKR(wallet.balance)}</b>. Check the balance on the SIM / app and type it here.
+          {t("Records say")} <b>{formatPKR(wallet.balance)}</b>{t(". Check the balance on the SIM / app and type it here.")}
         </p>
         <Field label="Balance on the SIM / app (Rs)">
           <Input autoFocus required type="number" min="0" step="any" value={actual} onChange={(e) => setActual(e.target.value)} aria-label="Actual balance" />
         </Field>
-        {actual !== "" && <p className={cn("text-sm font-semibold", diff === 0 ? "text-emerald-700" : "text-amber-700")}>{diff === 0 ? "Matches ✓" : `Difference ${formatPKR(diff)} will be recorded as a correction`}</p>}
+        {actual !== "" && <p className={cn("text-sm font-semibold", diff === 0 ? "text-emerald-700" : "text-amber-700")}>{diff === 0 ? t("Matches ✓") : t("Difference {amount} will be recorded as a correction", { amount: formatPKR(diff) })}</p>}
         <Field label="Note (optional)">
           <Textarea value={note} onChange={(e) => setNote(e.target.value)} aria-label="Note" />
         </Field>
@@ -622,6 +628,7 @@ function CheckModal({ wallet, onClose, onSaved }: { wallet: WalletRow | null; on
 
 function CancelModal({ txn, onClose, onSaved }: { txn: Txn | null; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
+  const t = useT();
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   useEffect(() => setReason(""), [txn]);
@@ -631,7 +638,7 @@ function CancelModal({ txn, onClose, onSaved }: { txn: Txn | null; onClose: () =
     setSaving(true);
     try {
       await api(`/api/wallet-txns/${txn!._id}/reverse`, { body: { reason } });
-      toast.success(`${txn!.txnNo} cancelled`);
+      toast.success(t("{no} cancelled", { no: txn!.txnNo }));
       onSaved();
     } catch (err) {
       toast.error((err as Error).message);
@@ -640,10 +647,10 @@ function CancelModal({ txn, onClose, onSaved }: { txn: Txn | null; onClose: () =
     }
   }
   return (
-    <Modal open onClose={onClose} title={`Cancel ${txn.txnNo}?`} size="sm">
+    <Modal open onClose={onClose} title={t("Cancel {no}?", { no: txn.txnNo })} size="sm">
       <form onSubmit={save} className="space-y-4">
         <p className="text-sm text-slate-600">
-          {WALLET_TXN_LABELS[txn.type]} of {formatPKR(txn.amount)}. The account balance{txn.cashEffect ? " and the drawer cash" : ""} go back as they were. Use this only when the entry was wrong or the money was returned.
+          {t(txn.cashEffect ? "{type} of {amount}. The account balance and the drawer cash go back as they were. Use this only when the entry was wrong or the money was returned." : "{type} of {amount}. The account balance go back as they were. Use this only when the entry was wrong or the money was returned.", { type: t(WALLET_TXN_LABELS[txn.type]), amount: formatPKR(txn.amount) })}
         </p>
         <Field label="Why?">
           <Textarea required minLength={3} value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Reason" />

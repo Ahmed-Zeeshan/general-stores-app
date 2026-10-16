@@ -8,6 +8,7 @@ import { useToast } from "./toast";
 import { api, todayISO } from "@/lib/client";
 import { REPAIR_ACCESSORIES, REPAIR_STATUS_LABELS, type RepairStatus } from "@/lib/constants";
 import { openWhatsApp, repairMessage, waNumber } from "@/lib/whatsapp";
+import { useT } from "@/lib/i18n";
 
 export type RepairJob = {
   _id: string;
@@ -100,6 +101,7 @@ type Tech = { _id: string; name: string };
 /** Book a phone in: customer, phone, problem, estimate, advance. */
 export function NewRepairModal({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: (job: RepairJob) => void }) {
   const toast = useToast();
+  const t = useT();
   const [techs, setTechs] = useState<Tech[]>([]);
   const [party, setParty] = useState<PartyLite | null>(null);
   const [pick, setPick] = useState(false);
@@ -152,7 +154,7 @@ export function NewRepairModal({ open, onClose, onSaved }: { open: boolean; onCl
           imei: f.imei || undefined,
         },
       });
-      toast.success(`${job.jobNo} booked`);
+      toast.success(t("{no} booked", { no: job.jobNo }));
       onSaved(job);
     } catch (err) {
       toast.error((err as Error).message);
@@ -178,7 +180,7 @@ export function NewRepairModal({ open, onClose, onSaved }: { open: boolean; onCl
         <div className="flex flex-wrap items-end gap-2 sm:col-span-2 lg:col-span-3">
           {party ? (
             <span className="inline-flex items-center gap-2 rounded-xl bg-brand-50 px-3 py-2 text-sm text-brand-800">
-              Customer khata: <b>{party.name}</b>
+              {t("Customer khata:")} <b>{party.name}</b>
               <button type="button" onClick={() => setParty(null)} aria-label="Unlink customer">
                 <X className="h-4 w-4" />
               </button>
@@ -196,7 +198,7 @@ export function NewRepairModal({ open, onClose, onSaved }: { open: boolean; onCl
           <Input required inputMode="tel" value={f.customerPhone} onChange={set("customerPhone")} placeholder="03xx xxxxxxx" aria-label="Customer mobile" />
         </Field>
         <Field label="Phone model *">
-          <Input required minLength={2} value={f.deviceName} onChange={set("deviceName")} placeholder="e.g. Redmi Note 12" aria-label="Phone model" />
+          <Input required minLength={2} value={f.deviceName} onChange={set("deviceName")} placeholder={t("e.g. {n}", { n: "Redmi Note 12" })} aria-label="Phone model" />
         </Field>
         <Field label="IMEI (optional)">
           <Input value={f.imei} onChange={set("imei")} className="font-mono" aria-label="IMEI" />
@@ -208,18 +210,18 @@ export function NewRepairModal({ open, onClose, onSaved }: { open: boolean; onCl
           <Input value={f.lockCode} onChange={set("lockCode")} aria-label="Screen lock" />
         </Field>
         <Field label="What is wrong *" className="sm:col-span-2 lg:col-span-3">
-          <Textarea required minLength={3} value={f.problem} onChange={set("problem")} placeholder="e.g. Screen broken, touch not working" className="min-h-[60px]" aria-label="Problem" />
+          <Textarea required minLength={3} value={f.problem} onChange={set("problem")} placeholder={t("e.g. Screen broken, touch not working")} className="min-h-[60px]" aria-label="Problem" />
         </Field>
         <Field label="Condition when received" className="sm:col-span-2">
-          <Input value={f.conditionNotes} onChange={set("conditionNotes")} placeholder="Scratches, cracked back, water damage…" aria-label="Condition" />
+          <Input value={f.conditionNotes} onChange={set("conditionNotes")} placeholder={t("Scratches, cracked back, water damage…")} aria-label="Condition" />
         </Field>
         <div>
-          <div className="mb-1.5 text-sm font-medium text-slate-700">Received with</div>
+          <div className="mb-1.5 text-sm font-medium text-slate-700">{t("Received with")}</div>
           <div className="flex flex-wrap gap-1.5">
             {REPAIR_ACCESSORIES.map((a) => (
               <label key={a} className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1 text-xs">
                 <input type="checkbox" checked={acc.includes(a)} onChange={(e) => setAcc(e.target.checked ? [...acc, a] : acc.filter((x) => x !== a))} className="h-3.5 w-3.5 accent-brand-600" />
-                {a}
+                {t(a)}
               </label>
             ))}
           </div>
@@ -232,9 +234,9 @@ export function NewRepairModal({ open, onClose, onSaved }: { open: boolean; onCl
         </Field>
         <Field label="Technician">
           <Select value={f.technicianId} onChange={set("technicianId")} aria-label="Technician">
-            <option value="">Not assigned</option>
-            {techs.map((t) => (
-              <option key={t._id} value={t._id}>{t.name}</option>
+            <option value="">{t("Not assigned")}</option>
+            {techs.map((tc) => (
+              <option key={tc._id} value={tc._id}>{tc.name}</option>
             ))}
           </Select>
         </Field>
@@ -243,11 +245,11 @@ export function NewRepairModal({ open, onClose, onSaved }: { open: boolean; onCl
         </Field>
         <Field label="Advance paid by">
           <Select value={f.advanceMethod} onChange={set("advanceMethod")} aria-label="Advance method">
-            <option value="cash">Cash</option>
+            <option value="cash">{t("Cash")}</option>
             <option value="jazzcash">JazzCash</option>
             <option value="easypaisa">Easypaisa</option>
-            <option value="card">Card</option>
-            <option value="bank">Bank</option>
+            <option value="card">{t("Card")}</option>
+            <option value="bank">{t("Bank")}</option>
           </Select>
         </Field>
         <Field label="Repair warranty (days)">

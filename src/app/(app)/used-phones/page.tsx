@@ -8,6 +8,7 @@ import { DateRange } from "@/components/date-range";
 import { useToast } from "@/components/toast";
 import { api, formatDate, PAYMENT_LABELS, todayISO } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
+import { useT } from "@/lib/i18n";
 
 type UsedRow = {
   _id: string;
@@ -31,6 +32,7 @@ const METHOD: Record<string, string> = { ...PAYMENT_LABELS, khata: "Customer kha
 
 export default function UsedPhonesPage() {
   const toast = useToast();
+  const t = useT();
   const [range, setRange] = useState({ from: todayISO(-89), to: todayISO() });
   const [q, setQ] = useState("");
   const [rows, setRows] = useState<UsedRow[] | null>(null);
@@ -76,7 +78,7 @@ export default function UsedPhonesPage() {
           <DateRange from={range.from} to={range.to} onChange={setRange} />
           <div className="relative lg:w-72">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, CNIC, IMEI, mobile no." className="pl-9" aria-label="Search used phones" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Name, CNIC, IMEI, mobile no.")} className="pl-9" aria-label="Search used phones" />
           </div>
         </div>
         {!rows ? (
@@ -114,7 +116,7 @@ export default function UsedPhonesPage() {
                   </Td>
                   <Td className="text-right">
                     <div className="font-semibold">{formatPKR(r.price)}</div>
-                    <div className="text-xs text-slate-500">{METHOD[r.method] ?? r.method}</div>
+                    <div className="text-xs text-slate-500">{t(METHOD[r.method] ?? r.method)}</div>
                   </Td>
                   <Td className="text-slate-500">{formatDate(r.createdAt, true)}</Td>
                   <Td className="text-right">
@@ -142,6 +144,7 @@ export default function UsedPhonesPage() {
 
 function CancelModal({ row, onClose, onDone }: { row: UsedRow | null; onClose: () => void; onDone: () => void }) {
   const toast = useToast();
+  const t = useT();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => setReason(""), [row]);
@@ -151,7 +154,7 @@ function CancelModal({ row, onClose, onDone }: { row: UsedRow | null; onClose: (
     setBusy(true);
     try {
       await api(`/api/used-phones/${row._id}/cancel`, { body: { reason } });
-      toast.success(`${row.buyNo} cancelled`);
+      toast.success(t("{no} cancelled", { no: row.buyNo }));
       onClose();
       onDone();
     } catch (err) {
@@ -161,11 +164,11 @@ function CancelModal({ row, onClose, onDone }: { row: UsedRow | null; onClose: (
     }
   }
   return (
-    <Modal open={!!row} onClose={onClose} title={row ? `Cancel ${row.buyNo}?` : ""} size="sm">
+    <Modal open={!!row} onClose={onClose} title={row ? t("Cancel {no}?", { no: row.buyNo }) : ""} size="sm">
       {row && (
         <form onSubmit={submit} className="space-y-4">
           <p className="text-sm text-slate-600">
-            Use this only if it was entered by mistake. {row.productName} (IMEI {row.imei}) is taken out of stock{row.method === "khata" ? " and the amount is taken back from the customer's khata" : "; take the money back from the seller"}.
+            {t(row.method === "khata" ? "Use this only if it was entered by mistake. {name} (IMEI {imei}) is taken out of stock and the amount is taken back from the customer's khata." : "Use this only if it was entered by mistake. {name} (IMEI {imei}) is taken out of stock; take the money back from the seller.", { name: row.productName, imei: row.imei })}
           </p>
           <Field label="Why?">
             <Textarea required minLength={3} value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Reason" />

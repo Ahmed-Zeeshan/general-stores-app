@@ -11,12 +11,14 @@ import { useToast } from "@/components/toast";
 import { api, formatDate, todayISO } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
 import { REPAIR_STATUS_LABELS, type RepairStatus } from "@/lib/constants";
+import { useT } from "@/lib/i18n";
 
 type Tab = "open" | RepairStatus | "all";
 const OPEN_STEPS: RepairStatus[] = ["received", "checking", "waiting_parts", "repairing", "ready"];
 
 export default function RepairsPage() {
   const toast = useToast();
+  const t = useT();
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("open");
   const [q, setQ] = useState("");
@@ -79,7 +81,7 @@ export default function RepairsPage() {
             {(tab === "delivered" || tab === "cancelled" || tab === "all") && <DateRange from={range.from} to={range.to} onChange={setRange} />}
             <div className="relative sm:w-64">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Job no, name, mobile, IMEI…" className="pl-9" aria-label="Search repairs" />
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Job no, name, mobile, IMEI…")} className="pl-9" aria-label="Search repairs" />
             </div>
           </div>
         </div>
@@ -124,11 +126,11 @@ export default function RepairsPage() {
                     </Td>
                     <Td>
                       {j.promisedAt ? <span className={isLate(j) ? "font-semibold text-rose-600" : "text-slate-600"}>{formatDate(j.promisedAt)}</span> : "—"}
-                      {isLate(j) && <div className="text-xs font-semibold text-rose-600">Late</div>}
+                      {isLate(j) && <div className="text-xs font-semibold text-rose-600">{t("Late")}</div>}
                     </Td>
                     <Td className="text-right">
                       <div className="font-semibold">{j.total ? formatPKR(j.total) : j.estimate ? `~${formatPKR(j.estimate)}` : "—"}</div>
-                      {toPay > 0 && j.status !== "cancelled" && <div className="text-xs font-semibold text-amber-700">{formatPKR(toPay)} to pay</div>}
+                      {toPay > 0 && j.status !== "cancelled" && <div className="text-xs font-semibold text-amber-700">{t("{amount} to pay", { amount: formatPKR(toPay) })}</div>}
                     </Td>
                     <Td className="text-right">
                       <Link href={`/repairs/${j._id}`} onClick={(e) => e.stopPropagation()}>
