@@ -9,6 +9,7 @@ import { api, formatDate, todayISO } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
 import { ACTION_LABELS, GROUP_LABELS, WARNING_ACTIONS } from "@/lib/activity-groups";
 import { toCsv } from "@/lib/csv";
+import { useT } from "@/lib/i18n";
 
 type Row = { _id: string; createdAt: string; userName?: string; role?: string; branchName?: string; action: string; summary: string; refNo?: string; amount?: number; ip?: string };
 type Data = { rows: Row[]; users: { _id: string; name: string; role: string }[]; truncated: boolean };
@@ -17,6 +18,7 @@ const ROLE: Record<string, string> = { owner: "Owner", manager: "Manager", cashi
 
 export default function ActivityPage() {
   const toast = useToast();
+  const tr = useT();
   const [range, setRange] = useState({ from: todayISO(-6), to: todayISO() });
   const [user, setUser] = useState("");
   const [group, setGroup] = useState("");
@@ -61,21 +63,21 @@ export default function ActivityPage() {
           <div className="flex flex-wrap items-center gap-3">
             <DateRange from={range.from} to={range.to} onChange={setRange} />
             <Select value={group} onChange={(e) => setGroup(e.target.value)} className="h-10 w-auto" aria-label="Type">
-              <option value="">Everything</option>
+              <option value="">{tr("Everything")}</option>
               {Object.entries(GROUP_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
+                <option key={k} value={k}>{tr(v)}</option>
               ))}
             </Select>
             <Select value={user} onChange={(e) => setUser(e.target.value)} className="h-10 w-auto" aria-label="Person">
-              <option value="">All staff</option>
+              <option value="">{tr("All staff")}</option>
               {data?.users.map((u) => (
-                <option key={u._id} value={u._id}>{u.name} ({ROLE[u.role] ?? u.role})</option>
+                <option key={u._id} value={u._id}>{u.name} ({tr(ROLE[u.role] ?? u.role)})</option>
               ))}
             </Select>
           </div>
           <div className="relative xl:w-72">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search bill no., item, name" className="pl-10" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("Search bill no., item, name")} className="pl-10" />
           </div>
         </div>
         {!data ? (
@@ -100,12 +102,12 @@ export default function ActivityPage() {
                   <Td>
                     <div className="font-medium text-slate-800">{r.userName}</div>
                     <div className="text-xs text-slate-400">
-                      {ROLE[r.role ?? ""] ?? r.role}
+                      {tr(ROLE[r.role ?? ""] ?? r.role ?? "")}
                       {r.branchName && ` · ${r.branchName}`}
                     </div>
                   </Td>
                   <Td>
-                    <Badge color={warn(r) ? "red" : r.action.startsWith("login") ? "slate" : "blue"}>{ACTION_LABELS[r.action] ?? r.action}</Badge>
+                    <Badge color={warn(r) ? "red" : r.action.startsWith("login") ? "slate" : "blue"}>{tr(ACTION_LABELS[r.action] ?? r.action)}</Badge>
                   </Td>
                   <Td className="max-w-[520px] whitespace-normal text-sm text-slate-700">{r.summary}</Td>
                   <Td className="text-right text-sm font-semibold">{r.amount ? formatPKR(r.amount) : ""}</Td>
@@ -114,7 +116,7 @@ export default function ActivityPage() {
             </tbody>
           </Table>
         )}
-        {data?.truncated && <p className="border-t border-slate-100 p-3 text-center text-xs text-slate-500">Showing the latest 1,000 entries — choose a shorter period to see older ones.</p>}
+        {data?.truncated && <p className="border-t border-slate-100 p-3 text-center text-xs text-slate-500">{tr("Showing the latest 1,000 entries — choose a shorter period to see older ones.")}</p>}
       </Card>
     </div>
   );

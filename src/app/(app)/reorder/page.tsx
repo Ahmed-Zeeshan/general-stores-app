@@ -10,10 +10,12 @@ import { api, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty } from "@/lib/money";
 import { openWhatsApp, orderMessage, waNumber } from "@/lib/whatsapp";
 import type { ReorderGroup } from "@/lib/reorder";
+import { useT } from "@/lib/i18n";
 
 /** What to order from each supplier, from how fast each item sells. */
 export default function ReorderPage() {
   const toast = useToast();
+  const t = useT();
   const { settings, branch } = useSession();
   const [days, setDays] = useState("14");
   const [groups, setGroups] = useState<ReorderGroup[] | null>(null);
@@ -33,9 +35,9 @@ export default function ReorderPage() {
   const q = (id: string, suggest: number) => (qty[id] !== undefined ? Number(qty[id]) || 0 : suggest);
   function send(g: ReorderGroup) {
     const phone = waNumber(g.supplier?.phone);
-    if (!phone) return toast.error("This supplier has no valid mobile number. Add it on the supplier's page.");
+    if (!phone) return toast.error(t("This supplier has no valid mobile number. Add it on the supplier's page."));
     const rows = g.rows.filter((r) => q(r.productId, r.suggest) > 0).map((r) => ({ name: r.name, qty: q(r.productId, r.suggest), unit: UNIT_LABELS[r.unit] ?? r.unit }));
-    if (!rows.length) return toast.error("Nothing to order in this list.");
+    if (!rows.length) return toast.error(t("Nothing to order in this list."));
     openWhatsApp(phone, orderMessage({ shop: settings?.shopName ?? "", shopPhone: settings?.phone, supplier: g.supplier?.name, rows }));
   }
 
@@ -45,7 +47,7 @@ export default function ReorderPage() {
       <PageHeader
         title="Reorder List"
         urdu="آرڈر لسٹ"
-        subtitle={`What to buy before it runs out${branch?.name ? ` · ${branch.name}` : ""} — from the last 30 days of sales`}
+        subtitle={t("What to buy before it runs out{branch} — from the last 30 days of sales", { branch: branch?.name ? ` · ${branch.name}` : "" })}
         actions={
           <Button variant="outline" icon={<Printer className="h-4 w-4" />} onClick={() => window.print()}>
             Print
@@ -53,7 +55,7 @@ export default function ReorderPage() {
         }
       />
       <div className="no-print mb-6 flex flex-wrap items-center gap-3">
-        <span className="text-sm font-medium text-slate-600">Order enough for</span>
+        <span className="text-sm font-medium text-slate-600">{t("Order enough for")}</span>
         <Segmented
           value={days}
           onChange={setDays}
@@ -63,7 +65,7 @@ export default function ReorderPage() {
             { value: "30", label: "1 month" },
           ]}
         />
-        {groups && groups.length > 0 && <span className="text-sm text-slate-500">About {formatPKR(total)} in all (last purchase prices)</span>}
+        {groups && groups.length > 0 && <span className="text-sm text-slate-500">{t("About {amount} in all (last purchase prices)", { amount: formatPKR(total) })}</span>}
       </div>
       {!groups ? (
         <Spinner />
@@ -85,11 +87,11 @@ export default function ReorderPage() {
                           {g.supplier.name}
                         </Link>
                       ) : (
-                        "No supplier yet"
+                        t("No supplier yet")
                       )}
                     </h2>
                     <p className="text-xs text-slate-500">
-                      {g.rows.length} item{g.rows.length > 1 ? "s" : ""} · about {formatPKR(g.rows.reduce((b, r) => b + q(r.productId, r.suggest) * r.lastCost, 0))}
+                      <Count n={g.rows.length} one="{n} item" many="{n} items" /> · {t("about {amount}", { amount: formatPKR(g.rows.reduce((b, r) => b + q(r.productId, r.suggest) * r.lastCost, 0)) })}
                       {g.supplier?.phone && ` · ${g.supplier.phone}`}
                     </p>
                   </div>
@@ -147,7 +149,7 @@ export default function ReorderPage() {
             </Card>
           ))}
           <p className="text-xs text-slate-500">
-            The order covers the days chosen at the speed each item sold in the last 30 days. Items that didn&apos;t sell show only when they are at their low-stock level. Change any quantity before sending.
+            {t("The order covers the days chosen at the speed each item sold in the last 30 days. Items that didn't sell show only when they are at their low-stock level. Change any quantity before sending.")}
           </p>
         </div>
       )}

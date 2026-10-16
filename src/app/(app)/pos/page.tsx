@@ -91,6 +91,7 @@ const BIG_KEY = "dukaan:pos-big";
 type CartItem = { key: string; product: Product; qty: number; price: number; discount: number; pack?: PackLike | null; custom?: boolean; device?: DeviceRow };
 const lineKey = (p: Product, pack?: PackLike | null) => (pack ? `${p._id}:${pack.name}` : p._id);
 type Held = HeldBill<CartItem, PartyLite>;
+type Translate = ReturnType<typeof useT>;
 
 const METHODS = [
   { value: "cash", label: "Cash", icon: Banknote },
@@ -298,7 +299,7 @@ export default function PosPage() {
   function addPhone(p: Product, d: DeviceRow) {
     const key = `dev:${d._id}`;
     if (cart.some((i) => i.key === key)) {
-      toast.error(`IMEI ${d.imei} is already on this bill.`);
+      toast.error(t("IMEI {imei} is already on this bill.", { imei: d.imei }));
       return;
     }
     beep();
@@ -341,7 +342,7 @@ export default function PosPage() {
     } else {
       addByImei(code).then((found) => {
         if (found) setQ("");
-        else toast.error(`No product has barcode ${code}, and no phone in stock here has this IMEI.`);
+        else toast.error(t("No product has barcode {code}, and no phone in stock here has this IMEI.", { code }));
       });
     }
   }
@@ -367,7 +368,7 @@ export default function PosPage() {
     } else if (filtered.length === 0) {
       addByImei(term).then((found) => {
         if (found) setQ("");
-        else toast.error(`No product found for "${term}"`);
+        else toast.error(t('No product found for "{term}"', { term }));
       });
     }
   }
@@ -438,7 +439,7 @@ export default function PosPage() {
     if (!cart.length) return false;
     const list = getHeld<CartItem, PartyLite>(tenantId, branchId);
     if (list.length >= MAX_HELD) {
-      toast.error(`You already have ${MAX_HELD} bills on hold. Finish or delete some first.`);
+      toast.error(t("You already have {n} bills on hold. Finish or delete some first.", { n: MAX_HELD }));
       return false;
     }
     const entry: Held = {
@@ -462,8 +463,8 @@ export default function PosPage() {
   async function resumeHeld(h: Held) {
     if (cart.length) {
       const ok = await ask({
-        title: "Put the current bill on hold?",
-        message: `The bill on screen (${formatPKR(total)}) will be held so you can open ${h.label}'s bill.`,
+        title: t("Put the current bill on hold?"),
+        message: t("The bill on screen ({amount}) will be held so you can open {name}'s bill.", { amount: formatPKR(total), name: h.label }),
         confirmLabel: "Hold & open",
         tone: "info",
       });
@@ -481,10 +482,10 @@ export default function PosPage() {
 
   async function deleteHeld(h: Held) {
     const ok = await ask({
-      title: `Delete ${h.label}'s held bill?`,
+      title: t("Delete {name}'s held bill?", { name: h.label }),
       details: [
-        { label: "Items", value: h.items.length },
-        { label: "Total", value: formatPKR(h.total), strong: true },
+        { label: t("Items"), value: h.items.length },
+        { label: t("Total"), value: formatPKR(h.total), strong: true },
       ],
       tone: "danger",
       confirmLabel: "Delete",
@@ -514,12 +515,12 @@ export default function PosPage() {
               </Button>
             )}
             {drawerOpen === false && !usingSaved && (
-              <Link href="/drawer" className="hidden items-center gap-1.5 whitespace-nowrap rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200 md:inline-flex" title="Open the cash drawer to track cash for the day close">
+              <Link href="/drawer" className="hidden items-center gap-1.5 whitespace-nowrap rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200 md:inline-flex" title={t("Open the cash drawer to track cash for the day close")}>
                 <Banknote className="h-4 w-4" /> {t("Drawer not open")}
               </Link>
             )}
             {held.length > 0 && (
-              <Button size="sm" variant="outline" className="whitespace-nowrap" icon={<PlayCircle className="h-4 w-4 text-amber-600" />} onClick={() => setHeldOpen(true)} title="Bills on hold (F6)">
+              <Button size="sm" variant="outline" className="whitespace-nowrap" icon={<PlayCircle className="h-4 w-4 text-amber-600" />} onClick={() => setHeldOpen(true)} title={t("Bills on hold (F6)")}>
                 {t("Held bills")} <Badge color="amber">{held.length}</Badge>
               </Button>
             )}
@@ -530,11 +531,11 @@ export default function PosPage() {
               icon={<Maximize2 className="h-4 w-4" />}
               onClick={() => setBig(!big)}
               aria-pressed={big}
-              title="Bigger buttons for touch screens (this computer)"
+              title={t("Bigger buttons for touch screens (this computer)")}
             >
               {t("Big buttons")}
             </Button>
-            <Button size="sm" variant="outline" className="whitespace-nowrap" icon={<HandCoins className="h-4 w-4 text-brand-600" />} onClick={() => setReceiveOpen(true)} title="Customer pays old udhaar (F8)">
+            <Button size="sm" variant="outline" className="whitespace-nowrap" icon={<HandCoins className="h-4 w-4 text-brand-600" />} onClick={() => setReceiveOpen(true)} title={t("Customer pays old udhaar (F8)")}>
               <span className="hidden sm:inline">{t("Receive udhaar")}</span>
               <span className="sm:hidden">{t("Udhaar")}</span>
             </Button>
@@ -583,8 +584,8 @@ export default function PosPage() {
             <Spinner />
           ) : products.length === 0 ? (
             <div className="rounded-2xl border-2 border-dashed border-slate-200 p-10 text-center">
-              <p className="font-semibold text-slate-700">No products yet</p>
-              <p className="mt-1 text-sm text-slate-500">Add your items first, then you can make bills.</p>
+              <p className="font-semibold text-slate-700">{t("No products yet")}</p>
+              <p className="mt-1 text-sm text-slate-500">{t("Add your items first, then you can make bills.")}</p>
               {can.manage && (
                 <Link href="/products" className="mt-4 inline-block">
                   <Button>Add products</Button>
@@ -592,7 +593,7 @@ export default function PosPage() {
               )}
             </div>
           ) : filtered.length === 0 ? (
-            <p className="py-10 text-center text-slate-500">No matching products.</p>
+            <p className="py-10 text-center text-slate-500">{t("No matching products.")}</p>
           ) : (
             <div className={big ? "grid grid-cols-2 gap-4 sm:grid-cols-3 2xl:grid-cols-4" : "grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"}>
               {filtered.slice(0, 200).map((p) => {
@@ -621,13 +622,13 @@ export default function PosPage() {
                     <span className={cn("line-clamp-2 font-semibold leading-tight text-slate-800", big ? "min-h-12 text-lg" : "min-h-10")}>{p.name}</span>
                     {extraName(p.name, p.nameUrdu) && <span className="urdu truncate text-xs text-slate-400">{extraName(p.name, p.nameUrdu)}</span>}
                     {(extraName(p.name, p.brand) || p.fits) && (
-                      <span className="truncate text-xs text-slate-500" title={p.fits ? `Fits ${p.fits}` : undefined}>
-                        {[extraName(p.name, p.brand), p.fits && `Fits ${p.fits}`].filter(Boolean).join(" · ")}
+                      <span className="truncate text-xs text-slate-500" title={p.fits ? t("Fits {model}", { model: p.fits }) : undefined}>
+                        {[extraName(p.name, p.brand), p.fits && t("Fits {model}", { model: p.fits })].filter(Boolean).join(" · ")}
                       </span>
                     )}
                     <span className={cn("mt-2 font-bold text-brand-700", big ? "text-2xl" : "text-lg")}>
                       {formatPKR(p.salePrice)}
-                      <span className="text-xs font-medium text-slate-400">/{UNIT_LABELS[p.unit]}</span>
+                      <span className="text-xs font-medium text-slate-400">/{unitLabel(p.unit, t)}</span>
                     </span>
                     <span className={cn("text-xs font-medium", p.stock <= 0 ? "text-rose-600" : "text-slate-500")}>
                       {t("Stock: {n}", { n: formatQty(p.stock) })}
@@ -704,7 +705,7 @@ export default function PosPage() {
                         <div className="truncate font-semibold text-slate-800">{item.product.name}</div>
                         <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
                           <span>
-                            {formatPKR(item.price)} / {item.pack ? `${item.pack.name} (${formatQty(item.pack.size)} ${UNIT_LABELS[item.product.unit] ?? item.product.unit})` : UNIT_LABELS[item.product.unit]}
+                            {formatPKR(item.price)} / {item.pack ? `${item.pack.name} (${formatQty(item.pack.size)} ${t(UNIT_LABELS[item.product.unit] ?? item.product.unit)})` : unitLabel(item.product.unit, t)}
                           </span>
                           {wholesale && !item.custom && <Badge color="violet">{t("Wholesale")}</Badge>}
                           {offer && <Badge color="green">{offer.name} −{formatPKR(offer.discount)}</Badge>}
@@ -722,7 +723,7 @@ export default function PosPage() {
                             aria-label={`Sell ${item.product.name} as`}
                             className="mt-1 h-7 rounded-lg border border-slate-200 bg-white px-1.5 text-xs font-semibold text-slate-700 focus:border-brand-500 focus:outline-hidden"
                           >
-                            <option value="">{UNIT_LABELS[item.product.unit] ?? item.product.unit}</option>
+                            <option value="">{t(UNIT_LABELS[item.product.unit] ?? item.product.unit)}</option>
                             {item.product.packs!.map((k) => (
                               <option key={k.name} value={k.name}>
                                 {k.name} ({formatQty(k.size)})
@@ -737,7 +738,7 @@ export default function PosPage() {
                     </div>
                     <div className="mt-2 flex items-center justify-between gap-2">
                       {item.device ? (
-                        <span className="text-xs text-slate-500">{item.product.warrantyMonths ? `${item.product.warrantyMonths} months warranty` : "1 phone"}</span>
+                        <span className="text-xs text-slate-500">{item.product.warrantyMonths ? t("{n} months warranty", { n: item.product.warrantyMonths }) : t("1 phone")}</span>
                       ) : (
                       <div className="flex items-center rounded-xl border border-slate-200 bg-white">
                         <button
@@ -772,7 +773,7 @@ export default function PosPage() {
                           min="0"
                           value={item.price}
                           onChange={(e) => updateItem(item.key, { price: Math.max(0, Number(e.target.value)), custom: true })}
-                          title="Price (owner/manager can change)"
+                          title={t("Price (owner/manager can change)")}
                           className="h-9 w-20 rounded-xl border border-slate-200 px-2 text-right text-sm focus:border-brand-500 focus:outline-hidden"
                         />
                       )}
@@ -822,7 +823,7 @@ export default function PosPage() {
             <span className="text-3xl font-extrabold tracking-tight text-slate-900">{formatPKR(total)}</span>
           </div>
           <div className="mt-4 flex gap-2">
-            <Button size="xl" variant="outline" className="shrink-0 px-4" disabled={!cart.length} onClick={() => holdBill()} icon={<PauseCircle className="h-5 w-5" />} title="Put this bill aside and serve the next customer (F4)">
+            <Button size="xl" variant="outline" className="shrink-0 px-4" disabled={!cart.length} onClick={() => holdBill()} icon={<PauseCircle className="h-5 w-5" />} title={t("Put this bill aside and serve the next customer (F4)")}>
               {t("Hold")}
             </Button>
             <Button size="xl" className="flex-1" disabled={!cart.length || cart.some((i) => i.qty <= 0)} onClick={() => setPayOpen(true)}>
@@ -846,7 +847,7 @@ export default function PosPage() {
         open={!!phoneFor}
         product={phoneFor}
         exclude={cart.filter((i) => i.device).map((i) => i.device!._id)}
-        title={phoneFor ? `Which ${phoneFor.name}?` : undefined}
+        title={phoneFor ? t("Which {name}?", { name: phoneFor.name }) : undefined}
         onClose={() => {
           setPhoneFor(null);
           searchRef.current?.focus();
@@ -929,7 +930,7 @@ export default function PosPage() {
             </p>
             <p className="text-3xl font-extrabold text-slate-900">{formatPKR(qistDone.financed)}</p>
             <p className="mt-1 text-sm text-slate-600">
-              {qistDone.months} × {formatPKR(qistDone.perMonth)} — first due {qistDone.firstDue ? formatDate(qistDone.firstDue) : "—"}
+              {qistDone.months} × {formatPKR(qistDone.perMonth)} — {t("first due {date}", { date: qistDone.firstDue ? formatDate(qistDone.firstDue) : "—" })}
             </p>
             <div className="mt-6 grid grid-cols-2 gap-3">
               <Button variant="outline" size="lg" icon={<Printer className="h-5 w-5" />} onClick={() => window.open(`/receipt/installment/${qistDone.planId}?print=1`, "_blank")}>
@@ -940,7 +941,7 @@ export default function PosPage() {
               </Button>
             </div>
             <Link href={`/installments/${qistDone.planId}`} className="mt-4 inline-block text-sm font-semibold text-brand-700 underline">
-              Open the installment plan
+              {t("Open the installment plan")}
             </Link>
           </div>
         )}
@@ -961,7 +962,7 @@ export default function PosPage() {
         {offlineDone && (
           <div className="text-center">
             <CloudOff className="mx-auto h-14 w-14 text-amber-500" />
-            <p className="mt-3 text-sm text-slate-500">No connection right now. The bill is saved on this device and will be sent automatically.</p>
+            <p className="mt-3 text-sm text-slate-500">{t("No connection right now. The bill is saved on this device and will be sent automatically.")}</p>
             <p className="mt-2 text-3xl font-extrabold text-slate-900">{formatPKR(offlineDone.total)}</p>
             {offlineDone.change > 0 && (
               <div className="mt-4 rounded-2xl bg-amber-50 p-4">
@@ -990,7 +991,7 @@ export default function PosPage() {
 
       <Modal open={heldOpen} onClose={() => setHeldOpen(false)} title={t("Bills on hold")} size="md">
         {held.length === 0 ? (
-          <p className="py-8 text-center text-sm text-slate-500">No bills on hold. Use “Hold” (F4) to put a bill aside while you serve someone else.</p>
+          <p className="py-8 text-center text-sm text-slate-500">{t("No bills on hold. Use “Hold” (F4) to put a bill aside while you serve someone else.")}</p>
         ) : (
           <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200">
             {[...held].reverse().map((h) => (
@@ -998,7 +999,7 @@ export default function PosPage() {
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-semibold text-slate-800">{h.label}</div>
                   <div className="text-xs text-slate-500">
-                    <Count n={h.items.length} one="{n} item" many="{n} items" /> · {heldAgo(h.at)}
+                    <Count n={h.items.length} one="{n} item" many="{n} items" /> · {heldAgo(h.at, t)}
                     {h.userName && ` · ${h.userName}`}
                   </div>
                   <div className="truncate text-xs text-slate-400">{h.items.map((i) => i.product.name).join(", ")}</div>
@@ -1012,7 +1013,7 @@ export default function PosPage() {
             ))}
           </ul>
         )}
-        <p className="mt-3 text-xs text-slate-500">Held bills are kept on this computer only. Stock is taken out when the bill is paid.</p>
+        <p className="mt-3 text-xs text-slate-500">{t("Held bills are kept on this computer only. Stock is taken out when the bill is paid.")}</p>
       </Modal>
 
       <CameraScanner open={cameraOpen} onClose={() => setCameraOpen(false)} onScan={addByCode} continuous title="Scan items" />
@@ -1087,6 +1088,7 @@ function CatChip({ active, onClick, children }: { active: boolean; onClick: () =
 }
 
 function LooseQtyModal({ product, onClose, onAdd }: { product: Product | null; onClose: () => void; onAdd: (qty: number) => void }) {
+  const t = useT();
   const [mode, setMode] = useState<"qty" | "amount">("qty");
   const [value, setValue] = useState("");
   useEffect(() => {
@@ -1094,7 +1096,7 @@ function LooseQtyModal({ product, onClose, onAdd }: { product: Product | null; o
     setMode("qty");
   }, [product]);
   if (!product) return null;
-  const unit = UNIT_LABELS[product.unit];
+  const unit = UNIT_LABELS[product.unit] ? t(UNIT_LABELS[product.unit]) : "";
   const n = Number(value) || 0;
   const qty = mode === "qty" ? n : product.salePrice > 0 ? Math.round((n / product.salePrice) * 1000) / 1000 : 0;
   const presets = product.unit === "kg" || product.unit === "litre" ? [0.25, 0.5, 1, 2, 5] : [100, 250, 500, 1000];
@@ -1103,7 +1105,7 @@ function LooseQtyModal({ product, onClose, onAdd }: { product: Product | null; o
   return (
     <Modal open onClose={onClose} title={product.name} size="sm">
       <p className="mb-4 text-sm text-slate-500">
-        Price: <b className="text-slate-800">{formatPKR(product.salePrice)}</b> per {unit}
+        {t("Price:")} <b className="text-slate-800">{formatPKR(product.salePrice)}</b> {t("per {unit}", { unit })}
       </p>
       <Segmented
         value={mode}
@@ -1112,7 +1114,7 @@ function LooseQtyModal({ product, onClose, onAdd }: { product: Product | null; o
           setValue("");
         }}
         options={[
-          { value: "qty", label: `By ${unit}` },
+          { value: "qty", label: t("By {unit}", { unit }) },
           { value: "amount", label: "By Rupees" },
         ]}
       />
@@ -1123,7 +1125,7 @@ function LooseQtyModal({ product, onClose, onAdd }: { product: Product | null; o
           if (qty > 0) onAdd(qty);
         }}
       >
-        <Field label={mode === "qty" ? `How many ${unit}?` : "Customer wants how many rupees of it?"}>
+        <Field label={mode === "qty" ? t("How many {unit}?", { unit }) : "Customer wants how many rupees of it?"}>
           <Input autoFocus type="number" inputMode="decimal" step="any" min="0" value={value} onChange={(e) => setValue(e.target.value)} className="h-14 text-2xl font-bold" />
         </Field>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -1225,7 +1227,7 @@ function PaymentModal({
       if (err instanceof NetworkError) {
         // A phone's IMEI must be checked by the server, so phones are never sold offline.
         if ((payload.items as { serials?: string[] }[]).some((i) => i.serials?.length)) {
-          toast.error("No connection to the shop server. Phones sold by IMEI need the connection — try again when it is back.");
+          toast.error(t("No connection to the shop server. Phones sold by IMEI need the connection — try again when it is back."));
         } else onOffline({ clientId: clientId.current, soldAt: new Date().toISOString(), payload: body, total, change, status: "pending" });
       } else toast.error((err as Error).message);
     } finally {
@@ -1325,7 +1327,7 @@ function PaymentModal({
           </div>
           {splitTooMuch && (
             <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
-              JazzCash / Easypaisa / card / bank add up to more than the bill. Only cash can be more (change is given back).
+              {t("JazzCash / Easypaisa / card / bank add up to more than the bill. Only cash can be more (change is given back).")}
             </p>
           )}
         </div>
@@ -1374,22 +1376,23 @@ function PaymentModal({
 
 function OutboxModal({ open, onClose, tenantId, bills, onSynced }: { open: boolean; onClose: () => void; tenantId: string; bills: OutboxBill[]; onSynced: () => void }) {
   const toast = useToast();
+  const t = useT();
   const ask = useConfirm();
   const [busy, setBusy] = useState(false);
   async function sendNow() {
     setBusy(true);
     const r = await syncOutbox(tenantId);
     setBusy(false);
-    if (r.offline) toast.error("Still no connection. Bills will be sent automatically when it is back.");
+    if (r.offline) toast.error(t("Still no connection. Bills will be sent automatically when it is back."));
     else if (r.sent) {
-      toast.success(`${r.sent} bill(s) sent`);
+      toast.success(t("{n} bill(s) sent", { n: r.sent }));
       onSynced();
     }
   }
   return (
     <Modal open={open} onClose={onClose} title="Bills waiting to be sent" size="md">
       {bills.length === 0 ? (
-        <p className="py-8 text-center text-sm text-slate-500">All bills have been sent.</p>
+        <p className="py-8 text-center text-sm text-slate-500">{t("All bills have been sent.")}</p>
       ) : (
         <>
           <ul className="divide-y divide-slate-100">
@@ -1404,7 +1407,7 @@ function OutboxModal({ open, onClose, tenantId, bills, onSynced }: { open: boole
                       {b.lines.map((l) => `${l.name} ×${l.qty}`).join(", ")}
                       {b.customerName && ` · ${b.customerName}`}
                     </div>
-                    {b.status === "failed" && <div className="mt-1 text-xs font-medium text-rose-600">Not saved: {b.error}</div>}
+                    {b.status === "failed" && <div className="mt-1 text-xs font-medium text-rose-600">{t("Not saved: {error}", { error: b.error ?? "" })}</div>}
                   </div>
                   {b.status === "failed" ? (
                     <div className="flex shrink-0 gap-1">
@@ -1415,14 +1418,14 @@ function OutboxModal({ open, onClose, tenantId, bills, onSynced }: { open: boole
                         className="hover:text-rose-600"
                         onClick={async () => {
                           const ok = await ask({
-                            title: "Discard this offline bill?",
-                            message: "It was never saved on the server and will be lost.",
+                            title: t("Discard this offline bill?"),
+                            message: t("It was never saved on the server and will be lost."),
                             tone: "danger",
                             icon: "delete",
                             details: [
-                              { label: "Made at", value: new Date(b.soldAt).toLocaleString("en-PK") },
-                              { label: "Reason not saved", value: b.error ?? "—" },
-                              { label: "Amount", value: formatPKR(b.total), strong: true },
+                              { label: t("Made at"), value: new Date(b.soldAt).toLocaleString("en-PK") },
+                              { label: t("Reason not saved"), value: b.error ?? "—" },
+                              { label: t("Amount"), value: formatPKR(b.total), strong: true },
                             ],
                             confirmLabel: "Discard bill",
                           });
@@ -1448,10 +1451,15 @@ function OutboxModal({ open, onClose, tenantId, bills, onSynced }: { open: boole
   );
 }
 
-function heldAgo(at: string) {
+/** A unit's name ("Kg", "Piece") in the chosen language. */
+function unitLabel(unit: string, t: Translate) {
+  return UNIT_LABELS[unit] ? t(UNIT_LABELS[unit]) : UNIT_LABELS[unit];
+}
+
+function heldAgo(at: string, t: Translate) {
   const min = Math.floor((Date.now() - new Date(at).getTime()) / 60000);
-  if (min < 1) return "just now";
-  if (min < 60) return `${min} min ago`;
+  if (min < 1) return t("just now");
+  if (min < 60) return t("{n} min ago", { n: min });
   const h = Math.floor(min / 60);
-  return h < 24 ? `${h} h ago` : new Date(at).toLocaleDateString("en-PK", { day: "2-digit", month: "short" });
+  return h < 24 ? t("{n} h ago", { n: h }) : new Date(at).toLocaleDateString("en-PK", { day: "2-digit", month: "short" });
 }

@@ -10,6 +10,7 @@ import { useToast } from "./toast";
 import { api } from "@/lib/client";
 import { installmentMessage, openWhatsApp, reminderMessage, repairMessage, waNumber } from "@/lib/whatsapp";
 import type { Task } from "@/lib/tasks";
+import { useT } from "@/lib/i18n";
 
 const GROUPS: Record<Task["group"], { label: string; icon: typeof Bell }> = {
   drawer: { label: "Cash drawer", icon: Wallet },
@@ -52,6 +53,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
 /** Bell with the number of things to do today; opens the list. */
 export function TasksBell({ className, light }: { className?: string; light?: boolean }) {
   const { data, load } = useContext(TasksContext);
+  const tr = useT();
   const [open, setOpen] = useState(false);
   const total = data ? Object.values(data.counts).reduce((a, n) => a + n, 0) : 0;
   const urgent = data?.tasks.some((t) => t.tone === "red");
@@ -66,7 +68,7 @@ export function TasksBell({ className, light }: { className?: string; light?: bo
         }}
         className={cn("relative rounded-lg p-2 transition", light ? "text-slate-600 hover:bg-slate-100" : "text-brand-800 hover:bg-brand-100", className)}
         aria-label={`Today's tasks${total ? ` (${total})` : ""}`}
-        title="Today's tasks"
+        title={tr("Today's tasks")}
       >
         <Bell className="h-5 w-5" />
         {total > 0 && (
@@ -83,6 +85,7 @@ export function TasksBell({ className, light }: { className?: string; light?: bo
 function TasksPanel({ open, onClose, data, onChanged }: { open: boolean; onClose: () => void; data: Data | null; onChanged: () => void }) {
   const { settings } = useSession();
   const toast = useToast();
+  const tr = useT();
   const [sent, setSent] = useState<Set<string>>(new Set());
   useEffect(() => {
     if (open) setSent(new Set());
@@ -93,7 +96,7 @@ function TasksPanel({ open, onClose, data, onChanged }: { open: boolean; onClose
   async function whatsapp(t: Task) {
     const w = t.wa!;
     const phone = waNumber(w.phone);
-    if (!phone) return toast.error("This mobile number is not a valid WhatsApp number.");
+    if (!phone) return toast.error(tr("This mobile number is not a valid WhatsApp number."));
     if (w.kind === "installment") {
       openWhatsApp(phone, installmentMessage("reminder", { name: w.name, planNo: w.planNo, items: w.items, amount: w.amount, dueDate: w.dueDate, overdue: w.overdue, balance: w.balance, shop, shopPhone }));
       await api(w.remindUrl, { method: "POST" }).catch(() => {});
@@ -115,8 +118,8 @@ function TasksPanel({ open, onClose, data, onChanged }: { open: boolean; onClose
       ) : groups.length === 0 ? (
         <div className="py-10 text-center">
           <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500" />
-          <p className="mt-3 font-semibold text-slate-800">Nothing waiting. Well done!</p>
-          <p className="text-sm text-slate-500">Late installments, phones ready, low balances and udhaar to remind show up here.</p>
+          <p className="mt-3 font-semibold text-slate-800">{tr("Nothing waiting. Well done!")}</p>
+          <p className="text-sm text-slate-500">{tr("Late installments, phones ready, low balances and udhaar to remind show up here.")}</p>
         </div>
       ) : (
         <div className="space-y-5">
@@ -125,8 +128,8 @@ function TasksPanel({ open, onClose, data, onChanged }: { open: boolean; onClose
             return (
               <section key={g}>
                 <h3 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-                  <G.icon className="h-4 w-4" /> {G.label}
-                  {count > items.length && <span className="font-medium normal-case text-slate-400">(first {items.length} of {count})</span>}
+                  <G.icon className="h-4 w-4" /> {tr(G.label)}
+                  {count > items.length && <span className="font-medium normal-case text-slate-400">{tr("(first {shown} of {count})", { shown: items.length, count })}</span>}
                 </h3>
                 <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200">
                   {items.map((t) => (
@@ -139,7 +142,7 @@ function TasksPanel({ open, onClose, data, onChanged }: { open: boolean; onClose
                       {t.wa &&
                         (sent.has(t.id) ? (
                           <span className="flex shrink-0 items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1.5 text-xs font-semibold text-emerald-700">
-                            <CheckCircle2 className="h-4 w-4" /> Sent
+                            <CheckCircle2 className="h-4 w-4" /> {tr("Sent")}
                           </span>
                         ) : (
                           <button
@@ -158,7 +161,7 @@ function TasksPanel({ open, onClose, data, onChanged }: { open: boolean; onClose
             );
           })}
           <p className="flex items-center gap-1.5 text-xs text-slate-400">
-            <AlertTriangle className="h-3.5 w-3.5" /> Red = needs attention now · amber = today · blue = waiting for the customer
+            <AlertTriangle className="h-3.5 w-3.5" /> {tr("Red = needs attention now · amber = today · blue = waiting for the customer")}
           </p>
         </div>
       )}

@@ -12,6 +12,7 @@ import { SendBillModal } from "@/components/send-whatsapp";
 import { useToast } from "@/components/toast";
 import { api, formatDate, PAYMENT_LABELS, todayISO } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
+import { useT } from "@/lib/i18n";
 
 type Sale = ReturnableSale & {
   cashierName?: string;
@@ -42,6 +43,7 @@ type Ret = {
 
 export default function SalesPage() {
   const toast = useToast();
+  const t = useT();
   const can = useCan();
   const [tab, setTab] = useState<"bills" | "returns">("bills");
   const [range, setRange] = useState({ from: todayISO(), to: todayISO() });
@@ -78,7 +80,7 @@ export default function SalesPage() {
       <PageHeader title="Sales History" urdu="فروخت" subtitle="All bills and returns in your shop" />
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Sales" value={formatPKR(gross)} icon={<Receipt className="h-5 w-5" />} hint={<Count n={sales?.length ?? 0} one="{n} bill" many="{n} bills" />} />
-        <StatCard label="Returns" value={formatPKR(returned)} icon={<Undo2 className="h-5 w-5" />} tone="rose" hint={`${returns?.length ?? 0} returns`} />
+        <StatCard label="Returns" value={formatPKR(returned)} icon={<Undo2 className="h-5 w-5" />} tone="rose" hint={t("{n} returns", { n: returns?.length ?? 0 })} />
         <StatCard label="Net sales" value={formatPKR(gross - returned)} icon={<Receipt className="h-5 w-5" />} tone="violet" hint="Sales − returns" />
         <StatCard label="Average bill" value={formatPKR(sales?.length ? gross / sales.length : 0)} icon={<Receipt className="h-5 w-5" />} tone="blue" />
       </div>
@@ -98,7 +100,7 @@ export default function SalesPage() {
           </div>
           <div className="relative xl:w-72">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Bill no., return no. or customer" className="pl-10" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Bill no., return no. or customer")} className="pl-10" />
           </div>
         </div>
 
@@ -127,14 +129,14 @@ export default function SalesPage() {
                       <div className="text-xs text-slate-400">
                         <Count n={s.items.length} one="{n} item" many="{n} items" /> · {s.cashierName}
                         {showBranch && s.branchName && ` · ${s.branchName}`}
-                        {s.offline && " · made offline"}
+                        {s.offline && ` · ${t("made offline")}`}
                       </div>
                     </Td>
                     <Td className="text-slate-500">{formatDate(s.createdAt, true)}</Td>
                     <Td>
-                      {s.customerName ?? <span className="text-slate-400">Walk-in</span>}
+                      {s.customerName ?? <span className="text-slate-400">{t("Walk-in")}</span>}
                       {s.fbrStatus === "synced" && <div className="text-xs text-emerald-700">FBR ✓</div>}
-                      {s.fbrStatus === "pending" && <div className="text-xs text-amber-700" title={s.fbrError}>FBR pending</div>}
+                      {s.fbrStatus === "pending" && <div className="text-xs text-amber-700" title={s.fbrError}>{t("FBR pending")}</div>}
                     </Td>
                     <Td>
                       {s.status === "returned" ? (
@@ -142,7 +144,7 @@ export default function SalesPage() {
                       ) : (
                         <div className="flex flex-wrap items-center gap-1">
                           {(s.payments?.length ?? 0) > 1 ? (
-                            <Badge color="violet">Split: {s.payments!.map((p) => PAYMENT_LABELS[p.method] ?? p.method).join(" + ")}</Badge>
+                            <Badge color="violet">{t("Split:")} {s.payments!.map((p) => t(PAYMENT_LABELS[p.method] ?? p.method)).join(" + ")}</Badge>
                           ) : (
                             <Badge color={s.paymentMethod === "credit" ? "amber" : s.paymentMethod === "cash" ? "green" : "blue"}>{PAYMENT_LABELS[s.paymentMethod]}</Badge>
                           )}
@@ -150,19 +152,19 @@ export default function SalesPage() {
                         </div>
                       )}
                       {s.creditAmount > 0 && s.paymentMethod !== "credit" && s.status !== "returned" && (
-                        <span className="text-xs text-amber-700">+{formatPKR(s.creditAmount)} udhaar</span>
+                        <span className="text-xs text-amber-700">+{formatPKR(s.creditAmount)} {t("udhaar")}</span>
                       )}
                     </Td>
                     <Td className="text-right">
                       <div className="font-bold text-slate-900">{formatPKR(s.total)}</div>
-                      {(s.returnedTotal ?? 0) > 0 && s.status !== "returned" && <div className="text-xs text-rose-600">−{formatPKR(s.returnedTotal!)} returned</div>}
+                      {(s.returnedTotal ?? 0) > 0 && s.status !== "returned" && <div className="text-xs text-rose-600">−{formatPKR(s.returnedTotal!)} {t("returned")}</div>}
                     </Td>
                     <Td className="text-right">
                       <div className="flex justify-end gap-1">
                         <Link href={`/receipt/${s._id}`} target="_blank">
                           <Button size="sm" variant="ghost" icon={<Eye className="h-4 w-4" />}>View</Button>
                         </Link>
-                        <Button size="sm" variant="ghost" aria-label={`WhatsApp ${s.invoiceNo}`} title="Send the bill on WhatsApp" icon={<MessageCircle className="h-4 w-4 text-emerald-600" />} onClick={() => setWaBill(s._id)} />
+                        <Button size="sm" variant="ghost" aria-label={`WhatsApp ${s.invoiceNo}`} title={t("Send the bill on WhatsApp")} icon={<MessageCircle className="h-4 w-4 text-emerald-600" />} onClick={() => setWaBill(s._id)} />
                         {can.manage && s.status !== "returned" && (
                           <Button size="sm" variant="ghost" className="hover:text-rose-600" icon={<RotateCcw className="h-4 w-4" />} onClick={() => setReturning(s)}>
                             Return
@@ -198,23 +200,23 @@ export default function SalesPage() {
                   <Td>
                     <div className="font-semibold text-slate-800">{r.returnNo}</div>
                     <div className="text-xs text-slate-400">
-                      bill {r.invoiceNo}
+                      {t("bill {no}", { no: r.invoiceNo })}
                       {r.userName && ` · ${r.userName}`}
                       {showBranch && r.branchName && ` · ${r.branchName}`}
                     </div>
                   </Td>
                   <Td className="text-slate-500">{formatDate(r.createdAt, true)}</Td>
-                  <Td>{r.customerName ?? <span className="text-slate-400">Walk-in</span>}</Td>
+                  <Td>{r.customerName ?? <span className="text-slate-400">{t("Walk-in")}</span>}</Td>
                   <Td className="max-w-[260px] whitespace-normal text-slate-600">
                     {r.items.map((i) => `${i.name} ×${i.qty}`).join(", ")}
                     {r.reason && <div className="text-xs text-slate-400">{r.reason}</div>}
                   </Td>
                   <Td className="text-right font-bold text-rose-600">{formatPKR(r.total)}</Td>
                   <Td className="text-sm">
-                    {r.creditReduced > 0 && <div className="text-emerald-700">−{formatPKR(r.creditReduced)} udhaar</div>}
+                    {r.creditReduced > 0 && <div className="text-emerald-700">−{formatPKR(r.creditReduced)} {t("udhaar")}</div>}
                     {r.refund > 0 && (
                       <div>
-                        {formatPKR(r.refund)} {r.refundMethod === "khata" ? "to khata" : `(${PAYMENT_LABELS[r.refundMethod] ?? r.refundMethod})`}
+                        {formatPKR(r.refund)} {r.refundMethod === "khata" ? t("to khata") : `(${t(PAYMENT_LABELS[r.refundMethod] ?? r.refundMethod)})`}
                       </div>
                     )}
                   </Td>

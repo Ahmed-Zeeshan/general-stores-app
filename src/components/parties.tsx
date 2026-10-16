@@ -300,8 +300,8 @@ function PartyForm({ type, open, party, onClose, onSaved }: { type: PartyType; o
         {type === "customer" && can.manage && (
           <Field label="Prices" hint="Wholesale customers automatically get wholesale prices at the counter">
             <Select value={form.priceLevel} onChange={set("priceLevel")} aria-label="Price level">
-              <option value="retail">Retail (normal prices)</option>
-              <option value="wholesale">Wholesale</option>
+              <option value="retail">{tr("Retail (normal prices)")}</option>
+              <option value="wholesale">{tr("Wholesale")}</option>
             </Select>
           </Field>
         )}
@@ -323,6 +323,7 @@ function PartyForm({ type, open, party, onClose, onSaved }: { type: PartyType; o
 
 export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
   const t = TEXT[type];
+  const tr = useT();
   const toast = useToast();
   const can = useCan();
   const confirm = useConfirm();
@@ -343,26 +344,28 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
     if (!wa) return;
     openWhatsApp(wa, reminderMessage(settings?.waTemplate, { name: party.name, amount: party.balance, shop: settings?.shopName ?? "", shopPhone: settings?.phone }));
     await api("/api/reminders", { body: { partyId: party._id, kind: "reminder" } }).catch(() => {});
-    toast.success("WhatsApp opened — press Send there");
+    toast.success(tr("WhatsApp opened — press Send there"));
   }
   async function cancelPayment(e: Entry) {
     const ok = await confirm({
-      title: `Cancel payment ${e.refNo ?? ""}?`,
-      message: "Use this only if the payment was entered by mistake. The entry stays in the khata, marked as cancelled.",
+      title: tr("Cancel payment {no}?", { no: e.refNo ?? "" }),
+      message: tr("Use this only if the payment was entered by mistake. The entry stays in the khata, marked as cancelled."),
       details: [
-        { label: type === "customer" ? "Received from" : "Paid to", value: party.name },
-        { label: "Amount", value: formatPKR(-e.amount), strong: true },
-        { label: "Date", value: formatDate(e.createdAt, true) },
+        { label: tr(type === "customer" ? "Received from" : "Paid to"), value: party.name },
+        { label: tr("Amount"), value: formatPKR(-e.amount), strong: true },
+        { label: tr("Date"), value: formatDate(e.createdAt, true) },
       ],
-      points: [`${formatPKR(-e.amount)} will be added back to the ${type === "customer" ? "customer's udhaar" : "amount you owe"}.`],
+      points: [
+        tr(type === "customer" ? "{amount} will be added back to the customer's udhaar." : "{amount} will be added back to the amount you owe.", { amount: formatPKR(-e.amount) }),
+      ],
       tone: "danger",
-      confirmLabel: "Cancel payment",
-      cancelLabel: "Keep it",
+      confirmLabel: tr("Cancel payment"),
+      cancelLabel: tr("Keep it"),
     });
     if (!ok) return;
     try {
       await api(`/api/ledger/${e._id}/reverse`, { body: {} });
-      toast.success("Payment cancelled");
+      toast.success(tr("Payment cancelled"));
       load();
     } catch (err) {
       toast.error((err as Error).message);
@@ -384,10 +387,10 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
   const khataCard = (
       <Card>
         <div className="border-b border-slate-100 px-5 py-4">
-          <h2 className="font-bold text-slate-900">Khata history</h2>
+          <h2 className="font-bold text-slate-900">{tr("Khata history")}</h2>
         </div>
         {ledger.length === 0 ? (
-          <p className="py-12 text-center text-sm text-slate-500">No entries yet.</p>
+          <p className="py-12 text-center text-sm text-slate-500">{tr("No entries yet.")}</p>
         ) : (
           <Table>
             <thead>
@@ -406,7 +409,7 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
                   <Td className="text-slate-500">{formatDate(e.createdAt, true)}</Td>
                   <Td>
                     <div className="flex flex-wrap items-center gap-1.5 font-medium text-slate-800">
-                      <span className={e.reversed ? "line-through decoration-rose-400" : ""}>{KIND[e.kind] ?? e.kind}</span>
+                      <span className={e.reversed ? "line-through decoration-rose-400" : ""}>{tr(KIND[e.kind] ?? e.kind)}</span>
                       {e.reversed && <Badge color="red">Cancelled</Badge>}
                     </div>
                     <div className="text-xs text-slate-400">
@@ -414,7 +417,7 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
                         e.refNo,
                         e.method && PAYMENT_LABELS[e.method],
                         e.note && e.note !== `Bill ${e.refNo}` ? (e.refNo && e.note.startsWith(`${e.refNo} cancelled`) ? e.note.slice(e.refNo.length + 11).replace(/^ — /, "") || null : e.note) : null,
-                        e.user?.name && `by ${e.user.name}`,
+                        e.user?.name && tr("by {name}", { name: e.user.name }),
                       ]
                         .filter(Boolean)
                         .join(" · ")}
@@ -426,22 +429,22 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
                   <Td className="text-right">
                     {e.kind === "payment" && e.refType === "payment" && (
                       <div className="flex justify-end gap-1">
-                        <Button size="sm" variant="ghost" title={type === "customer" ? "Print receipt" : "Print voucher"} aria-label="Print receipt" icon={<Printer className="h-4 w-4" />} onClick={() => printPaymentReceipt(e._id)} />
+                        <Button size="sm" variant="ghost" title={tr(type === "customer" ? "Print receipt" : "Print voucher")} aria-label="Print receipt" icon={<Printer className="h-4 w-4" />} onClick={() => printPaymentReceipt(e._id)} />
                         {type === "customer" && wa && !e.reversed && (
                           <Button
                             size="sm"
                             variant="ghost"
-                            title="Send payment confirmation on WhatsApp"
+                            title={tr("Send payment confirmation on WhatsApp")}
                             aria-label="WhatsApp receipt"
                             icon={<MessageCircle className="h-4 w-4 text-emerald-600" />}
                             onClick={() => {
                               sendPaymentWhatsApp(settings, party, e);
-                              toast.success("WhatsApp opened — press Send there");
+                              toast.success(tr("WhatsApp opened — press Send there"));
                             }}
                           />
                         )}
                         {can.manage && !e.reversed && (
-                          <Button size="sm" variant="ghost" className="hover:text-rose-600" title="Cancel this payment" aria-label="Cancel payment" icon={<Ban className="h-4 w-4" />} onClick={() => cancelPayment(e)} />
+                          <Button size="sm" variant="ghost" className="hover:text-rose-600" title={tr("Cancel this payment")} aria-label="Cancel payment" icon={<Ban className="h-4 w-4" />} onClick={() => cancelPayment(e)} />
                         )}
                       </div>
                     )}
@@ -456,7 +459,7 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
   const pointsCard = type === "customer" ? (
       <Card>
           <div className="border-b border-slate-100 px-5 py-4">
-            <h2 className="font-bold text-slate-900">Loyalty points</h2>
+            <h2 className="font-bold text-slate-900">{tr("Loyalty points")}</h2>
           </div>
           <Table>
             <thead>
@@ -472,7 +475,7 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
                 <tr key={p._id}>
                   <Td className="text-slate-500">{formatDate(p.createdAt, true)}</Td>
                   <Td>
-                    {{ earn: "Earned on bill", redeem: "Spent on bill", return: "Taken back (return)", adjust: "Adjusted" }[p.kind]} {p.refNo && <span className="text-xs text-slate-400">{p.refNo}</span>}
+                    {tr({ earn: "Earned on bill", redeem: "Spent on bill", return: "Taken back (return)", adjust: "Adjusted" }[p.kind])} {p.refNo && <span className="text-xs text-slate-400">{p.refNo}</span>}
                   </Td>
                   <Td className={`text-right font-semibold ${p.points > 0 ? "text-emerald-700" : "text-rose-600"}`}>{p.points > 0 ? `+${p.points}` : p.points}</Td>
                   <Td className="text-right font-bold">{p.balanceAfter}</Td>
@@ -486,7 +489,7 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
   return (
     <div>
       <Link href={t.base} className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800">
-        <ArrowLeft className="h-4 w-4" /> Back to {t.title}
+        <ArrowLeft className="h-4 w-4" /> {tr("Back to {name}", { name: tr(t.title) })}
       </Link>
 
       <Card className="overflow-hidden">
@@ -499,7 +502,7 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
               <div>
                 <h1 className="flex flex-wrap items-center gap-2 text-2xl font-bold">
                   {party.name}
-                  {party.priceLevel === "wholesale" && <span className="rounded-full bg-violet-500/30 px-2.5 py-0.5 text-xs font-semibold text-violet-100">Wholesale</span>}
+                  {party.priceLevel === "wholesale" && <span className="rounded-full bg-violet-500/30 px-2.5 py-0.5 text-xs font-semibold text-violet-100">{tr("Wholesale")}</span>}
                 </h1>
                 <div className="mt-0.5 flex flex-wrap gap-3 text-sm text-slate-300">
                   {party.phone && (
@@ -512,12 +515,12 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
               </div>
             </div>
             <div className="sm:text-right">
-              <div className="text-sm text-slate-300">{party.balance >= 0 ? t.oweHint : "Advance / extra paid"}</div>
+              <div className="text-sm text-slate-300">{tr(party.balance >= 0 ? t.oweHint : "Advance / extra paid")}</div>
               <div className={`text-4xl font-extrabold ${party.balance > 0 ? "text-amber-300" : "text-emerald-300"}`}>{formatPKR(Math.abs(party.balance))}</div>
-              {party.creditLimit > 0 && <div className="text-xs text-slate-400">Limit: {formatPKR(party.creditLimit)}</div>}
+              {party.creditLimit > 0 && <div className="text-xs text-slate-400">{tr("Limit: {amount}", { amount: formatPKR(party.creditLimit) })}</div>}
               {type === "customer" && settings?.loyaltyEnabled && (
                 <div className="mt-1 text-sm font-semibold text-violet-200">
-                  {party.points ?? 0} loyalty points · worth {formatPKR((party.points ?? 0) * (settings.loyaltyPointValue ?? 1))}
+                  {tr("{points} loyalty points · worth {amount}", { points: party.points ?? 0, amount: formatPKR((party.points ?? 0) * (settings.loyaltyPointValue ?? 1)) })}
                 </div>
               )}
             </div>
@@ -566,6 +569,7 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
 /** Manual udhaar / supplier bill added to the khata (payments use ReceivePaymentModal). */
 function TxnModal({ type, mode, party, onClose, onSaved }: { type: PartyType; mode: "charge" | null; party: Party; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
+  const tr = useT();
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -581,7 +585,7 @@ function TxnModal({ type, mode, party, onClose, onSaved }: { type: PartyType; mo
     setSaving(true);
     try {
       await api(`/api/parties/${party._id}/payment`, { body: { type: "charge", amount: Number(amount), note } });
-      toast.success("Khata updated");
+      toast.success(tr("Khata updated"));
       onSaved();
     } catch (err) {
       toast.error((err as Error).message);

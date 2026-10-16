@@ -10,6 +10,7 @@ import { useToast } from "@/components/toast";
 import { useConfirm } from "@/components/confirm";
 import { api, formatDate, todayISO, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty, round2 } from "@/lib/money";
+import { useT } from "@/lib/i18n";
 
 type Item = { name: string; unit: string; qty: number; cost: number; total: number; returnedQty?: number; serials?: { device: string; imei: string; returned?: boolean }[] };
 type Purchase = {
@@ -48,6 +49,7 @@ const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
 export default function PurchasesPage() {
   const toast = useToast();
+  const t = useT();
   const [tab, setTab] = useState<"purchases" | "returns">("purchases");
   const [range, setRange] = useState({ from: todayISO(-29), to: todayISO() });
   const [branch, setBranch] = useState("");
@@ -80,8 +82,8 @@ export default function PurchasesPage() {
         }
       />
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Total purchased" value={formatPKR(total)} icon={<PackagePlus className="h-5 w-5" />} tone="violet" hint={`${active.length} purchases`} />
-        <StatCard label="Returned to suppliers" value={formatPKR(returnedValue)} icon={<Undo2 className="h-5 w-5" />} tone="amber" hint={`${returns?.length ?? 0} returns`} />
+        <StatCard label="Total purchased" value={formatPKR(total)} icon={<PackagePlus className="h-5 w-5" />} tone="violet" hint={t("{n} purchases", { n: active.length })} />
+        <StatCard label="Returned to suppliers" value={formatPKR(returnedValue)} icon={<Undo2 className="h-5 w-5" />} tone="amber" hint={t("{n} returns", { n: returns?.length ?? 0 })} />
         <StatCard label="Not paid at purchase time" value={formatPKR(unpaid)} icon={<PackagePlus className="h-5 w-5" />} tone="rose" hint="See Suppliers for the khata balance" />
       </div>
       <Card>
@@ -125,7 +127,7 @@ export default function PurchasesPage() {
                     <Td>
                       <div className={cn("font-semibold text-slate-800", p.status === "void" && "line-through")}>{p.purchaseNo}</div>
                       <div className="text-xs text-slate-400">
-                        <Count n={p.items.length} one="{n} item" many="{n} items" />{p.supplierInvoice && ` · Inv ${p.supplierInvoice}`}
+                        <Count n={p.items.length} one="{n} item" many="{n} items" />{p.supplierInvoice && ` · ${t("Inv {no}", { no: p.supplierInvoice })}`}
                         {p.branchName && branch === "all" && ` · ${p.branchName}`}
                       </div>
                     </Td>
@@ -133,7 +135,7 @@ export default function PurchasesPage() {
                     <Td>{p.supplierName ?? <span className="text-slate-400">—</span>}</Td>
                     <Td className="text-right">
                       <div className="font-bold">{formatPKR(p.total)}</div>
-                      {(p.returnedTotal ?? 0) > 0 && <div className="text-xs text-amber-700">−{formatPKR(p.returnedTotal!)} returned</div>}
+                      {(p.returnedTotal ?? 0) > 0 && <div className="text-xs text-amber-700">−{t("{n} returned", { n: formatPKR(p.returnedTotal!) })}</div>}
                     </Td>
                     <Td className="text-right">
                       {p.status === "void" ? (
@@ -175,7 +177,7 @@ export default function PurchasesPage() {
                 <tr key={r._id}>
                   <Td>
                     <div className="font-semibold text-slate-800">{r.returnNo}</div>
-                    <div className="text-xs text-slate-400">from {r.purchaseNo}{r.userName && ` · ${r.userName}`}</div>
+                    <div className="text-xs text-slate-400">{t("from {no}", { no: r.purchaseNo })}{r.userName && ` · ${r.userName}`}</div>
                   </Td>
                   <Td className="text-slate-500">{formatDate(r.createdAt, true)}</Td>
                   <Td>{r.supplierName ?? <span className="text-slate-400">—</span>}</Td>
@@ -199,6 +201,7 @@ export default function PurchasesPage() {
 
 function PurchaseModal({ id, onClose, onChanged }: { id: string | null; onClose: () => void; onChanged: () => void }) {
   const toast = useToast();
+  const t = useT();
   const confirm = useConfirm();
   const [p, setP] = useState<(Purchase & { returns: PReturn[] }) | null>(null);
   const [mode, setMode] = useState<"view" | "return">("view");
@@ -243,7 +246,7 @@ function PurchaseModal({ id, onClose, onChanged }: { id: string | null; onClose:
       const r = await api<PReturn>(`/api/purchases/${p._id}/return`, {
         body: { items: chosen.map((l) => ({ index: l.index, qty: l.q, ...(l.serials?.length ? { serials: phones[l.index] } : {}) })), settlement, reason: reason || undefined },
       });
-      toast.success(`${r.returnNo} saved — ${formatPKR(r.total)} ${r.settlement === "khata" ? "taken off the supplier's khata" : "cash back from supplier"}`);
+      toast.success(t(r.settlement === "khata" ? "{no} saved — {amount} taken off the supplier's khata" : "{no} saved — {amount} cash back from supplier", { no: r.returnNo, amount: formatPKR(r.total) }));
       setMode("view");
       setQty({});
       setPhones({});
@@ -259,16 +262,16 @@ function PurchaseModal({ id, onClose, onChanged }: { id: string | null; onClose:
   async function cancelPurchase() {
     if (!p) return;
     const ok = await confirm({
-      title: `Cancel purchase ${p.purchaseNo}?`,
-      message: "Use this only if the purchase was entered by mistake. It stays in the list marked as cancelled.",
+      title: t("Cancel purchase {no}?", { no: p.purchaseNo }),
+      message: t("Use this only if the purchase was entered by mistake. It stays in the list marked as cancelled."),
       details: [
-        { label: "Supplier", value: p.supplierName ?? "—" },
-        { label: "Items", value: p.items.length },
-        { label: "Total", value: formatPKR(p.total), strong: true },
+        { label: t("Supplier"), value: p.supplierName ?? "—" },
+        { label: t("Items"), value: p.items.length },
+        { label: t("Total"), value: formatPKR(p.total), strong: true },
       ],
       points: [
-        "All its items are taken back out of stock.",
-        p.supplier ? `${formatPKR(p.total - p.amountPaid)} still owed to the supplier is removed from their khata.` : `The ${formatPKR(p.amountPaid)} paid is counted as money back.`,
+        t("All its items are taken back out of stock."),
+        p.supplier ? t("{amount} still owed to the supplier is removed from their khata.", { amount: formatPKR(p.total - p.amountPaid) }) : t("The {amount} paid is counted as money back.", { amount: formatPKR(p.amountPaid) }),
       ],
       tone: "danger",
       confirmLabel: "Cancel purchase",
@@ -277,7 +280,7 @@ function PurchaseModal({ id, onClose, onChanged }: { id: string | null; onClose:
     if (!ok) return;
     try {
       await api(`/api/purchases/${p._id}/void`, { body: {} });
-      toast.success("Purchase cancelled");
+      toast.success(t("Purchase cancelled"));
       load();
       onChanged();
     } catch (err) {
@@ -289,14 +292,14 @@ function PurchaseModal({ id, onClose, onChanged }: { id: string | null; onClose:
     <Modal
       open
       onClose={onClose}
-      title={p ? `${mode === "return" ? "Return to supplier — " : ""}${p.purchaseNo}` : "Purchase"}
+      title={p ? (mode === "return" ? t("Return to supplier — {no}", { no: p.purchaseNo }) : p.purchaseNo) : "Purchase"}
       size="lg"
       footer={
         p && mode === "return" ? (
           <>
             <Button variant="outline" onClick={() => setMode("view")}>Back</Button>
             <Button variant="danger" loading={saving} disabled={!chosen.length} icon={<RotateCcw className="h-4 w-4" />} onClick={saveReturn}>
-              Return {value ? formatPKR(value) : ""}
+              {value ? t("Return {amount}", { amount: formatPKR(value) }) : `${t("Return")} `}
             </Button>
           </>
         ) : p && canAct ? (
@@ -317,8 +320,8 @@ function PurchaseModal({ id, onClose, onChanged }: { id: string | null; onClose:
         <>
           <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-slate-500">
             <span>{formatDate(p.createdAt, true)}</span>
-            <span>· {p.supplierName ?? "No supplier"}</span>
-            {p.supplierInvoice && <span>· Inv {p.supplierInvoice}</span>}
+            <span>· {p.supplierName ?? t("No supplier")}</span>
+            {p.supplierInvoice && <span>· {t("Inv {no}", { no: p.supplierInvoice })}</span>}
             {p.branchName && <span>· {p.branchName}</span>}
             {p.status === "void" && <Badge color="red">Cancelled</Badge>}
             {p.status === "partially_returned" && <Badge color="amber">Part returned</Badge>}
@@ -326,7 +329,7 @@ function PurchaseModal({ id, onClose, onChanged }: { id: string | null; onClose:
           </div>
           {p.status === "void" && (
             <p className="mb-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">
-              Cancelled {p.voidedAt && formatDate(p.voidedAt, true)}{p.voidedByName && ` by ${p.voidedByName}`}{p.voidReason && ` — ${p.voidReason}`}
+              {t("Cancelled")} {p.voidedAt && formatDate(p.voidedAt, true)}{p.voidedByName && ` ${t("by {name}", { name: p.voidedByName })}`}{p.voidReason && ` — ${p.voidReason}`}
             </p>
           )}
           <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200">
@@ -336,7 +339,7 @@ function PurchaseModal({ id, onClose, onChanged }: { id: string | null; onClose:
                   <div className="truncate font-semibold text-slate-800">{l.name}</div>
                   <div className="text-xs text-slate-500">
                     {formatQty(l.qty)} {UNIT_LABELS[l.unit] ?? l.unit} × {formatPKR(l.cost)}
-                    {(l.returnedQty ?? 0) > 0 && <span className="text-amber-700"> · {formatQty(l.returnedQty!)} returned</span>}
+                    {(l.returnedQty ?? 0) > 0 && <span className="text-amber-700"> · {t("{n} returned", { n: formatQty(l.returnedQty!) })}</span>}
                   </div>
                   {mode === "view" && l.serials?.length ? (
                     <div className="mt-0.5 font-mono text-[11px] text-slate-500">
@@ -392,14 +395,14 @@ function PurchaseModal({ id, onClose, onChanged }: { id: string | null; onClose:
           </ul>
           {mode === "view" ? (
             <div className="mt-4 space-y-1.5 rounded-2xl bg-slate-50 p-4 text-sm">
-              <div className="flex justify-between"><span className="text-slate-500">Total</span><b>{formatPKR(p.total)}</b></div>
-              <div className="flex justify-between"><span className="text-slate-500">Paid at purchase</span><b>{formatPKR(p.amountPaid)}</b></div>
-              {(p.returnedTotal ?? 0) > 0 && <div className="flex justify-between"><span className="text-slate-500">Returned to supplier</span><b className="text-amber-700">−{formatPKR(p.returnedTotal!)}</b></div>}
+              <div className="flex justify-between"><span className="text-slate-500">{t("Total")}</span><b>{formatPKR(p.total)}</b></div>
+              <div className="flex justify-between"><span className="text-slate-500">{t("Paid at purchase")}</span><b>{formatPKR(p.amountPaid)}</b></div>
+              {(p.returnedTotal ?? 0) > 0 && <div className="flex justify-between"><span className="text-slate-500">{t("Returned to supplier")}</span><b className="text-amber-700">−{formatPKR(p.returnedTotal!)}</b></div>}
               {p.returns.length > 0 && (
                 <ul className="mt-2 border-t border-dashed border-slate-200 pt-2 text-xs text-slate-500">
                   {p.returns.map((r) => (
                     <li key={r._id}>
-                      {r.returnNo} · {formatDate(r.createdAt, true)} · {formatPKR(r.total)} · {r.settlement === "khata" ? "less in khata" : "cash back"}
+                      {r.returnNo} · {formatDate(r.createdAt, true)} · {formatPKR(r.total)} · {r.settlement === "khata" ? t("less in khata") : t("cash back")}
                       {r.reason && ` · ${r.reason}`}
                     </li>
                   ))}
@@ -410,19 +413,19 @@ function PurchaseModal({ id, onClose, onChanged }: { id: string | null; onClose:
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Field label="Settle by">
                 <Select value={settlement} onChange={(e) => setSettlement(e.target.value as "khata" | "cash")} aria-label="Settle by">
-                  {p.supplier && <option value="khata">Take off supplier&apos;s khata</option>}
-                  <option value="cash">Supplier gave cash back</option>
+                  {p.supplier && <option value="khata">{t("Take off supplier's khata")}</option>}
+                  <option value="cash">{t("Supplier gave cash back")}</option>
                 </Select>
               </Field>
               <Field label="Reason">
                 <Select value={reason} onChange={(e) => setReason(e.target.value)}>
-                  <option value="">Choose (optional)</option>
+                  <option value="">{t("Choose (optional)")}</option>
                   {REASONS.map((r) => (
-                    <option key={r}>{r}</option>
+                    <option key={r} value={r}>{t(r)}</option>
                   ))}
                 </Select>
               </Field>
-              <p className="text-xs text-slate-500 sm:col-span-2">The items leave stock at {p.branchName ?? "this branch"} at their purchase cost.</p>
+              <p className="text-xs text-slate-500 sm:col-span-2">{t("The items leave stock at {branch} at their purchase cost.", { branch: p.branchName ?? t("this branch") })}</p>
             </div>
           )}
         </>

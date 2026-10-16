@@ -7,6 +7,7 @@ import { RepairStatusBadge, type RepairJob } from "./repairs";
 import { useToast } from "./toast";
 import { api, formatDate, PAYMENT_LABELS } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
+import { plural, useT } from "@/lib/i18n";
 
 type Overview = {
   stats: { bills: number; bought: number; avgBill: number; firstVisit: string | null; lastVisit: string | null; phones: number; inWarranty: number; openRepairs: number; installmentsLeft: number; installmentsLate: number };
@@ -24,6 +25,7 @@ const METHOD: Record<string, string> = { ...PAYMENT_LABELS, split: "Split", inst
 /** Customer page: khata plus everything else about the customer, in tabs, with a summary on top. */
 export function CustomerTabs({ id, khata, points }: { id: string; khata: React.ReactNode; points: React.ReactNode | null }) {
   const toast = useToast();
+  const tr = useT();
   const [data, setData] = useState<Overview | null>(null);
   const [tab, setTab] = useState<Tab>("khata");
   useEffect(() => {
@@ -48,12 +50,16 @@ export function CustomerTabs({ id, khata, points }: { id: string; khata: React.R
     <div className="mt-6">
       {s && (
         <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-          <Fact label="Bought in all" value={formatPKR(s.bought)} hint={`${s.bills} bill${s.bills === 1 ? "" : "s"}${s.bills ? ` · avg ${formatPKR(s.avgBill)}` : ""}`} />
-          <Fact label="Last visit" value={s.lastVisit ? formatDate(s.lastVisit) : "—"} hint={s.firstVisit ? `Customer since ${formatDate(s.firstVisit)}` : "No bills yet"} />
-          {m.phones || s.phones ? <Fact label="Phones bought" value={String(s.phones)} hint={`${s.inWarranty} in warranty`} /> : null}
+          <Fact
+            label="Bought in all"
+            value={formatPKR(s.bought)}
+            hint={`${tr(plural(s.bills, "{n} bill", "{n} bills"), { n: s.bills })}${s.bills ? ` · ${tr("avg {amount}", { amount: formatPKR(s.avgBill) })}` : ""}`}
+          />
+          <Fact label="Last visit" value={s.lastVisit ? formatDate(s.lastVisit) : "—"} hint={s.firstVisit ? tr("Customer since {date}", { date: formatDate(s.firstVisit) }) : tr("No bills yet")} />
+          {m.phones || s.phones ? <Fact label="Phones bought" value={String(s.phones)} hint={tr("{n} in warranty", { n: s.inWarranty })} /> : null}
           {m.repairs ? <Fact label="Repairs in the shop" value={String(s.openRepairs)} /> : null}
           {m.installments ? (
-            <Fact label="Installments left" value={formatPKR(s.installmentsLeft)} hint={s.installmentsLate ? `${formatPKR(s.installmentsLate)} late` : "Nothing late"} tone={s.installmentsLate ? "red" : undefined} />
+            <Fact label="Installments left" value={formatPKR(s.installmentsLeft)} hint={s.installmentsLate ? tr("{amount} late", { amount: formatPKR(s.installmentsLate) }) : tr("Nothing late")} tone={s.installmentsLate ? "red" : undefined} />
           ) : null}
         </div>
       )}
@@ -96,8 +102,8 @@ export function CustomerTabs({ id, khata, points }: { id: string; khata: React.R
                       {b.status !== "completed" && <Badge color={b.status === "returned" ? "red" : "amber"}>{b.status === "returned" ? "Returned" : "Part returned"}</Badge>}
                     </Td>
                     <Td>
-                      {METHOD[b.method] ?? b.method}
-                      {b.creditAmount > 0 && <div className="text-xs text-amber-700">{formatPKR(b.creditAmount)} udhaar</div>}
+                      {tr(METHOD[b.method] ?? b.method)}
+                      {b.creditAmount > 0 && <div className="text-xs text-amber-700">{tr("{amount} udhaar", { amount: formatPKR(b.creditAmount) })}</div>}
                     </Td>
                     <Td className="text-right font-semibold">{formatPKR(b.total)}</Td>
                   </tr>
@@ -135,11 +141,11 @@ export function CustomerTabs({ id, khata, points }: { id: string; khata: React.R
                       {p.returned ? (
                         <Badge color="slate">Returned</Badge>
                       ) : p.inWarranty ? (
-                        <Badge color="green">Till {formatDate(p.warrantyUntil!)}</Badge>
+                        <Badge color="green">{tr("Till {date}", { date: formatDate(p.warrantyUntil!) })}</Badge>
                       ) : p.warrantyUntil ? (
-                        <Badge color="red">Ended {formatDate(p.warrantyUntil)}</Badge>
+                        <Badge color="red">{tr("Ended {date}", { date: formatDate(p.warrantyUntil) })}</Badge>
                       ) : (
-                        <span className="text-slate-400">None</span>
+                        <span className="text-slate-400">{tr("None")}</span>
                       )}
                     </Td>
                   </tr>
@@ -177,11 +183,11 @@ export function CustomerTabs({ id, khata, points }: { id: string; khata: React.R
                     </Td>
                     <Td>
                       <RepairStatusBadge status={r.status} />
-                      {r.warrantyUntil && new Date(r.warrantyUntil) >= new Date() && <div className="text-xs text-emerald-700">Warranty till {formatDate(r.warrantyUntil)}</div>}
+                      {r.warrantyUntil && new Date(r.warrantyUntil) >= new Date() && <div className="text-xs text-emerald-700">{tr("Warranty till {date}", { date: formatDate(r.warrantyUntil) })}</div>}
                     </Td>
                     <Td className="text-right">
                       <div className="font-semibold">{r.total ? formatPKR(r.total) : "—"}</div>
-                      {r.balance > 0 && r.status !== "cancelled" && <div className="text-xs font-semibold text-amber-700">{formatPKR(r.balance)} to pay</div>}
+                      {r.balance > 0 && r.status !== "cancelled" && <div className="text-xs font-semibold text-amber-700">{tr("{amount} to pay", { amount: formatPKR(r.balance) })}</div>}
                     </Td>
                   </tr>
                 ))}
@@ -223,7 +229,7 @@ export function CustomerTabs({ id, khata, points }: { id: string; khata: React.R
                       ) : p.status === "cancelled" ? (
                         <Badge color="slate">Closed</Badge>
                       ) : p.lateCount ? (
-                        <Badge color="red">{formatPKR(p.overdue)} late</Badge>
+                        <Badge color="red">{tr("{amount} late", { amount: formatPKR(p.overdue) })}</Badge>
                       ) : p.next ? (
                         <span className="text-sm">
                           {formatDate(p.next.dueDate)} · {formatPKR(p.next.amount)}
@@ -259,7 +265,7 @@ export function CustomerTabs({ id, khata, points }: { id: string; khata: React.R
                     {u.productName}
                     <div className="text-xs text-slate-500">
                       {formatDate(u.createdAt)}
-                      {u.status === "cancelled" && " · cancelled"}
+                      {u.status === "cancelled" && ` · ${tr("cancelled")}`}
                     </div>
                   </Td>
                   <Td className="font-mono text-sm">{u.imei}</Td>
@@ -275,9 +281,10 @@ export function CustomerTabs({ id, khata, points }: { id: string; khata: React.R
 }
 
 function Fact({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: "red" }) {
+  const t = useT();
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-3">
-      <div className="text-xs font-medium text-slate-500">{label}</div>
+      <div className="text-xs font-medium text-slate-500">{t(label)}</div>
       <div className={tone === "red" ? "text-lg font-extrabold text-rose-600" : "text-lg font-extrabold text-slate-900"}>{value}</div>
       {hint && <div className={tone === "red" ? "text-xs font-semibold text-rose-600" : "text-xs text-slate-500"}>{hint}</div>}
     </div>
@@ -285,5 +292,6 @@ function Fact({ label, value, hint, tone }: { label: string; value: string; hint
 }
 
 function Empty({ text }: { text: string }) {
-  return <p className="py-12 text-center text-sm text-slate-500">{text}</p>;
+  const t = useT();
+  return <p className="py-12 text-center text-sm text-slate-500">{t(text)}</p>;
 }

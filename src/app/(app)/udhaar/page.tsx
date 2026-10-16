@@ -10,6 +10,7 @@ import { useSession } from "@/components/session";
 import { useToast } from "@/components/toast";
 import { api, formatDate } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
+import { useT } from "@/lib/i18n";
 import { openWhatsApp, reminderMessage, waNumber } from "@/lib/whatsapp";
 import { toCsv } from "@/lib/csv";
 
@@ -30,13 +31,14 @@ type Row = {
 type Report = { rows: Row[]; totals: { customers: number; balance: number; d0_30: number; d31_60: number; d61_90: number; d90: number; withoutPhone: number } };
 
 const daysAgo = (d: string | null) => (d ? Math.floor((Date.now() - new Date(d).getTime()) / 864e5) : null);
-const ago = (d: string | null) => {
+const ago = (d: string | null, tr: ReturnType<typeof useT>) => {
   const n = daysAgo(d);
-  return n === null ? "Never" : n === 0 ? "Today" : n === 1 ? "Yesterday" : `${n} days ago`;
+  return n === null ? tr("Never") : n === 0 ? tr("Today") : n === 1 ? tr("Yesterday") : tr("{n} days ago", { n });
 };
 
 export default function UdhaarReportPage() {
   const toast = useToast();
+  const tr = useT();
   const { settings } = useSession();
   const [data, setData] = useState<Report | null>(null);
   const [q, setQ] = useState("");
@@ -66,7 +68,7 @@ export default function UdhaarReportPage() {
 
   async function send(r: Row) {
     const n = waNumber(r.phone);
-    if (!n) return toast.error(`${r.name} has no valid mobile number. Add it in Customers Khata.`);
+    if (!n) return toast.error(tr("{name} has no valid mobile number. Add it in Customers Khata.", { name: r.name }));
     openWhatsApp(n, message(r));
     await api("/api/reminders", { body: { partyId: r._id, kind: "reminder" } }).catch(() => {});
     setData((d) => d && { ...d, rows: d.rows.map((x) => (x._id === r._id ? { ...x, lastRemindedAt: new Date().toISOString(), reminders: x.reminders + 1 } : x)) });
@@ -96,13 +98,13 @@ export default function UdhaarReportPage() {
       <PageHeader
         title="Udhaar Report"
         urdu="ادھار رپورٹ"
-        subtitle={`Who owes you, for how long, and WhatsApp reminders · ${formatDate(new Date(), true)}`}
+        subtitle={tr("Who owes you, for how long, and WhatsApp reminders · {date}", { date: formatDate(new Date(), true) })}
         actions={
           <div className="no-print flex flex-wrap gap-2">
             <Button variant="outline" icon={<Printer className="h-4 w-4" />} onClick={() => window.print()}>Print</Button>
             <Button variant="outline" icon={<Download className="h-4 w-4" />} onClick={exportCsv} disabled={!rows.length}>Excel</Button>
             <Button icon={<BellRing className="h-4 w-4" />} disabled={!sendable.length} onClick={() => setQueue(sendable)}>
-              Remind {sendable.length} on WhatsApp
+              {tr("Remind {n} on WhatsApp", { n: sendable.length })}
             </Button>
           </div>
         }
@@ -123,18 +125,18 @@ export default function UdhaarReportPage() {
             <div className="no-print flex flex-col gap-3 border-b border-slate-100 p-4 xl:flex-row xl:items-center">
               <div className="relative flex-1">
                 <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or phone" className="pl-10" />
+                <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("Search name or phone")} className="pl-10" />
               </div>
               <Select value={age} onChange={(e) => setAge(e.target.value)} className="xl:w-48">
-                <option value="0">Any age</option>
-                <option value="30">Older than 30 days</option>
-                <option value="60">Older than 60 days</option>
-                <option value="90">Older than 90 days</option>
+                <option value="0">{tr("Any age")}</option>
+                <option value="30">{tr("Older than 30 days")}</option>
+                <option value="60">{tr("Older than 60 days")}</option>
+                <option value="90">{tr("Older than 90 days")}</option>
               </Select>
-              <Input value={minAmount} onChange={(e) => setMinAmount(e.target.value)} type="number" min="0" placeholder="Min amount" className="xl:w-36" />
+              <Input value={minAmount} onChange={(e) => setMinAmount(e.target.value)} type="number" min="0" placeholder={tr("Min amount")} className="xl:w-36" />
               <label className="flex items-center gap-2 text-sm font-medium text-slate-600">
                 <input type="checkbox" checked={notReminded} onChange={(e) => setNotReminded(e.target.checked)} className="h-4 w-4 accent-brand-600" />
-                Not reminded in 7 days
+                {tr("Not reminded in 7 days")}
               </label>
               <WaModePicker />
             </div>
@@ -163,8 +165,8 @@ export default function UdhaarReportPage() {
                         <Td>
                           <Link href={`/customers/${r._id}`} className="font-semibold text-slate-800 hover:text-brand-700">{r.name}</Link>
                           <div className="text-xs text-slate-400">
-                            {r.phone || <span className="text-rose-500">No phone</span>}
-                            {r.daysOverdue > 0 && <> · oldest <Count n={r.daysOverdue} one="{n} day" many="{n} days" /></>}
+                            {r.phone || <span className="text-rose-500">{tr("No phone")}</span>}
+                            {r.daysOverdue > 0 && <> · {tr("oldest")} <Count n={r.daysOverdue} one="{n} day" many="{n} days" /></>}
                           </div>
                         </Td>
                         <Td className="text-right font-bold text-slate-900">
@@ -175,8 +177,8 @@ export default function UdhaarReportPage() {
                         <Td className="text-right text-slate-600">{r.buckets.d31_60 ? formatPKR(r.buckets.d31_60) : "—"}</Td>
                         <Td className="text-right text-amber-700">{r.buckets.d61_90 ? formatPKR(r.buckets.d61_90) : "—"}</Td>
                         <Td className="text-right font-semibold text-rose-600">{r.buckets.d90 ? formatPKR(r.buckets.d90) : "—"}</Td>
-                        <Td className="text-slate-500">{ago(r.lastPaymentAt)}</Td>
-                        <Td className="text-slate-500">{r.lastRemindedAt ? `${ago(r.lastRemindedAt)} (${r.reminders})` : "Never"}</Td>
+                        <Td className="text-slate-500">{ago(r.lastPaymentAt, tr)}</Td>
+                        <Td className="text-slate-500">{r.lastRemindedAt ? `${ago(r.lastRemindedAt, tr)} (${r.reminders})` : tr("Never")}</Td>
                         <Td className="no-print text-right">
                           <div className="flex justify-end gap-1">
                             <Button size="sm" variant="ghost" icon={<HandCoins className="h-4 w-4 text-brand-600" />} onClick={() => setPaying({ _id: r._id, type: "customer", name: r.name, phone: r.phone, balance: r.balance })}>
@@ -185,7 +187,7 @@ export default function UdhaarReportPage() {
                             <Button size="sm" variant="ghost" disabled={!waNumber(r.phone)} icon={<MessageCircle className="h-4 w-4 text-emerald-600" />} onClick={() => send(r)}>
                               WhatsApp
                             </Button>
-                            <a href={`/statement/${r._id}`} target="_blank" rel="noreferrer" title="Khata statement" aria-label={`Statement for ${r.name}`}>
+                            <a href={`/statement/${r._id}`} target="_blank" rel="noreferrer" title={tr("Khata statement")} aria-label={`Statement for ${r.name}`}>
                               <Button size="sm" variant="ghost" icon={<FileText className="h-4 w-4" />} />
                             </a>
                           </div>
@@ -196,7 +198,7 @@ export default function UdhaarReportPage() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-50 font-bold">
-                    <Td>Total ({rows.length})</Td>
+                    <Td>{tr("Total ({n})", { n: rows.length })}</Td>
                     <Td className="text-right">{formatPKR(shown)}</Td>
                     <Td className="text-right">{formatPKR(rows.reduce((s, r) => s + r.buckets.d0_30, 0))}</Td>
                     <Td className="text-right">{formatPKR(rows.reduce((s, r) => s + r.buckets.d31_60, 0))}</Td>
@@ -219,6 +221,7 @@ export default function UdhaarReportPage() {
 
 /** Goes through customers one by one: open WhatsApp with the message, then move to the next. */
 function ReminderQueue({ queue, onClose, message, onSend }: { queue: Row[] | null; onClose: () => void; message: (r: Row) => string; onSend: (r: Row) => Promise<void> }) {
+  const tr = useT();
   const [i, setI] = useState(0);
   const [sent, setSent] = useState(0);
   useEffect(() => {
@@ -231,14 +234,16 @@ function ReminderQueue({ queue, onClose, message, onSend }: { queue: Row[] | nul
     <Modal open onClose={onClose} title="WhatsApp reminders" size="md">
       {!r ? (
         <div className="py-6 text-center">
-          <p className="text-lg font-bold text-slate-900">Done</p>
-          <p className="text-sm text-slate-500">WhatsApp opened for {sent} of <Count n={queue.length} one="{n} customer" many="{n} customers" />.</p>
+          <p className="text-lg font-bold text-slate-900">{tr("Done")}</p>
+          <p className="text-sm text-slate-500">
+            {tr(queue.length === 1 ? "WhatsApp opened for {sent} of {n} customer." : "WhatsApp opened for {sent} of {n} customers.", { sent, n: queue.length })}
+          </p>
           <Button className="mt-5" onClick={onClose}>Close</Button>
         </div>
       ) : (
         <div className="space-y-4">
           <div className="flex items-center justify-between text-sm text-slate-500">
-            <span>Customer {i + 1} of {queue.length}</span>
+            <span>{tr("Customer {i} of {n}", { i: i + 1, n: queue.length })}</span>
             <div className="h-2 w-40 rounded-full bg-slate-100">
               <div className="h-2 rounded-full bg-brand-500" style={{ width: `${((i + 1) / queue.length) * 100}%` }} />
             </div>
@@ -251,7 +256,7 @@ function ReminderQueue({ queue, onClose, message, onSend }: { queue: Row[] | nul
             <div className="text-xs text-slate-500">{r.phone}</div>
           </div>
           <pre className="whitespace-pre-wrap rounded-xl border border-emerald-200 bg-emerald-50 p-4 font-sans text-sm text-emerald-950">{message(r)}</pre>
-          <p className="text-xs text-slate-500">WhatsApp opens with this message typed. Press Send there, then come back and tap Next.</p>
+          <p className="text-xs text-slate-500">{tr("WhatsApp opens with this message typed. Press Send there, then come back and tap Next.")}</p>
           <div className="grid grid-cols-2 gap-3">
             <Button variant="outline" icon={<SkipForward className="h-4 w-4" />} onClick={() => setI(i + 1)}>Skip</Button>
             <Button

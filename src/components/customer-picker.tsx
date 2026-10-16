@@ -32,7 +32,6 @@ export function CustomerPicker({
   const [saving, setSaving] = useState(false);
   const [phoneError, setPhoneError] = useState("");
   const tr = useT();
-  const label = type === "customer" ? "customer" : "supplier";
   const { user } = useSession();
   const cacheKey = `${user.tenantId}:parties:${type}`;
 
@@ -72,7 +71,7 @@ export function CustomerPicker({
     setSaving(true);
     try {
       const p = await api<PartyLite>("/api/parties", { body: { type, name: form.name, phone: phone.phone ?? "" } });
-      toast.success(`${p.name} added`);
+      toast.success(tr("{name} added", { name: p.name }));
       onPick(p);
     } catch (err) {
       toast.error((err as Error).message);
@@ -82,7 +81,7 @@ export function CustomerPicker({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={adding ? `New ${label}` : `Choose ${label}`}>
+    <Modal open={open} onClose={onClose} title={adding ? (type === "customer" ? "New customer" : "New supplier") : type === "customer" ? "Choose customer" : "Choose supplier"}>
       {adding ? (
         <form onSubmit={add} className="space-y-4">
           <Field label="Name *">
@@ -109,10 +108,10 @@ export function CustomerPicker({
         <div>
           <div className="relative mb-3">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or phone" className="pl-10" />
+            <Input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("Search by name or phone")} className="pl-10" />
           </div>
           <Button variant="secondary" className="mb-3 w-full" icon={<Plus className="h-4 w-4" />} onClick={() => setAdding(true)}>
-            Add new {label}
+            {type === "customer" ? "Add new customer" : "Add new supplier"}
           </Button>
           <ul className="max-h-80 divide-y divide-slate-100 overflow-y-auto">
             {list.map((p) => (
@@ -123,13 +122,13 @@ export function CustomerPicker({
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-semibold text-slate-800">{p.name}</div>
-                    <div className="text-xs text-slate-500">{p.phone || "No phone"}</div>
+                    <div className="text-xs text-slate-500">{p.phone || tr("No phone")}</div>
                   </div>
                   {p.balance > 0 && <span className="text-sm font-semibold text-amber-700">{formatPKR(p.balance)}</span>}
                 </button>
               </li>
             ))}
-            {list.length === 0 && <li className="py-8 text-center text-sm text-slate-500">No {label}s found.</li>}
+            {list.length === 0 && <li className="py-8 text-center text-sm text-slate-500">{tr(type === "customer" ? "No customers found." : "No suppliers found.")}</li>}
           </ul>
         </div>
       )}

@@ -5,6 +5,7 @@ import { MessageCircle } from "lucide-react";
 import { Button, Field, Input, Modal, Spinner, Textarea } from "./ui";
 import { api } from "@/lib/client";
 import { billMessage, openWhatsApp, waNumber } from "@/lib/whatsapp";
+import { useT } from "@/lib/i18n";
 
 type Shop = { shopName: string; phone?: string };
 type SaleLite = {
@@ -24,6 +25,7 @@ type SaleLite = {
  * and a link to the bill when the shop has set its public address. The message can be edited first.
  */
 export function SendBillModal({ saleId, open, onClose, shop }: { saleId: string | null; open: boolean; onClose: () => void; shop: Shop }) {
+  const t = useT();
   const [phone, setPhone] = useState("");
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -86,7 +88,7 @@ export function SendBillModal({ saleId, open, onClose, shop }: { saleId: string 
         <Spinner />
       ) : (
         <div className="space-y-4">
-          <Field label="Customer's WhatsApp number" error={phone && !number ? "Enter a Pakistani mobile number, e.g. 0300-1234567" : undefined}>
+          <Field label="Customer's WhatsApp number" error={phone && !number ? t("Enter a Pakistani mobile number, e.g. 0300-1234567") : undefined}>
             <Input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="03xx-xxxxxxx" autoFocus={!phone} aria-label="Customer WhatsApp number" />
           </Field>
           <Field label="Message" hint={link ? "The link opens the bill on the customer's phone." : "Tip: set the app's public address in Settings to add a link to the bill."}>

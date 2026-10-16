@@ -15,6 +15,7 @@ import { compressImage } from "@/lib/image";
 import { api, formatDate, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty } from "@/lib/money";
 import { extraName } from "@/lib/product-search";
+import { useT } from "@/lib/i18n";
 
 type Category = { _id: string; name: string };
 type Product = {
@@ -74,6 +75,7 @@ export default function ProductsPageWrapper() {
 
 function ProductsPage() {
   const toast = useToast();
+  const t = useT();
   const can = useCan();
   const params = useSearchParams();
   const [products, setProducts] = useState<Product[] | null>(null);
@@ -126,19 +128,19 @@ function ProductsPage() {
   async function assignMissing() {
     const missing = products?.filter((p) => !p.barcode).length ?? 0;
     const ok = await confirm({
-      title: "Create barcodes?",
-      message: "Every product without a barcode gets its own in-store barcode, ready to print on labels.",
+      title: t("Create barcodes?"),
+      message: t("Every product without a barcode gets its own in-store barcode, ready to print on labels."),
       tone: "info",
       icon: "info",
-      details: missing ? [{ label: "Products without a barcode (this list)", value: missing, strong: true }] : undefined,
-      points: ["Products that already have a barcode are not changed.", "Barcodes start with 20 (reserved for shops), so they never clash with company barcodes."],
+      details: missing ? [{ label: t("Products without a barcode (this list)"), value: missing, strong: true }] : undefined,
+      points: [t("Products that already have a barcode are not changed."), t("Barcodes start with 20 (reserved for shops), so they never clash with company barcodes.")],
       confirmLabel: "Create barcodes",
     });
     if (!ok) return;
     setAssigning(true);
     try {
       const r = await api<{ assigned: number }>("/api/barcodes/assign", { body: {} });
-      toast.success(r.assigned ? `${r.assigned} barcode(s) created. Print labels to stick on the items.` : "Every product already has a barcode.");
+      toast.success(r.assigned ? t("{n} barcode(s) created. Print labels to stick on the items.", { n: r.assigned }) : t("Every product already has a barcode."));
       load();
     } catch (e) {
       toast.error((e as Error).message);
@@ -151,21 +153,21 @@ function ProductsPage() {
 
   async function remove(p: Product) {
     const ok = await confirm({
-      title: `Remove "${p.name}"?`,
-      message: "It will no longer appear in New Bill, Products or Purchases.",
+      title: t('Remove "{name}"?', { name: p.name }),
+      message: t("It will no longer appear in New Bill, Products or Purchases."),
       tone: "danger",
       icon: "delete",
       details: [
-        { label: "Barcode", value: p.barcode || "—" },
-        { label: "Stock now", value: `${formatQty(p.stock)} ${UNIT_LABELS[p.unit]}` },
+        { label: t("Barcode"), value: p.barcode || "—" },
+        { label: t("Stock now"), value: `${formatQty(p.stock)} ${UNIT_LABELS[p.unit]}` },
       ],
-      points: ["Old bills, reports and stock history still show this item."],
+      points: [t("Old bills, reports and stock history still show this item.")],
       confirmLabel: "Remove product",
     });
     if (!ok) return;
     try {
       await api(`/api/products/${p._id}`, { method: "DELETE" });
-      toast.success("Product removed");
+      toast.success(t("Product removed"));
       load();
     } catch (e) {
       toast.error((e as Error).message);
@@ -179,7 +181,7 @@ function ProductsPage() {
         urdu="اشیاء اور اسٹاک"
         subtitle={
           products
-            ? <><Count n={products.length} one="{n} item" many="{n} items" />{multiBranch ? ` · Stock at ${allBranches ? "all branches" : branch?.name}` : ""}{can.manage ? ` · Stock value ${formatPKR(stockValue)}` : ""}</>
+            ? <><Count n={products.length} one="{n} item" many="{n} items" />{multiBranch ? ` · ${t("Stock at {branch}", { branch: allBranches ? t("all branches") : (branch?.name ?? "") })}` : ""}{can.manage ? ` · ${t("Stock value {amount}", { amount: formatPKR(stockValue) })}` : ""}</>
             : undefined
         }
         actions={
@@ -210,12 +212,12 @@ function ProductsPage() {
           <div className="flex flex-1 gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, brand, phone model or scan barcode" className="pl-10" />
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search name, brand, phone model or scan barcode")} className="pl-10" />
             </div>
             <CameraButton onClick={() => setCameraOpen(true)} />
           </div>
           <Select value={cat} onChange={(e) => setCat(e.target.value)} className="lg:w-56">
-            <option value="">All categories</option>
+            <option value="">{t("All categories")}</option>
             {categories.map((c) => (
               <option key={c._id} value={c._id}>
                 {c.name}
@@ -283,7 +285,7 @@ function ProductsPage() {
                             type="button"
                             onClick={() => toggleFavourite(p)}
                             aria-label={`${p.favourite ? "Unstar" : "Star"} ${p.name}`}
-                            title={p.favourite ? "Remove from Favourites" : "Show first on the sale screen"}
+                            title={p.favourite ? t("Remove from Favourites") : t("Show first on the sale screen")}
                             className="rounded p-0.5 text-slate-300 hover:text-amber-500"
                           >
                             <Star className={p.favourite ? "h-4 w-4 fill-amber-400 text-amber-400" : "h-4 w-4"} />
@@ -293,7 +295,7 @@ function ProductsPage() {
                         )}
                       </div>
                       {(extraName(p.name, p.brand) || p.fits) && (
-                        <div className="text-xs text-slate-500">{[extraName(p.name, p.brand), p.fits && `Fits ${p.fits}`].filter(Boolean).join(" · ")}</div>
+                        <div className="text-xs text-slate-500">{[extraName(p.name, p.brand), p.fits && t("Fits {models}", { models: p.fits })].filter(Boolean).join(" · ")}</div>
                       )}
                       <div className="text-xs text-slate-400">
                         {extraName(p.name, p.nameUrdu) && <span className="urdu mr-2">{extraName(p.name, p.nameUrdu)}</span>}
@@ -316,7 +318,7 @@ function ProductsPage() {
                       <Td className="text-right">
                         <div className="flex justify-end gap-1">
                           {p.trackSerial ? (
-                            <Link href={`/phones?product=${p._id}`} title="Phones of this model by IMEI">
+                            <Link href={`/phones?product=${p._id}`} title={t("Phones of this model by IMEI")}>
                               <Button size="sm" variant="ghost" icon={<Smartphone className="h-4 w-4" />}>
                                 IMEIs
                               </Button>
@@ -326,7 +328,7 @@ function ProductsPage() {
                               Stock
                             </Button>
                           )}
-                          <Link href={`/labels?ids=${p._id}`} title="Print barcode labels">
+                          <Link href={`/labels?ids=${p._id}`} title={t("Print barcode labels")}>
                             <Button size="sm" variant="ghost" aria-label="Print labels">
                               <Barcode className="h-4 w-4" />
                             </Button>
@@ -395,6 +397,7 @@ function ProductForm({
   onSaved: () => void;
 }) {
   const toast = useToast();
+  const t = useT();
   const { settings } = useSession();
   const [form, setForm] = useState(EMPTY);
   const [packs, setPacks] = useState<PackRow[]>([]);
@@ -454,10 +457,10 @@ function ProductForm({
     if (
       form.barcode &&
       !(await confirm({
-        title: "Replace the barcode?",
-        message: "Labels already stuck on this item will stop working with the new barcode.",
+        title: t("Replace the barcode?"),
+        message: t("Labels already stuck on this item will stop working with the new barcode."),
         tone: "warning",
-        details: [{ label: "Current barcode", value: form.barcode }],
+        details: [{ label: t("Current barcode"), value: form.barcode }],
         confirmLabel: "Create new barcode",
       }))
     )
@@ -492,7 +495,7 @@ function ProductForm({
       };
       if (product) await api(`/api/products/${product._id}`, { method: "PUT", body });
       else await api("/api/products", { body });
-      toast.success(product ? "Product updated" : "Product added");
+      toast.success(product ? t("Product updated") : t("Product added"));
       onSaved();
     } catch (err) {
       toast.error((err as Error).message);
@@ -516,14 +519,14 @@ function ProductForm({
     >
       <form id="product-form" onSubmit={save} className="grid gap-4 sm:grid-cols-2">
         <Field label="Product name *" className="sm:col-span-2">
-          <Input autoFocus required value={form.name} onChange={set("name")} placeholder="e.g. Sugar, Dairy Milk 50g, Bread Large" />
+          <Input autoFocus required value={form.name} onChange={set("name")} placeholder={t("e.g. Sugar, Dairy Milk 50g, Bread Large")} />
         </Field>
         <Field label="Name in Urdu (optional)">
           <Input value={form.nameUrdu} onChange={set("nameUrdu")} dir="rtl" className="urdu" placeholder="چینی" />
         </Field>
         <Field label="Category">
           <Select value={form.category} onChange={set("category")}>
-            <option value="">No category</option>
+            <option value="">{t("No category")}</option>
             {categories.map((c) => (
               <option key={c._id} value={c._id}>{c.name}</option>
             ))}
@@ -533,15 +536,15 @@ function ProductForm({
           <PhotoPicker current={image === undefined ? (product?.hasImage ? `/api/products/${product._id}/image?v=${encodeURIComponent(product.updatedAt ?? "")}` : null) : image || null} onChange={setImage} />
           <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={favourite} onChange={(e) => setFavourite(e.target.checked)} className="h-4 w-4 accent-brand-600" aria-label="Favourite" />
-            <Star className="h-4 w-4 fill-amber-400 text-amber-400" /> Favourite — show first on the sale screen
+            <Star className="h-4 w-4 fill-amber-400 text-amber-400" /> {t("Favourite — show first on the sale screen")}
           </label>
         </div>
         <Field label="Brand (optional)">
-          <Input value={form.brand} onChange={set("brand")} placeholder={phonesOn ? "e.g. Samsung, Anker, Faster, Audionic" : "e.g. Nestlé, Shan"} maxLength={60} aria-label="Brand" />
+          <Input value={form.brand} onChange={set("brand")} placeholder={phonesOn ? t("e.g. Samsung, Anker, Faster, Audionic") : t("e.g. Nestlé, Shan")} maxLength={60} aria-label="Brand" />
         </Field>
         {phonesOn && (
           <Field label="Fits phone models (accessories)" hint="Covers, protectors, batteries, chargers: searching a model finds this item">
-            <Input value={form.fits} onChange={set("fits")} placeholder="e.g. Samsung A54, A55 · iPhone 13, 14" maxLength={300} aria-label="Fits phone models" />
+            <Input value={form.fits} onChange={set("fits")} placeholder={t("e.g. Samsung A54, A55 · iPhone 13, 14")} maxLength={300} aria-label="Fits phone models" />
           </Field>
         )}
         <Field label="Sold by" hint="Kg / Litre items let you sell by weight or by rupees">
@@ -567,7 +570,7 @@ function ProductForm({
                 type="button"
                 onClick={generate}
                 disabled={generating}
-                title="Create a new barcode"
+                title={t("Create a new barcode")}
                 aria-label="Create a new barcode"
                 className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-600 shadow-xs hover:bg-slate-50 hover:text-brand-700 disabled:opacity-50"
               >
@@ -585,10 +588,10 @@ function ProductForm({
         <Field label="Cost price (you buy at) *">
           <Input required type="number" inputMode="decimal" step="any" min="0" value={form.costPrice} onChange={set("costPrice")} placeholder="0" />
         </Field>
-        <Field label="Sale price (you sell at) *" hint={form.salePrice && form.costPrice ? `Profit per ${UNIT_LABELS[form.unit]}: ${formatPKR(margin)}` : undefined} error={margin < 0 ? "Sale price is less than cost price" : undefined}>
+        <Field label="Sale price (you sell at) *" hint={form.salePrice && form.costPrice ? t("Profit per {unit}: {amount}", { unit: UNIT_LABELS[form.unit], amount: formatPKR(margin) }) : undefined} error={margin < 0 ? t("Sale price is less than cost price") : undefined}>
           <Input required type="number" inputMode="decimal" step="any" min="0" value={form.salePrice} onChange={set("salePrice")} placeholder="0" />
         </Field>
-        <Field label="Wholesale price (optional)" hint={`For customers marked "wholesale". Empty = same as sale price.`}>
+        <Field label="Wholesale price (optional)" hint={'For customers marked "wholesale". Empty = same as sale price.'}>
           <Input type="number" inputMode="decimal" step="any" min="0" value={form.wholesalePrice} onChange={set("wholesalePrice")} placeholder={form.salePrice || "0"} aria-label="Wholesale price" />
         </Field>
         {phonesOn && (
@@ -605,13 +608,13 @@ function ProductForm({
                 aria-label="Track by IMEI"
               />
               <span>
-                <span className="block font-semibold text-slate-800">Track each piece by IMEI / serial number</span>
-                <span className="text-sm text-slate-500">For mobile phones and tablets. Every phone is bought, sold, returned and moved by its IMEI, and the IMEI prints on the bill. After saving, add phones from Phones → Add phones or from a purchase.</span>
+                <span className="block font-semibold text-slate-800">{t("Track each piece by IMEI / serial number")}</span>
+                <span className="text-sm text-slate-500">{t("For mobile phones and tablets. Every phone is bought, sold, returned and moved by its IMEI, and the IMEI prints on the bill. After saving, add phones from Phones → Add phones or from a purchase.")}</span>
               </span>
             </label>
             {trackSerial && (
               <Field label="Warranty (months)" hint="Printed on the bill with the end date. Empty = no warranty.">
-                <Input type="number" inputMode="numeric" min="0" max="120" value={form.warrantyMonths} onChange={set("warrantyMonths")} placeholder="e.g. 12" aria-label="Warranty months" />
+                <Input type="number" inputMode="numeric" min="0" max="120" value={form.warrantyMonths} onChange={set("warrantyMonths")} placeholder={t("e.g. {n}", { n: 12 })} aria-label="Warranty months" />
               </Field>
             )}
           </div>
@@ -628,8 +631,8 @@ function ProductForm({
         <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3 sm:col-span-2">
           <input type="checkbox" checked={trackExpiry} onChange={(e) => setTrackExpiry(e.target.checked)} className="mt-0.5 h-5 w-5 accent-brand-600" aria-label="Track expiry by batch" />
           <span>
-            <span className="block font-semibold text-slate-800">Track expiry by batch</span>
-            <span className="text-sm text-slate-500">Each delivery keeps its own expiry date; bills sell the earliest expiry first. For dairy, bakery, medicines, snacks.</span>
+            <span className="block font-semibold text-slate-800">{t("Track expiry by batch")}</span>
+            <span className="text-sm text-slate-500">{t("Each delivery keeps its own expiry date; bills sell the earliest expiry first. For dairy, bakery, medicines, snacks.")}</span>
           </span>
         </label>
         {trackExpiry ? (
@@ -649,7 +652,7 @@ function ProductForm({
           </Field>
         )}
         {settings?.fbrEnabled && (
-          <Field label="FBR PCT code" hint={`Empty = shop default (${settings.fbrDefaultPct || "11001010"})`}>
+          <Field label="FBR PCT code" hint={t("Empty = shop default ({code})", { code: settings.fbrDefaultPct || "11001010" })}>
             <Input value={form.pctCode} onChange={set("pctCode")} />
           </Field>
         )}
@@ -662,13 +665,14 @@ type PackRow = { name: string; size: string; price: string; wholesalePrice: stri
 
 /** Bigger units the product is also sold in: carton, dozen, box … each with its own price and barcode. */
 function PacksEditor({ unit, unitPrice, packs, onChange }: { unit: string; unitPrice: number; packs: PackRow[]; onChange: (p: PackRow[]) => void }) {
+  const t = useT();
   const update = (i: number, patch: Partial<PackRow>) => onChange(packs.map((k, j) => (j === i ? { ...k, ...patch } : k)));
   return (
     <div className="rounded-2xl border border-slate-200 p-4 sm:col-span-2">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div>
-          <div className="text-sm font-semibold text-slate-800">Packs / cartons (optional)</div>
-          <div className="text-xs text-slate-500">Also sell this item as a carton, dozen or box. Stock is always counted in {unit}.</div>
+          <div className="text-sm font-semibold text-slate-800">{t("Packs / cartons (optional)")}</div>
+          <div className="text-xs text-slate-500">{t("Also sell this item as a carton, dozen or box. Stock is always counted in {unit}.", { unit })}</div>
         </div>
         {packs.length < 5 && (
           <Button type="button" size="sm" variant="outline" icon={<Plus className="h-4 w-4" />} onClick={() => onChange([...packs, { name: packs.length ? "" : "Carton", size: "", price: "", wholesalePrice: "", barcode: "" }])}>
@@ -678,8 +682,8 @@ function PacksEditor({ unit, unitPrice, packs, onChange }: { unit: string; unitP
       </div>
       {packs.map((k, i) => (
         <div key={i} className="mt-2 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-2 sm:grid-cols-[1fr_0.8fr_1fr_1fr_1.3fr_auto]">
-          <Input value={k.name} onChange={(e) => update(i, { name: e.target.value })} placeholder="Carton" aria-label="Pack name" className="h-10" />
-          <Input type="number" inputMode="decimal" min="0" step="any" value={k.size} onChange={(e) => update(i, { size: e.target.value })} placeholder={`${unit} in it`} aria-label="Units in pack" className="h-10" />
+          <Input value={k.name} onChange={(e) => update(i, { name: e.target.value })} placeholder={t("Carton")} aria-label="Pack name" className="h-10" />
+          <Input type="number" inputMode="decimal" min="0" step="any" value={k.size} onChange={(e) => update(i, { size: e.target.value })} placeholder={t("{unit} in it", { unit })} aria-label="Units in pack" className="h-10" />
           <Input
             type="number"
             inputMode="decimal"
@@ -687,22 +691,23 @@ function PacksEditor({ unit, unitPrice, packs, onChange }: { unit: string; unitP
             step="any"
             value={k.price}
             onChange={(e) => update(i, { price: e.target.value })}
-            placeholder={unitPrice && Number(k.size) ? String(Math.round(unitPrice * Number(k.size))) : "Price"}
+            placeholder={unitPrice && Number(k.size) ? String(Math.round(unitPrice * Number(k.size))) : t("Price")}
             aria-label="Pack price"
             className="h-10"
           />
-          <Input type="number" inputMode="decimal" min="0" step="any" value={k.wholesalePrice} onChange={(e) => update(i, { wholesalePrice: e.target.value })} placeholder="Wholesale" aria-label="Pack wholesale price" className="h-10" />
-          <Input value={k.barcode} onChange={(e) => update(i, { barcode: e.target.value })} placeholder="Carton barcode" aria-label="Pack barcode" className="h-10" />
+          <Input type="number" inputMode="decimal" min="0" step="any" value={k.wholesalePrice} onChange={(e) => update(i, { wholesalePrice: e.target.value })} placeholder={t("Wholesale")} aria-label="Pack wholesale price" className="h-10" />
+          <Input value={k.barcode} onChange={(e) => update(i, { barcode: e.target.value })} placeholder={t("Carton barcode")} aria-label="Pack barcode" className="h-10" />
           <Button type="button" size="sm" variant="ghost" className="hover:text-rose-600" aria-label="Remove pack" icon={<Trash2 className="h-4 w-4" />} onClick={() => onChange(packs.filter((_, j) => j !== i))} />
         </div>
       ))}
-      {packs.length > 0 && <p className="mt-2 text-xs text-slate-500">Empty price = units × sale price. Scanning the carton barcode at the counter adds one carton.</p>}
+      {packs.length > 0 && <p className="mt-2 text-xs text-slate-500">{t("Empty price = units × sale price. Scanning the carton barcode at the counter adds one carton.")}</p>}
     </div>
   );
 }
 
 function StockModal({ product, onClose, onSaved }: { product: Product | null; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
+  const t = useT();
   const [mode, setMode] = useState<"add" | "remove" | "wastage" | "set">("add");
   const [qty, setQty] = useState("");
   const [note, setNote] = useState("");
@@ -733,7 +738,7 @@ function StockModal({ product, onClose, onSaved }: { product: Product | null; on
     setSaving(true);
     try {
       await api(`/api/products/${product!._id}/stock`, { body: { mode, qty: n, note, ...(product!.trackExpiry && after > here ? { expiryDate: expiry, batchNo } : {}) } });
-      toast.success("Stock updated");
+      toast.success(t("Stock updated"));
       onSaved();
     } catch (err) {
       toast.error((err as Error).message);
@@ -743,10 +748,10 @@ function StockModal({ product, onClose, onSaved }: { product: Product | null; on
   }
 
   return (
-    <Modal open onClose={onClose} title={`Stock: ${product.name}`} size="sm">
+    <Modal open onClose={onClose} title={t("Stock: {name}", { name: product.name })} size="sm">
       <form onSubmit={save} className="space-y-4">
         <div className="rounded-xl bg-slate-50 p-4 text-center">
-          <div className="text-sm text-slate-500">Current stock{detail && detail.byBranch.length > 1 ? ` in ${branch?.name}` : ""}</div>
+          <div className="text-sm text-slate-500">{detail && detail.byBranch.length > 1 ? t("Current stock in {branch}", { branch: branch?.name ?? "" }) : t("Current stock")}</div>
           <div className="text-3xl font-extrabold text-slate-900">
             {formatQty(here)} <span className="text-base font-medium text-slate-500">{UNIT_LABELS[product.unit]}</span>
           </div>
@@ -775,7 +780,7 @@ function StockModal({ product, onClose, onSaved }: { product: Product | null; on
               onClick={() => setMode(v)}
               className={`rounded-xl border-2 px-3 py-2.5 text-sm font-semibold ${mode === v ? "border-brand-600 bg-brand-50 text-brand-800" : "border-slate-200 text-slate-600"}`}
             >
-              {l}
+              {t(l)}
             </button>
           ))}
         </div>
@@ -784,7 +789,7 @@ function StockModal({ product, onClose, onSaved }: { product: Product | null; on
         </Field>
         {product.trackExpiry && after > here && (
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Expiry of this stock" hint={product.shelfLifeDays ? `Empty = ${product.shelfLifeDays} days from today` : undefined}>
+            <Field label="Expiry of this stock" hint={product.shelfLifeDays ? t("Empty = {n} days from today", { n: product.shelfLifeDays }) : undefined}>
               <Input type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} aria-label="Batch expiry" />
             </Field>
             <Field label="Batch no. (optional)">
@@ -792,12 +797,12 @@ function StockModal({ product, onClose, onSaved }: { product: Product | null; on
             </Field>
           </div>
         )}
-        {product.trackExpiry && after < here && <p className="text-xs text-slate-500">Taken from the lot that expires first.</p>}
+        {product.trackExpiry && after < here && <p className="text-xs text-slate-500">{t("Taken from the lot that expires first.")}</p>}
         <Field label="Note (optional)">
-          <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Damaged packets, monthly stock count" className="min-h-[60px]" />
+          <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("e.g. Damaged packets, monthly stock count")} className="min-h-[60px]" />
         </Field>
         <p className="text-center text-sm text-slate-500">
-          New stock will be <b className="text-slate-900">{formatQty(after)} {UNIT_LABELS[product.unit]}</b>
+          {t("New stock will be")} <b className="text-slate-900">{formatQty(after)} {UNIT_LABELS[product.unit]}</b>
         </p>
         <Button type="submit" size="lg" className="w-full" loading={saving} icon={<Boxes className="h-5 w-5" />}>
           Update stock
@@ -809,6 +814,7 @@ function StockModal({ product, onClose, onSaved }: { product: Product | null; on
 
 function CategoriesModal({ open, onClose, categories, onChanged }: { open: boolean; onClose: () => void; categories: Category[]; onChanged: () => void }) {
   const toast = useToast();
+  const t = useT();
   const confirm = useConfirm();
   const [name, setName] = useState("");
 
@@ -824,8 +830,8 @@ function CategoriesModal({ open, onClose, categories, onChanged }: { open: boole
   }
   async function remove(c: Category) {
     const ok = await confirm({
-      title: `Delete category "${c.name}"?`,
-      message: "Products in this category are kept; they will just have no category.",
+      title: t('Delete category "{name}"?', { name: c.name }),
+      message: t("Products in this category are kept; they will just have no category."),
       tone: "danger",
       icon: "delete",
       confirmLabel: "Delete category",
@@ -842,7 +848,7 @@ function CategoriesModal({ open, onClose, categories, onChanged }: { open: boole
   return (
     <Modal open={open} onClose={onClose} title="Categories" size="sm">
       <form onSubmit={add} className="mb-4 flex gap-2">
-        <Input required value={name} onChange={(e) => setName(e.target.value)} placeholder="New category name" />
+        <Input required value={name} onChange={(e) => setName(e.target.value)} placeholder={t("New category name")} />
         <Button type="submit" icon={<Plus className="h-4 w-4" />}>Add</Button>
       </form>
       <ul className="divide-y divide-slate-100">
@@ -862,9 +868,10 @@ function CategoriesModal({ open, onClose, categories, onChanged }: { open: boole
 /** Small product photo for the sale screen: take or choose a picture, made small before saving. */
 function PhotoPicker({ current, onChange }: { current: string | null; onChange: (v: string) => void }) {
   const toast = useToast();
+  const t = useT();
   return (
     <div className="flex items-center gap-2">
-      <label className="flex h-16 w-16 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-dashed border-slate-300 bg-slate-50 text-slate-400 hover:border-brand-400" title="Photo for the sale screen">
+      <label className="flex h-16 w-16 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-dashed border-slate-300 bg-slate-50 text-slate-400 hover:border-brand-400" title={t("Photo for the sale screen")}>
         {current ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={current} alt="Product photo" className="h-full w-full object-contain" />
@@ -890,7 +897,7 @@ function PhotoPicker({ current, onChange }: { current: string | null; onChange: 
       </label>
       {current && (
         <button type="button" onClick={() => onChange("")} className="text-xs font-semibold text-rose-600 hover:underline">
-          Remove photo
+          {t("Remove photo")}
         </button>
       )}
     </div>

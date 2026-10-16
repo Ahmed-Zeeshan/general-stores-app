@@ -6,6 +6,7 @@ import { Button, Field, Input, Modal, Select, Spinner, cn } from "./ui";
 import { useToast } from "./toast";
 import { api, formatDate, PAYMENT_LABELS, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty, round2 } from "@/lib/money";
+import { useT } from "@/lib/i18n";
 
 export type ReturnableSale = {
   _id: string;
@@ -42,6 +43,7 @@ const round3 = (n: number) => Math.round(n * 1000) / 1000;
 /** Return some or all items of a bill, with udhaar handled first and the refund method chosen. */
 export function ReturnModal({ sale: given, onClose, onDone }: { sale: ReturnableSale | null; onClose: () => void; onDone: () => void }) {
   const toast = useToast();
+  const t = useT();
   // Always work on the latest copy of the bill (the list on screen may not have refreshed yet).
   const [sale, setSale] = useState<ReturnableSale | null>(null);
   const closeRef = useRef(onClose);
@@ -92,15 +94,15 @@ export function ReturnModal({ sale: given, onClose, onDone }: { sale: Returnable
   if (!given) return null;
   if (!sale) {
     return (
-      <Modal open onClose={onClose} title={`Return items — ${given.invoiceNo}`} size="lg">
+      <Modal open onClose={onClose} title={t("Return items — {no}", { no: given.invoiceNo })} size="lg">
         <Spinner />
       </Modal>
     );
   }
   if (sale.status === "returned" && !done) {
     return (
-      <Modal open onClose={onClose} title={`Return items — ${sale.invoiceNo}`} size="sm">
-        <p className="py-6 text-center text-sm text-slate-500">This bill has already been fully returned.</p>
+      <Modal open onClose={onClose} title={t("Return items — {no}", { no: sale.invoiceNo })} size="sm">
+        <p className="py-6 text-center text-sm text-slate-500">{t("This bill has already been fully returned.")}</p>
         <Button className="w-full" onClick={onClose}>Close</Button>
       </Modal>
     );
@@ -147,17 +149,17 @@ export function ReturnModal({ sale: given, onClose, onDone }: { sale: Returnable
       <Modal open onClose={onClose} title="Return saved" size="sm">
         <div className="text-center">
           <CheckCircle2 className="mx-auto h-14 w-14 text-brand-500" />
-          <p className="mt-2 text-sm text-slate-500">{done.returnNo} · bill {sale.invoiceNo}</p>
-          {done.creditReduced > 0 && <p className="mt-3 text-sm text-slate-600">Udhaar reduced by <b>{formatPKR(done.creditReduced)}</b></p>}
+          <p className="mt-2 text-sm text-slate-500">{done.returnNo} · {t("bill {no}", { no: sale.invoiceNo })}</p>
+          {done.creditReduced > 0 && <p className="mt-3 text-sm text-slate-600">{t("Udhaar reduced by")} <b>{formatPKR(done.creditReduced)}</b></p>}
           {done.refund > 0 ? (
             <div className="mt-4 rounded-2xl bg-amber-50 p-4">
               <p className="text-sm font-medium text-amber-800">
-                {done.refundMethod === "khata" ? "Added to customer's khata as credit" : `Give back to customer (${PAYMENT_LABELS[done.refundMethod] ?? done.refundMethod})`}
+                {done.refundMethod === "khata" ? t("Added to customer's khata as credit") : t("Give back to customer ({method})", { method: t(PAYMENT_LABELS[done.refundMethod] ?? done.refundMethod) })}
               </p>
               <p className="text-3xl font-extrabold text-amber-900">{formatPKR(done.refund)}</p>
             </div>
           ) : (
-            <p className="mt-3 text-sm text-slate-500">No money to give back.</p>
+            <p className="mt-3 text-sm text-slate-500">{t("No money to give back.")}</p>
           )}
           <div className="mt-6 grid grid-cols-2 gap-3">
             <Button variant="outline" size="lg" icon={<Printer className="h-5 w-5" />} onClick={() => window.open(`/receipt/return/${done._id}?print=1`, "_blank")}>
@@ -176,20 +178,20 @@ export function ReturnModal({ sale: given, onClose, onDone }: { sale: Returnable
     <Modal
       open
       onClose={onClose}
-      title={`Return items — ${sale.invoiceNo}`}
+      title={t("Return items — {no}", { no: sale.invoiceNo })}
       size="lg"
       footer={
         <>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button variant="danger" loading={saving} disabled={!chosen.length} icon={<RotateCcw className="h-4 w-4" />} onClick={submit}>
-            {refund > 0 && method !== "khata" ? `Return & refund ${formatPKR(refund)}` : "Save return"}
+            {refund > 0 && method !== "khata" ? t("Return & refund {amount}", { amount: formatPKR(refund) }) : "Save return"}
           </Button>
         </>
       }
     >
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
         <span>
-          {formatDate(sale.createdAt, true)} · {sale.customerName ?? "Walk-in"} · {PAYMENT_LABELS[sale.paymentMethod] ?? sale.paymentMethod} · {formatPKR(sale.total)}
+          {formatDate(sale.createdAt, true)} · {sale.customerName ?? t("Walk-in")} · {t(PAYMENT_LABELS[sale.paymentMethod] ?? sale.paymentMethod)} · {formatPKR(sale.total)}
         </span>
         <Button size="sm" variant="secondary" onClick={selectAll}>Return everything</Button>
       </div>
@@ -200,9 +202,9 @@ export function ReturnModal({ sale: given, onClose, onDone }: { sale: Returnable
             <div className="min-w-0 flex-1">
               <div className="truncate font-semibold text-slate-800">{l.name}</div>
               <div className="text-xs text-slate-500">
-                Sold {formatQty(l.qty)} {UNIT_LABELS[l.unit] ?? l.unit}
-                {l.pack ? ` (${formatQty(l.pack.count)} ${l.pack.name} of ${formatQty(l.pack.size)})` : ` × ${formatPKR(l.price)}`}
-                {(l.returnedQty ?? 0) > 0 && <span className="text-rose-600"> · {formatQty(l.returnedQty!)} already returned</span>}
+                {t("Sold {qty} {unit}", { qty: formatQty(l.qty), unit: t(UNIT_LABELS[l.unit] ?? l.unit) })}
+                {l.pack ? ` (${t("{count} {pack} of {size}", { count: formatQty(l.pack.count), pack: l.pack.name, size: formatQty(l.pack.size) })})` : ` × ${formatPKR(l.price)}`}
+                {(l.returnedQty ?? 0) > 0 && <span className="text-rose-600"> · {t("{n} already returned", { n: formatQty(l.returnedQty!) })}</span>}
               </div>
             </div>
             {l.left > 0 && l.serials?.length ? (
@@ -243,7 +245,7 @@ export function ReturnModal({ sale: given, onClose, onDone }: { sale: Returnable
                 </button>
               </div>
             ) : (
-              <span className="text-xs font-semibold text-rose-600">Fully returned</span>
+              <span className="text-xs font-semibold text-rose-600">{t("Fully returned")}</span>
             )}
             <span className="w-24 text-right text-sm font-semibold text-slate-800">{l.q ? formatPKR(l.value * ratio) : "—"}</span>
           </li>
@@ -253,9 +255,9 @@ export function ReturnModal({ sale: given, onClose, onDone }: { sale: Returnable
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <Field label="Reason">
           <Select value={reason} onChange={(e) => setReason(e.target.value)}>
-            <option value="">Choose a reason (optional)</option>
+            <option value="">{t("Choose a reason (optional)")}</option>
             {REASONS.map((r) => (
-              <option key={r} value={r}>{r}</option>
+              <option key={r} value={r}>{t(r)}</option>
             ))}
           </Select>
         </Field>
@@ -265,27 +267,27 @@ export function ReturnModal({ sale: given, onClose, onDone }: { sale: Returnable
       </div>
 
       <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-sm">
-        <div className="flex justify-between"><span className="text-slate-500">Value of returned items</span><b>{formatPKR(value)}</b></div>
+        <div className="flex justify-between"><span className="text-slate-500">{t("Value of returned items")}</span><b>{formatPKR(value)}</b></div>
         {creditLeft > 0 && (
           <div className="mt-1.5 flex justify-between">
-            <span className="text-slate-500">Taken off this bill&apos;s udhaar</span>
+            <span className="text-slate-500">{t("Taken off this bill's udhaar")}</span>
             <b className="text-emerald-700">{formatPKR(creditReduced)}</b>
           </div>
         )}
         {refund > 0 && (
           <div className="mt-3 flex flex-col gap-2 border-t border-slate-200 pt-3 sm:flex-row sm:items-center sm:justify-between">
-            <span className="font-semibold text-slate-800">Give back {formatPKR(refund)} by</span>
+            <span className="font-semibold text-slate-800">{t("Give back {amount} by", { amount: formatPKR(refund) })}</span>
             <Select value={method} onChange={(e) => setMethod(e.target.value)} className="h-10 sm:w-60">
-              <option value="cash">Cash</option>
-              <option value="jazzcash">JazzCash</option>
-              <option value="easypaisa">Easypaisa</option>
-              <option value="bank">Bank transfer</option>
-              <option value="card">Card</option>
-              {sale.customer && <option value="khata">Credit to khata (advance)</option>}
+              <option value="cash">{t("Cash")}</option>
+              <option value="jazzcash">{t("JazzCash")}</option>
+              <option value="easypaisa">{t("Easypaisa")}</option>
+              <option value="bank">{t("Bank transfer")}</option>
+              <option value="card">{t("Card")}</option>
+              {sale.customer && <option value="khata">{t("Credit to khata (advance)")}</option>}
             </Select>
           </div>
         )}
-        <p className="mt-3 text-xs text-slate-500">Returned items go back into stock. Discount and tax of the bill are shared fairly across the returned items.</p>
+        <p className="mt-3 text-xs text-slate-500">{t("Returned items go back into stock. Discount and tax of the bill are shared fairly across the returned items.")}</p>
       </div>
     </Modal>
   );

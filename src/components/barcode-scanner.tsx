@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, CameraOff, ScanLine } from "lucide-react";
 import { Button, Modal } from "./ui";
+import { useT } from "@/lib/i18n";
 
 /**
  * USB / Bluetooth barcode scanners act like a keyboard: they type the code very fast and press
@@ -76,6 +77,7 @@ export function CameraScanner({
   continuous?: boolean;
   title?: string;
 }) {
+  const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState("");
   const [lastCode, setLastCode] = useState("");
@@ -171,7 +173,7 @@ export function CameraScanner({
       {error ? (
         <div className="flex flex-col items-center py-8 text-center">
           <CameraOff className="h-12 w-12 text-slate-400" />
-          <p className="mt-3 text-sm text-slate-600">{error}</p>
+          <p className="mt-3 text-sm text-slate-600">{t(error)}</p>
         </div>
       ) : (
         <div>
@@ -181,10 +183,10 @@ export function CameraScanner({
             <div className="pointer-events-none absolute inset-6 rounded-xl border-2 border-white/60" />
           </div>
           <p className="mt-3 flex items-center justify-center gap-2 text-sm text-slate-500">
-            <ScanLine className="h-4 w-4" /> Hold the barcode inside the frame
+            <ScanLine className="h-4 w-4" /> {t("Hold the barcode inside the frame")}
           </p>
           {continuous && lastCode && (
-            <p className="mt-2 text-center text-sm font-semibold text-emerald-700">Added: {lastCode}</p>
+            <p className="mt-2 text-center text-sm font-semibold text-emerald-700">{t("Added: {code}", { code: lastCode })}</p>
           )}
         </div>
       )}
@@ -199,11 +201,12 @@ export function CameraScanner({
 
 /** Small camera button used next to search boxes. */
 export function CameraButton({ onClick, label = "Scan with camera" }: { onClick: () => void; label?: string }) {
+  const t = useT();
   return (
     <button
       type="button"
       onClick={onClick}
-      title={label}
+      title={t(label)}
       aria-label={label}
       className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-600 shadow-xs hover:bg-slate-50 hover:text-brand-700"
     >

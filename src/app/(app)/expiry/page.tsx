@@ -9,6 +9,7 @@ import { useToast } from "@/components/toast";
 import { useConfirm } from "@/components/confirm";
 import { api, formatDate, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty } from "@/lib/money";
+import { useT } from "@/lib/i18n";
 
 type Row = {
   _id: string;
@@ -33,15 +34,16 @@ export default function ExpiryPageWrapper() {
   );
 }
 
-function when(days: number) {
-  if (days < 0) return <Badge color="red">Expired {-days === 1 ? "yesterday" : `${-days} days ago`}</Badge>;
+function when(days: number, t: ReturnType<typeof useT>) {
+  if (days < 0) return <Badge color="red">{-days === 1 ? t("Expired yesterday") : t("Expired {n} days ago", { n: -days })}</Badge>;
   if (days === 0) return <Badge color="red">Expires today</Badge>;
-  if (days <= 7) return <Badge color="amber">{days === 1 ? "Tomorrow" : `In ${days} days`}</Badge>;
-  return <Badge color="slate">In {days} days</Badge>;
+  if (days <= 7) return <Badge color="amber">{days === 1 ? "Tomorrow" : t("In {n} days", { n: days })}</Badge>;
+  return <Badge color="slate">{t("In {n} days", { n: days })}</Badge>;
 }
 
 function ExpiryPage() {
   const toast = useToast();
+  const t = useT();
   const confirm = useConfirm();
   const params = useSearchParams();
   const [within, setWithin] = useState(params.get("within") ?? "30");
@@ -56,13 +58,13 @@ function ExpiryPage() {
 
   async function writeOff(r: Row) {
     const ok = await confirm({
-      title: `Throw away ${r.name}?`,
-      message: "The stock of this lot is removed as wastage and shows in the product's stock history.",
+      title: t("Throw away {name}?", { name: r.name }),
+      message: t("The stock of this lot is removed as wastage and shows in the product's stock history."),
       details: [
-        { label: "Lot", value: [r.batchNo, r.refNo].filter(Boolean).join(" · ") || "—" },
-        { label: "Expiry", value: formatDate(r.expiryDate) },
-        { label: "Quantity", value: `${formatQty(r.qty)} ${UNIT_LABELS[r.unit] ?? r.unit}` },
-        { label: "Value at cost", value: formatPKR(r.value), strong: true },
+        { label: t("Lot"), value: [r.batchNo, r.refNo].filter(Boolean).join(" · ") || "—" },
+        { label: t("Expiry"), value: formatDate(r.expiryDate) },
+        { label: t("Quantity"), value: `${formatQty(r.qty)} ${t(UNIT_LABELS[r.unit] ?? r.unit)}` },
+        { label: t("Value at cost"), value: formatPKR(r.value), strong: true },
       ],
       tone: "danger",
       icon: "delete",
@@ -71,7 +73,7 @@ function ExpiryPage() {
     if (!ok) return;
     try {
       await api(`/api/expiry/${r._id}/write-off`, { body: {} });
-      toast.success(`${r.name} written off`);
+      toast.success(t("{name} written off", { name: r.name }));
       load();
     } catch (e) {
       toast.error((e as Error).message);
@@ -88,9 +90,9 @@ function ExpiryPage() {
         actions={<Button variant="outline" icon={<Printer className="h-4 w-4" />} onClick={() => window.print()}>Print</Button>}
       />
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Already expired" value={formatPKR(s?.expired.value ?? 0)} icon={<AlertTriangle className="h-5 w-5" />} tone="rose" hint={`${s?.expired.count ?? 0} lots — remove from shelves`} />
-        <StatCard label="Expire within 7 days" value={formatPKR(s?.week.value ?? 0)} icon={<CalendarClock className="h-5 w-5" />} tone="amber" hint={`${s?.week.count ?? 0} lots — put in front / discount`} />
-        <StatCard label="Expire in 8–30 days" value={formatPKR(s?.month.value ?? 0)} icon={<CalendarClock className="h-5 w-5" />} tone="blue" hint={`${s?.month.count ?? 0} lots`} />
+        <StatCard label="Already expired" value={formatPKR(s?.expired.value ?? 0)} icon={<AlertTriangle className="h-5 w-5" />} tone="rose" hint={t("{n} lots — remove from shelves", { n: s?.expired.count ?? 0 })} />
+        <StatCard label="Expire within 7 days" value={formatPKR(s?.week.value ?? 0)} icon={<CalendarClock className="h-5 w-5" />} tone="amber" hint={t("{n} lots — put in front / discount", { n: s?.week.count ?? 0 })} />
+        <StatCard label="Expire in 8–30 days" value={formatPKR(s?.month.value ?? 0)} icon={<CalendarClock className="h-5 w-5" />} tone="blue" hint={t("{n} lots", { n: s?.month.count ?? 0 })} />
       </div>
       <Card>
         <div className="no-print flex flex-wrap items-center gap-3 border-b border-slate-100 p-4">
@@ -105,7 +107,7 @@ function ExpiryPage() {
             ]}
           />
           <BranchFilter value={branch} onChange={setBranch} />
-          <p className="text-xs text-slate-500">Expired lots are always shown. Values are at cost price.</p>
+          <p className="text-xs text-slate-500">{t("Expired lots are always shown. Values are at cost price.")}</p>
         </div>
         {!data ? (
           <Spinner />
@@ -131,14 +133,14 @@ function ExpiryPage() {
                     {r.branchName && branch === "all" && <div className="text-xs text-slate-400">{r.branchName}</div>}
                   </Td>
                   <Td className="text-sm text-slate-500">
-                    {r.kind === "product" ? <span className="text-slate-400">Single expiry date</span> : [r.batchNo && `Batch ${r.batchNo}`, r.refNo].filter(Boolean).join(" · ") || "—"}
+                    {r.kind === "product" ? <span className="text-slate-400">{t("Single expiry date")}</span> : [r.batchNo && t("Batch {no}", { no: r.batchNo }), r.refNo].filter(Boolean).join(" · ") || "—"}
                   </Td>
                   <Td className="text-right font-semibold">
-                    {formatQty(r.qty)} {UNIT_LABELS[r.unit] ?? r.unit}
+                    {formatQty(r.qty)} {t(UNIT_LABELS[r.unit] ?? r.unit)}
                   </Td>
                   <Td>
                     <div className="text-sm text-slate-600">{formatDate(r.expiryDate)}</div>
-                    {when(r.daysLeft)}
+                    {when(r.daysLeft, t)}
                   </Td>
                   <Td className="text-right">{formatPKR(r.value)}</Td>
                   <Td className="no-print text-right">

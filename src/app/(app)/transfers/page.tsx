@@ -11,6 +11,7 @@ import { CameraButton, CameraScanner, beep, useBarcodeScanner } from "@/componen
 import { api, formatDate, todayISO, UNIT_LABELS } from "@/lib/client";
 import { formatQty } from "@/lib/money";
 import { productMatches } from "@/lib/product-search";
+import { useT } from "@/lib/i18n";
 
 type Product = { _id: string; name: string; barcode?: string; unit: string; stock: number; trackSerial?: boolean };
 type Transfer = {
@@ -26,6 +27,7 @@ type Transfer = {
 
 export default function TransfersPage() {
   const toast = useToast();
+  const t = useT();
   const { branch, branches } = useSession();
   const others = (branches ?? []).filter((b) => b._id !== branch?._id);
   const [products, setProducts] = useState<Product[]>([]);
@@ -66,7 +68,7 @@ export default function TransfersPage() {
     if (p) {
       beep();
       add(p);
-    } else toast.error(`No product has barcode ${code}.`);
+    } else toast.error(t("No product has barcode {code}.", { code }));
   }
   const [cameraOpen, setCameraOpen] = useState(false);
   useBarcodeScanner(addByCode, !cameraOpen && !phonesFor);
@@ -74,13 +76,13 @@ export default function TransfersPage() {
 
   async function send() {
     const noPhones = lines.find((l) => l.product.trackSerial && !l.phones?.length);
-    if (noPhones) return toast.error(`Choose which ${noPhones.product.name} phones to send.`);
+    if (noPhones) return toast.error(t("Choose which {name} phones to send.", { name: noPhones.product.name }));
     const bad = lines.find((l) => !l.product.trackSerial && (!(Number(l.qty) > 0) || Number(l.qty) > l.product.stock));
-    if (bad) return toast.error(`Check the quantity of ${bad.product.name} (you have ${formatQty(bad.product.stock)}).`);
+    if (bad) return toast.error(t("Check the quantity of {name} (you have {qty}).", { name: bad.product.name, qty: formatQty(bad.product.stock) }));
     setSaving(true);
     try {
       await api("/api/transfers", { body: { toBranch: to, note, items: lines.map((l) => (l.phones ? { productId: l.product._id, qty: l.phones.length, serials: l.phones.map((d) => d._id) } : { productId: l.product._id, qty: Number(l.qty) })) } });
-      toast.success(`Stock sent to ${others.find((b) => b._id === to)?.name}`);
+      toast.success(t("Stock sent to {branch}", { branch: others.find((b) => b._id === to)?.name ?? "" }));
       setLines([]);
       setNote("");
       loadProducts();
@@ -103,13 +105,13 @@ export default function TransfersPage() {
 
   return (
     <div>
-      <PageHeader title="Stock Transfer" urdu="منتقلی" subtitle={`Send stock from ${branch?.name} to another branch`} />
+      <PageHeader title="Stock Transfer" urdu="منتقلی" subtitle={t("Send stock from {branch} to another branch", { branch: branch?.name ?? "" })} />
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="p-5 lg:col-span-2">
           <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search product or scan barcode" className="pl-10"
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search product or scan barcode")} className="pl-10"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && q.trim()) {
                   e.preventDefault();
@@ -124,7 +126,7 @@ export default function TransfersPage() {
                   <li key={p._id}>
                     <button onClick={() => add(p)} className="flex w-full justify-between px-4 py-2.5 text-left hover:bg-slate-50">
                       <span className="font-medium">{p.name}</span>
-                      <span className="text-sm text-slate-500">Here: {formatQty(p.stock)} {UNIT_LABELS[p.unit]}</span>
+                      <span className="text-sm text-slate-500">{t("Here: {qty}", { qty: formatQty(p.stock) })} {UNIT_LABELS[p.unit]}</span>
                     </button>
                   </li>
                 ))}
@@ -134,14 +136,14 @@ export default function TransfersPage() {
           <CameraButton onClick={() => setCameraOpen(true)} />
           </div>
           {lines.length === 0 ? (
-            <p className="py-16 text-center text-sm text-slate-500">Search above to add items to send.</p>
+            <p className="py-16 text-center text-sm text-slate-500">{t("Search above to add items to send.")}</p>
           ) : (
             <div className="mt-4">
               <Table>
                 <thead>
                   <tr>
                     <Th>Item</Th>
-                    <Th className="text-right">In {branch?.name}</Th>
+                    <Th className="text-right">{t("In {branch}", { branch: branch?.name ?? "" })}</Th>
                     <Th>Send</Th>
                     <Th />
                   </tr>
@@ -154,7 +156,7 @@ export default function TransfersPage() {
                       <Td>
                         {l.phones ? (
                           <button type="button" onClick={() => setPhonesFor(l.product)} className="inline-flex items-center gap-1 rounded-lg border border-brand-300 bg-brand-50 px-2 py-1 text-xs font-semibold text-brand-800">
-                            <Smartphone className="h-3.5 w-3.5" /> {l.phones.length ? `${l.phones.length} phone${l.phones.length === 1 ? "" : "s"} — change` : "Choose phones"}
+                            <Smartphone className="h-3.5 w-3.5" /> {l.phones.length ? t(l.phones.length === 1 ? "{n} phone — change" : "{n} phones — change", { n: l.phones.length }) : t("Choose phones")}
                           </button>
                         ) : (
                           <Input
@@ -196,7 +198,7 @@ export default function TransfersPage() {
             </Select>
           </Field>
           <Field label="Note (optional)" className="mt-4">
-            <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Sent with Rashid" />
+            <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("e.g. Sent with Rashid")} />
           </Field>
           <Button size="lg" className="mt-5 w-full" disabled={!lines.length || !to} loading={saving} icon={<Send className="h-5 w-5" />} onClick={send}>
             Send stock
@@ -206,13 +208,13 @@ export default function TransfersPage() {
 
       <Card className="mt-6">
         <div className="flex flex-col gap-3 border-b border-slate-100 p-4 lg:flex-row lg:items-center lg:justify-between">
-          <h2 className="font-bold text-slate-900">Transfer history</h2>
+          <h2 className="font-bold text-slate-900">{t("Transfer history")}</h2>
           <DateRange from={range.from} to={range.to} onChange={setRange} />
         </div>
         {!history ? (
           <Spinner />
         ) : history.length === 0 ? (
-          <p className="py-12 text-center text-sm text-slate-500">No transfers in this period.</p>
+          <p className="py-12 text-center text-sm text-slate-500">{t("No transfers in this period.")}</p>
         ) : (
           <Table>
             <thead>
@@ -225,25 +227,25 @@ export default function TransfersPage() {
               </tr>
             </thead>
             <tbody>
-              {history.map((t) => (
-                <tr key={t._id}>
-                  <Td className="font-semibold">{t.transferNo}</Td>
-                  <Td className="text-slate-500">{formatDate(t.createdAt, true)}</Td>
-                  <Td>{t.fromName} → {t.toName}</Td>
-                  <Td className="whitespace-normal text-slate-600">{t.items.map((i) => `${i.name} ${formatQty(i.qty)} ${UNIT_LABELS[i.unit] ?? i.unit}`).join(", ")}</Td>
-                  <Td className="text-slate-500">{t.userName}</Td>
+              {history.map((x) => (
+                <tr key={x._id}>
+                  <Td className="font-semibold">{x.transferNo}</Td>
+                  <Td className="text-slate-500">{formatDate(x.createdAt, true)}</Td>
+                  <Td>{x.fromName} → {x.toName}</Td>
+                  <Td className="whitespace-normal text-slate-600">{x.items.map((i) => `${i.name} ${formatQty(i.qty)} ${UNIT_LABELS[i.unit] ?? i.unit}`).join(", ")}</Td>
+                  <Td className="text-slate-500">{x.userName}</Td>
                 </tr>
               ))}
             </tbody>
           </Table>
         )}
       </Card>
-      <CameraScanner open={cameraOpen} onClose={() => setCameraOpen(false)} onScan={addByCode} continuous title="Scan items" />
+      <CameraScanner open={cameraOpen} onClose={() => setCameraOpen(false)} onScan={addByCode} continuous title={t("Scan items")} />
       <DevicePicker
         open={!!phonesFor}
         product={phonesFor}
         multiple
-        title={phonesFor ? `Which ${phonesFor.name} to send?` : undefined}
+        title={phonesFor ? t("Which {name} to send?", { name: phonesFor.name }) : undefined}
         onClose={() => setPhonesFor(null)}
         onPick={(picked) => {
           setLines((ls) => ls.map((l) => (l.product._id === phonesFor?._id ? { ...l, phones: picked } : l)));

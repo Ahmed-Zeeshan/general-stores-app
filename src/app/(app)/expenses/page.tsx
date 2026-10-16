@@ -9,12 +9,14 @@ import { useToast } from "@/components/toast";
 import { useConfirm } from "@/components/confirm";
 import { api, formatDate, PAYMENT_LABELS, todayISO } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
+import { useT } from "@/lib/i18n";
 import { EXPENSE_CATEGORIES } from "@/lib/constants";
 
 type Expense = { _id: string; category: string; amount: number; method?: string; note?: string; date: string; user?: { name: string } };
 
 export default function ExpensesPage() {
   const toast = useToast();
+  const tr = useT();
   const can = useCan();
   const confirm = useConfirm();
   const [range, setRange] = useState({ from: todayISO(-29), to: todayISO() });
@@ -33,7 +35,7 @@ export default function ExpensesPage() {
     setSaving(true);
     try {
       await api("/api/expenses", { body: { ...form, amount: Number(form.amount) } });
-      toast.success("Expense added");
+      toast.success(tr("Expense added"));
       setOpen(false);
       setForm({ category: form.category, amount: "", note: "", date: todayISO(), method: form.method });
       load();
@@ -46,17 +48,17 @@ export default function ExpensesPage() {
 
   async function remove(x: Expense) {
     const ok = await confirm({
-      title: "Delete this expense?",
+      title: tr("Delete this expense?"),
       tone: "danger",
       icon: "delete",
       details: [
-        { label: "Category", value: x.category },
-        { label: "Date", value: formatDate(x.date) },
-        ...(x.note ? [{ label: "Note", value: x.note }] : []),
-        { label: "Amount", value: formatPKR(x.amount), strong: true },
+        { label: tr("Category"), value: tr(x.category) },
+        { label: tr("Date"), value: formatDate(x.date) },
+        ...(x.note ? [{ label: tr("Note"), value: x.note }] : []),
+        { label: tr("Amount"), value: formatPKR(x.amount), strong: true },
       ],
-      message: "Reports and profit will be recalculated without it.",
-      confirmLabel: "Delete expense",
+      message: tr("Reports and profit will be recalculated without it."),
+      confirmLabel: tr("Delete expense"),
     });
     if (!ok) return;
     try {
@@ -81,14 +83,14 @@ export default function ExpensesPage() {
         actions={<Button icon={<Plus className="h-4 w-4" />} onClick={() => setOpen(true)}>Add expense</Button>}
       />
       <div className="mb-6 grid gap-4 lg:grid-cols-3">
-        <StatCard label="Total expenses" value={formatPKR(total)} icon={<Wallet className="h-5 w-5" />} tone="amber" hint={`${list?.length ?? 0} entries`} />
+        <StatCard label="Total expenses" value={formatPKR(total)} icon={<Wallet className="h-5 w-5" />} tone="amber" hint={tr("{n} entries", { n: list?.length ?? 0 })} />
         <Card className="p-5 lg:col-span-2">
-          <p className="mb-3 text-sm font-medium text-slate-500">By category</p>
+          <p className="mb-3 text-sm font-medium text-slate-500">{tr("By category")}</p>
           <div className="flex flex-wrap gap-2">
-            {byCat.length === 0 && <span className="text-sm text-slate-400">No expenses yet</span>}
+            {byCat.length === 0 && <span className="text-sm text-slate-400">{tr("No expenses yet")}</span>}
             {byCat.map(([c, v]) => (
               <span key={c} className="rounded-xl bg-slate-100 px-3 py-1.5 text-sm">
-                <span className="text-slate-500">{c}:</span> <b className="text-slate-800">{formatPKR(v)}</b>
+                <span className="text-slate-500">{tr(c)}:</span> <b className="text-slate-800">{formatPKR(v)}</b>
               </span>
             ))}
           </div>
@@ -117,10 +119,10 @@ export default function ExpensesPage() {
               {list.map((x) => (
                 <tr key={x._id}>
                   <Td className="text-slate-500">{formatDate(x.date)}</Td>
-                  <Td className="font-medium">{x.category}</Td>
+                  <Td className="font-medium">{tr(x.category)}</Td>
                   <Td className="text-slate-500">
                     {x.note}
-                    {x.method && x.method !== "cash" && <span className="ml-1 text-xs text-slate-400">({PAYMENT_LABELS[x.method] ?? x.method})</span>}
+                    {x.method && x.method !== "cash" && <span className="ml-1 text-xs text-slate-400">({tr(PAYMENT_LABELS[x.method] ?? x.method)})</span>}
                   </Td>
                   <Td className="text-right font-bold">{formatPKR(x.amount)}</Td>
                   {can.owner && (
@@ -148,7 +150,7 @@ export default function ExpensesPage() {
                   onClick={() => setForm({ ...form, category: c })}
                   className={`rounded-xl border-2 px-3 py-2 text-sm font-semibold ${form.category === c ? "border-brand-600 bg-brand-50 text-brand-800" : "border-slate-200 text-slate-600"}`}
                 >
-                  {c}
+                  {tr(c)}
                 </button>
               ))}
             </div>
@@ -158,11 +160,11 @@ export default function ExpensesPage() {
           </Field>
           <Field label="Paid from" hint="Cash from the drawer is taken off the day's expected cash">
             <Select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })} aria-label="Paid from">
-              <option value="cash">Cash drawer</option>
-              <option value="bank">Bank transfer</option>
+              <option value="cash">{tr("Cash drawer")}</option>
+              <option value="bank">{tr("Bank transfer")}</option>
               <option value="jazzcash">JazzCash</option>
               <option value="easypaisa">Easypaisa</option>
-              <option value="card">Card</option>
+              <option value="card">{tr("Card")}</option>
             </Select>
           </Field>
           <Field label="Date">

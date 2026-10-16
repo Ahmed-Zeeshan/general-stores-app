@@ -27,7 +27,7 @@ import { DaySummaryButton } from "@/components/day-summary";
 import { useCan, useSession } from "@/components/session";
 import { api, formatDate, PAYMENT_LABELS, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty } from "@/lib/money";
-import { plural, useT } from "@/lib/i18n";
+import { plural, useLang, useT } from "@/lib/i18n";
 import { WALLET_TXN_LABELS, type WalletTxnType } from "@/lib/constants";
 import type { MobileReport } from "@/lib/mobile-report";
 
@@ -55,6 +55,7 @@ export default function DashboardPage() {
   const { user, settings } = useSession();
   const can = useCan();
   const t = useT();
+  const { lang } = useLang();
   const [data, setData] = useState<Dashboard | null>(null);
 
   useEffect(() => {
@@ -80,7 +81,7 @@ export default function DashboardPage() {
         <div>
           <p className="text-sm font-medium text-slate-500">{formatDate(new Date())}</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-            {greeting()}, {user.name.split(" ")[0]} 👋
+            {t(greeting())}, {user.name.split(" ")[0]} 👋
           </h1>
         </div>
         {can.manage && <DaySummaryButton />}
@@ -96,8 +97,8 @@ export default function DashboardPage() {
             className={`group relative overflow-hidden rounded-2xl bg-linear-to-br ${q.cls} p-5 text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl`}
           >
             <q.icon className="h-8 w-8 opacity-90" />
-            <div className="mt-4 text-lg font-bold">{q.label}</div>
-            <div className="urdu text-sm opacity-80">{q.urdu}</div>
+            <div className={`mt-4 text-lg font-bold${lang === "ur" ? " urdu" : ""}`}>{lang === "ur" ? q.urdu : t(q.label)}</div>
+            <div className={`${lang === "ur" ? "" : "urdu "}text-sm opacity-80`}>{lang === "ur" ? q.label : q.urdu}</div>
             <ArrowRight className="absolute bottom-5 right-5 h-5 w-5 opacity-0 transition group-hover:opacity-100" />
           </Link>
         ))}
@@ -123,7 +124,7 @@ export default function DashboardPage() {
                 value={formatPKR(data.today.profit - data.today.expenses)}
                 icon={<Receipt className="h-5 w-5" />}
                 tone="violet"
-                hint={`${formatPKR(data.today.profit)} profit − ${formatPKR(data.today.expenses)} expenses`}
+                hint={t("{profit} profit − {expenses} expenses", { profit: formatPKR(data.today.profit), expenses: formatPKR(data.today.expenses) })}
               />
             ) : (
               <StatCard
@@ -131,7 +132,7 @@ export default function DashboardPage() {
                 value={formatPKR(data.today.cash + data.today.collectedCash)}
                 icon={<Wallet className="h-5 w-5" />}
                 tone="violet"
-                hint={data.today.collectedCash ? `incl. ${formatPKR(data.today.collectedCash)} udhaar collected` : "From bills"}
+                hint={data.today.collectedCash ? t("incl. {amount} udhaar collected", { amount: formatPKR(data.today.collectedCash) }) : "From bills"}
               />
             )}
             <Link href="/customers?due=1">
@@ -166,12 +167,12 @@ export default function DashboardPage() {
             <Card className="p-5 lg:col-span-2">
               <div className="mb-4 flex items-center justify-between">
                 <div>
-                  <h2 className="font-bold text-slate-900">Last 7 days</h2>
-                  <p className="text-xs text-slate-500">Daily sales{can.manage && " and profit"}</p>
+                  <h2 className="font-bold text-slate-900">{t("Last 7 days")}</h2>
+                  <p className="text-xs text-slate-500">{t(can.manage ? "Daily sales and profit" : "Daily sales")}</p>
                 </div>
                 <div className="flex gap-4 text-xs font-medium text-slate-500">
-                  <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-brand-600" /> Sales</span>
-                  {can.manage && <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-brand-200" /> Profit</span>}
+                  <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-brand-600" /> {t("Sales")}</span>
+                  {can.manage && <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-brand-200" /> {t("Profit")}</span>}
                 </div>
               </div>
               <SalesBarChart data={data.series} showProfit={can.manage} />
@@ -179,23 +180,23 @@ export default function DashboardPage() {
 
             <Card className="p-5">
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="font-bold text-slate-900">Running low</h2>
-                <Link href="/products?filter=low" className="text-sm font-semibold text-brand-600 hover:text-brand-700">See all</Link>
+                <h2 className="font-bold text-slate-900">{t("Running low")}</h2>
+                <Link href="/products?filter=low" className="text-sm font-semibold text-brand-600 hover:text-brand-700">{t("See all")}</Link>
               </div>
               {data.expiringCount > 0 && (
                 <Link href={can.manage ? "/expiry?within=7" : "/products?filter=expiring"} className="mb-3 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
-                  <CalendarClock className="h-4 w-4" /> {data.expiringCount} {data.expiringCount === 1 ? "lot expires" : "lots expire"} within 7 days (or already expired)
+                  <CalendarClock className="h-4 w-4" /> {t(plural(data.expiringCount, "{n} lot expires within 7 days (or already expired)", "{n} lots expire within 7 days (or already expired)"), { n: data.expiringCount })}
                 </Link>
               )}
               {data.lowStock.length === 0 ? (
-                <p className="py-8 text-center text-sm text-slate-500">All items have enough stock 🎉</p>
+                <p className="py-8 text-center text-sm text-slate-500">{t("All items have enough stock 🎉")}</p>
               ) : (
                 <ul className="divide-y divide-slate-100">
                   {data.lowStock.map((p) => (
                     <li key={p._id} className="flex items-center justify-between py-2.5">
                       <span className="truncate pr-2 text-sm font-medium text-slate-700">{p.name}</span>
                       <Badge color={p.stock <= 0 ? "red" : "amber"}>
-                        {formatQty(p.stock)} {UNIT_LABELS[p.unit] ?? p.unit}
+                        {formatQty(p.stock)} {t(UNIT_LABELS[p.unit] ?? p.unit)}
                       </Badge>
                     </li>
                   ))}
@@ -206,9 +207,9 @@ export default function DashboardPage() {
 
           <div className="mt-6 grid gap-6 lg:grid-cols-2">
             <Card className="p-5">
-              <h2 className="mb-4 font-bold text-slate-900">Best sellers (30 days)</h2>
+              <h2 className="mb-4 font-bold text-slate-900">{t("Best sellers (30 days)")}</h2>
               {data.topProducts.length === 0 ? (
-                <p className="py-8 text-center text-sm text-slate-500">No sales yet. Make your first bill!</p>
+                <p className="py-8 text-center text-sm text-slate-500">{t("No sales yet. Make your first bill!")}</p>
               ) : (
                 <ul className="space-y-3">
                   {data.topProducts.map((p, i) => {
@@ -233,11 +234,11 @@ export default function DashboardPage() {
 
             <Card className="p-5">
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="font-bold text-slate-900">Recent bills</h2>
-                <Link href="/sales" className="text-sm font-semibold text-brand-600 hover:text-brand-700">See all</Link>
+                <h2 className="font-bold text-slate-900">{t("Recent bills")}</h2>
+                <Link href="/sales" className="text-sm font-semibold text-brand-600 hover:text-brand-700">{t("See all")}</Link>
               </div>
               {data.recent.length === 0 ? (
-                <p className="py-8 text-center text-sm text-slate-500">No bills yet.</p>
+                <p className="py-8 text-center text-sm text-slate-500">{t("No bills yet.")}</p>
               ) : (
                 <ul className="divide-y divide-slate-100">
                   {data.recent.map((s) => (
@@ -249,7 +250,7 @@ export default function DashboardPage() {
                             {s.status === "partially_returned" && <Badge color="amber">Part returned</Badge>}
                           </div>
                           <div className="text-xs text-slate-500">
-                            {formatDate(s.createdAt, true)} · {s.customerName ?? "Walk-in"} · {PAYMENT_LABELS[s.paymentMethod]}
+                            {formatDate(s.createdAt, true)} · {s.customerName ?? t("Walk-in")} · {t(PAYMENT_LABELS[s.paymentMethod] ?? "")}
                           </div>
                         </div>
                         <span className="font-bold text-slate-900">{formatPKR(s.total)}</span>
@@ -268,15 +269,17 @@ export default function DashboardPage() {
 
 /** Today's mobile-shop work: repairs, Easyload / wallets, installments and used phones. */
 function MobileToday({ m }: { m: MobileReport }) {
+  const tr = useT();
   const tiles: React.ReactNode[] = [];
   if (m.repairs) {
     const r = m.repairs;
     tiles.push(
-      <Tile key="repairs" href="/repairs" icon={<Wrench className="h-5 w-5" />} title="Repairs" value={`${r.inShop} in shop`}>
-        {r.ready > 0 && <Badge color="green">{r.ready} ready to collect</Badge>}
-        {r.late > 0 && <Badge color="red">{r.late} late</Badge>}
+      <Tile key="repairs" href="/repairs" icon={<Wrench className="h-5 w-5" />} title="Repairs" value={tr("{n} in shop", { n: r.inShop })}>
+        {r.ready > 0 && <Badge color="green">{tr("{n} ready to collect", { n: r.ready })}</Badge>}
+        {r.late > 0 && <Badge color="red">{tr("{n} late", { n: r.late })}</Badge>}
         <div>
-          {r.delivered} delivered today{r.profit !== undefined && r.delivered > 0 ? ` · profit ${formatPKR(r.profit)}` : ""}
+          {tr("{n} delivered today", { n: r.delivered })}
+          {r.profit !== undefined && r.delivered > 0 ? ` · ${tr("profit {amount}", { amount: formatPKR(r.profit) })}` : ""}
         </div>
       </Tile>,
     );
@@ -284,16 +287,16 @@ function MobileToday({ m }: { m: MobileReport }) {
   if (m.wallets) {
     const w = m.wallets;
     tiles.push(
-      <Tile key="wallets" href="/wallets" icon={<Zap className="h-5 w-5" />} title="Easyload & wallets" value={w.profit !== undefined ? `${formatPKR(w.profit)} earned` : `${w.count} entries`}>
-        {w.low.length > 0 && <Badge color="amber">Low balance: {w.low.map((x) => x.name).join(", ")}</Badge>}
+      <Tile key="wallets" href="/wallets" icon={<Zap className="h-5 w-5" />} title="Easyload & wallets" value={w.profit !== undefined ? tr("{amount} earned", { amount: formatPKR(w.profit) }) : tr("{n} entries", { n: w.count })}>
+        {w.low.length > 0 && <Badge color="amber">{tr("Low balance: {names}", { names: w.low.map((x) => x.name).join(", ") })}</Badge>}
         <div>
           {w.byType.length
             ? w.byType
                 .filter((t) => t.count > 0)
                 .slice(0, 3)
-                .map((t) => `${WALLET_TXN_LABELS[t.type as WalletTxnType] ?? t.type} ${t.count}`)
+                .map((t) => `${tr(WALLET_TXN_LABELS[t.type as WalletTxnType] ?? t.type)} ${t.count}`)
                 .join(" · ")
-            : "Nothing yet today"}
+            : tr("Nothing yet today")}
         </div>
       </Tile>,
     );
@@ -301,40 +304,42 @@ function MobileToday({ m }: { m: MobileReport }) {
   if (m.installments) {
     const q = m.installments;
     tiles.push(
-      <Tile key="installments" href={q.latePlans ? "/installments?tab=late" : "/installments"} icon={<CalendarRange className="h-5 w-5" />} title="Installments" value={`${formatPKR(q.outstanding)} to collect`}>
+      <Tile key="installments" href={q.latePlans ? "/installments?tab=late" : "/installments"} icon={<CalendarRange className="h-5 w-5" />} title="Installments" value={tr("{amount} to collect", { amount: formatPKR(q.outstanding) })}>
         {q.latePlans > 0 && (
           <Badge color="red">
-            {q.latePlans} late · {formatPKR(q.overdue)}
+            {tr("{n} late", { n: q.latePlans })} · {formatPKR(q.overdue)}
           </Badge>
         )}
         <div>
-          {formatPKR(q.collected)} collected today{q.sold ? ` · ${q.sold} sold` : ""}
+          {tr("{amount} collected today", { amount: formatPKR(q.collected) })}
+          {q.sold ? ` · ${tr("{n} sold", { n: q.sold })}` : ""}
         </div>
       </Tile>,
     );
   }
   if (m.usedPhones) {
     tiles.push(
-      <Tile key="used" href="/used-phones" icon={<Repeat className="h-5 w-5" />} title="Used phones bought" value={`${m.usedPhones.count} today`}>
-        <div>{formatPKR(m.usedPhones.spent)} paid</div>
+      <Tile key="used" href="/used-phones" icon={<Repeat className="h-5 w-5" />} title="Used phones bought" value={tr("{n} today", { n: m.usedPhones.count })}>
+        <div>{tr("{amount} paid", { amount: formatPKR(m.usedPhones.spent) })}</div>
       </Tile>,
     );
   }
   if (!tiles.length) return null;
   return (
     <div className="mt-6">
-      <h2 className="mb-3 font-bold text-slate-900">Mobile shop today</h2>
+      <h2 className="mb-3 font-bold text-slate-900">{tr("Mobile shop today")}</h2>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">{tiles}</div>
     </div>
   );
 }
 
 function Tile({ href, icon, title, value, children }: { href: string; icon: React.ReactNode; title: string; value: string; children: React.ReactNode }) {
+  const t = useT();
   return (
     <Link href={href} className="block rounded-2xl border border-slate-200 bg-white p-4 shadow-xs transition hover:border-brand-300 hover:shadow-md">
       <div className="flex items-center gap-2 text-sm font-semibold text-slate-500">
         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-brand-700">{icon}</span>
-        {title}
+        {t(title)}
       </div>
       <div className="mt-2 text-xl font-extrabold text-slate-900">{value}</div>
       <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">{children}</div>

@@ -123,12 +123,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (
       waiting &&
       !(await confirm({
-        title: "Offline bills not sent yet",
-        message: `${waiting} bill(s) made offline are still on this device.`,
+        title: t("Offline bills not sent yet"),
+        message: t("{n} bill(s) made offline are still on this device.", { n: waiting }),
         tone: "warning",
-        points: ["They stay safely on this device.", "They are sent automatically after the next login on this device."],
-        confirmLabel: "Log out anyway",
-        cancelLabel: "Stay logged in",
+        points: [t("They stay safely on this device."), t("They are sent automatically after the next login on this device.")],
+        confirmLabel: t("Log out anyway"),
+        cancelLabel: t("Stay logged in"),
       }))
     )
       return;
@@ -158,9 +158,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="mx-4 mb-3 rounded-xl bg-brand-50 px-3 py-2.5">
         <div className="flex items-start gap-1">
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-bold text-brand-900">{isAdmin ? "Admin Panel" : data.settings?.shopName ?? "My Shop"}</div>
+            <div className="truncate text-sm font-bold text-brand-900">{isAdmin ? t("Admin Panel") : data.settings?.shopName ?? t("My Shop")}</div>
             <div className="text-xs text-brand-700">
-              {data.user.name} · {ROLE_LABEL[data.user.role]}
+              {data.user.name} · {t(ROLE_LABEL[data.user.role])}
             </div>
             {!isAdmin && <SwitchUserButton className="mt-0.5" />}
           </div>
@@ -249,7 +249,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <button onClick={() => setOpen(true)} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100" aria-label="Open menu">
               <Menu className="h-6 w-6" />
             </button>
-            <span className="truncate px-2 font-bold text-slate-900">{isAdmin ? "Admin Panel" : data.settings?.shopName}</span>
+            <span className="truncate px-2 font-bold text-slate-900">{isAdmin ? t("Admin Panel") : data.settings?.shopName}</span>
             {isAdmin ? (
               <span className="w-9" />
             ) : (
@@ -276,6 +276,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
 function ChangePasswordModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const toast = useToast();
+  const t = useT();
   const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirm: "" });
   const [saving, setSaving] = useState(false);
   useEffect(() => {
@@ -284,11 +285,11 @@ function ChangePasswordModal({ open, onClose }: { open: boolean; onClose: () => 
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (form.newPassword !== form.confirm) return toast.error("New passwords do not match.");
+    if (form.newPassword !== form.confirm) return toast.error(t("New passwords do not match."));
     setSaving(true);
     try {
       await api("/api/auth/password", { body: { currentPassword: form.currentPassword, newPassword: form.newPassword } });
-      toast.success("Password changed");
+      toast.success(t("Password changed"));
       onClose();
     } catch (err) {
       toast.error((err as Error).message);
@@ -318,6 +319,7 @@ function ChangePasswordModal({ open, onClose }: { open: boolean; onClose: () => 
 }
 
 function BranchSwitcher({ data }: { data: SessionData }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   if (data.branchLocked || !data.branches) {
     return (
@@ -339,7 +341,7 @@ function BranchSwitcher({ data }: { data: SessionData }) {
   return (
     <label className="mt-2 flex items-center gap-1.5 rounded-lg bg-white/70 px-2 py-1 ring-1 ring-brand-200">
       <MapPin className="h-3.5 w-3.5 shrink-0 text-brand-700" />
-      <span className="sr-only">Branch</span>
+      <span className="sr-only">{t("Branch")}</span>
       <select
         value={data.branch?._id}
         disabled={busy}
@@ -359,6 +361,7 @@ function BranchSwitcher({ data }: { data: SessionData }) {
 /** Sends offline bills in the background and shows a banner while offline or bills are waiting. */
 function OfflineSync({ tenantId, offline, onOnline }: { tenantId: string; offline: boolean; onOnline: () => void }) {
   const toast = useToast();
+  const t = useT();
   const [waiting, setWaiting] = useState(0);
   const [failed, setFailed] = useState(0);
   const [netDown, setNetDown] = useState(offline);
@@ -381,7 +384,7 @@ function OfflineSync({ tenantId, offline, onOnline }: { tenantId: string; offlin
       if (stopped || !getOutbox(tenantId).some((b) => b.status === "pending")) return;
       const r = await syncOutbox(tenantId);
       setNetDown(r.offline);
-      if (r.sent) toast.success(`${r.sent} offline bill(s) sent to the server`);
+      if (r.sent) toast.success(t("{n} offline bill(s) sent to the server", { n: r.sent }));
       if (!r.offline && offline) onOnline();
     };
     run();
@@ -396,7 +399,7 @@ function OfflineSync({ tenantId, offline, onOnline }: { tenantId: string; offlin
       clearInterval(timer);
       window.removeEventListener("online", back);
     };
-  }, [tenantId, toast, offline, onOnline]);
+  }, [tenantId, toast, offline, onOnline, t]);
 
   const visible = netDown || waiting > 0 || failed > 0;
   // Full-height screens (New Bill) subtract the banner's height so nothing is hidden under it.
@@ -408,11 +411,11 @@ function OfflineSync({ tenantId, offline, onOnline }: { tenantId: string; offlin
   if (!visible) return null;
   return (
     <div className={`no-print z-30 flex h-10 items-center justify-center truncate px-4 text-center text-sm font-semibold lg:sticky lg:top-0 ${netDown ? "bg-amber-500 text-white" : failed ? "bg-rose-600 text-white" : "bg-sky-600 text-white"}`}>
-      {netDown ? "Offline — you can still make bills. " : ""}
-      {waiting > 0 && `${waiting} bill(s) waiting to be sent. `}
+      {netDown ? `${t("Offline — you can still make bills.")} ` : ""}
+      {waiting > 0 && `${t("{n} bill(s) waiting to be sent.", { n: waiting })} `}
       {failed > 0 && (
         <Link href="/pos?outbox=1" className="underline">
-          {failed} bill(s) could not be saved — tap to review
+          {t("{n} bill(s) could not be saved — tap to review", { n: failed })}
         </Link>
       )}
     </div>

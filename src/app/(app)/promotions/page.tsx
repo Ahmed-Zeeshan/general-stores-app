@@ -8,6 +8,7 @@ import { useConfirm } from "@/components/confirm";
 import { api, formatDate } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
 import { isRunning, type PromoLike } from "@/lib/promotions";
+import { useT } from "@/lib/i18n";
 
 type Promo = PromoLike & { createdAt: string };
 type Product = { _id: string; name: string };
@@ -20,15 +21,17 @@ const KINDS = [
   { value: "bill", label: "Off the bill" },
 ] as const;
 
-function describe(p: PromoLike) {
-  if (p.kind === "percent") return `${p.value}% off`;
-  if (p.kind === "amount") return `${formatPKR(p.value ?? 0)} off each`;
-  if (p.kind === "bxgy") return `Buy ${p.buyQty} get ${p.freeQty} free`;
-  return `${p.billMode === "amount" ? formatPKR(p.value ?? 0) : `${p.value}%`} off bills of ${formatPKR(p.minAmount ?? 0)} or more${p.maxDiscount ? ` (up to ${formatPKR(p.maxDiscount)})` : ""}`;
+function describe(p: PromoLike, t: ReturnType<typeof useT>) {
+  if (p.kind === "percent") return t("{n}% off", { n: String(p.value) });
+  if (p.kind === "amount") return t("{amount} off each", { amount: formatPKR(p.value ?? 0) });
+  if (p.kind === "bxgy") return t("Buy {buy} get {free} free", { buy: String(p.buyQty), free: String(p.freeQty) });
+  const off = t("{discount} off bills of {min} or more", { discount: p.billMode === "amount" ? formatPKR(p.value ?? 0) : `${p.value}%`, min: formatPKR(p.minAmount ?? 0) });
+  return `${off}${p.maxDiscount ? ` (${t("up to {amount}", { amount: formatPKR(p.maxDiscount) })})` : ""}`;
 }
 
 export default function PromotionsPage() {
   const toast = useToast();
+  const t = useT();
   const confirm = useConfirm();
   const [list, setList] = useState<Promo[] | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -46,7 +49,7 @@ export default function PromotionsPage() {
 
   const names = useMemo(() => new Map([...products, ...categories].map((x) => [x._id, x.name])), [products, categories]);
   const scope = (p: PromoLike) =>
-    p.kind === "bill" ? "Whole bill" : p.appliesTo === "products" ? (p.products ?? []).map((id) => names.get(String(id)) ?? "…").join(", ") : p.appliesTo === "categories" ? `Category: ${(p.categories ?? []).map((id) => names.get(String(id)) ?? "…").join(", ")}` : "All items";
+    p.kind === "bill" ? t("Whole bill") : p.appliesTo === "products" ? (p.products ?? []).map((id) => names.get(String(id)) ?? "…").join(", ") : p.appliesTo === "categories" ? `${t("Category:")} ${(p.categories ?? []).map((id) => names.get(String(id)) ?? "…").join(", ")}` : t("All items");
 
   async function toggle(p: Promo) {
     try {
@@ -57,7 +60,7 @@ export default function PromotionsPage() {
     }
   }
   async function remove(p: Promo) {
-    if (!(await confirm({ title: `Delete offer "${p.name}"?`, message: "Bills already made keep their discount.", tone: "danger", icon: "delete", confirmLabel: "Delete offer" }))) return;
+    if (!(await confirm({ title: t('Delete offer "{name}"?', { name: p.name }), message: t("Bills already made keep their discount."), tone: "danger", icon: "delete", confirmLabel: "Delete offer" }))) return;
     try {
       await api(`/api/promotions/${p._id}`, { method: "DELETE" });
       load();
@@ -97,14 +100,14 @@ export default function PromotionsPage() {
                   <tr key={p._id}>
                     <Td>
                       <div className="font-semibold text-slate-800">{p.name}</div>
-                      <div className="text-xs text-slate-500">{describe(p)}</div>
+                      <div className="text-xs text-slate-500">{describe(p, t)}</div>
                     </Td>
                     <Td className="max-w-[260px] whitespace-normal text-sm text-slate-600">{scope(p)}</Td>
                     <Td className="text-sm text-slate-500">
-                      {p.startsAt ? formatDate(String(p.startsAt)) : "Now"} – {p.endsAt ? formatDate(String(p.endsAt)) : "no end"}
+                      {p.startsAt ? formatDate(String(p.startsAt)) : t("Now")} – {p.endsAt ? formatDate(String(p.endsAt)) : t("no end")}
                     </Td>
                     <Td>
-                      <button onClick={() => toggle(p)} title="Switch on / off">
+                      <button onClick={() => toggle(p)} title={t("Switch on / off")}>
                         {!p.active ? <Badge color="slate">Off</Badge> : running ? <Badge color="green">Running</Badge> : <Badge color="amber">Scheduled / ended</Badge>}
                       </button>
                     </Td>
@@ -128,6 +131,7 @@ export default function PromotionsPage() {
 
 function PromoForm({ promo, products, categories, onClose, onSaved }: { promo: Promo | null; products: Product[]; categories: Category[]; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
+  const t = useT();
   const [f, setF] = useState({
     name: promo?.name ?? "",
     kind: (promo?.kind ?? "percent") as PromoLike["kind"],
@@ -157,7 +161,7 @@ function PromoForm({ promo, products, categories, onClose, onSaved }: { promo: P
       const body = { ...f, value: Number(f.value) || 0, buyQty: Number(f.buyQty) || undefined, freeQty: Number(f.freeQty) || undefined, minAmount: Number(f.minAmount) || 0, maxDiscount: Number(f.maxDiscount) || 0 };
       if (promo) await api(`/api/promotions/${promo._id}`, { method: "PUT", body });
       else await api("/api/promotions", { body });
-      toast.success("Offer saved");
+      toast.success(t("Offer saved"));
       onSaved();
     } catch (err) {
       toast.error((err as Error).message);
@@ -181,7 +185,7 @@ function PromoForm({ promo, products, categories, onClose, onSaved }: { promo: P
     >
       <form id="promo-form" onSubmit={save} className="grid gap-4 sm:grid-cols-2">
         <Field label="Name *" className="sm:col-span-2">
-          <Input autoFocus required value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Ramzan offer, Biscuits 10% off" aria-label="Offer name" />
+          <Input autoFocus required value={f.name} onChange={(e) => set("name", e.target.value)} placeholder={t("e.g. Ramzan offer, Biscuits 10% off")} aria-label="Offer name" />
         </Field>
         <div className="sm:col-span-2">
           <Segmented value={f.kind} onChange={(v) => set("kind", v)} options={KINDS.map((k) => ({ value: k.value, label: k.label }))} />
@@ -205,7 +209,11 @@ function PromoForm({ promo, products, categories, onClose, onSaved }: { promo: P
               <Input type="number" inputMode="numeric" min="1" value={f.freeQty} onChange={(e) => set("freeQty", e.target.value)} aria-label="Free quantity" />
             </Field>
             <p className="col-span-2 text-xs text-slate-500">
-              Example: buy {f.buyQty || "X"} get {f.freeQty || "Y"} free — for every {(Number(f.buyQty) || 0) + (Number(f.freeQty) || 0) || "X+Y"} of the same item on a bill, {f.freeQty || "Y"} are free.
+              {t("Example: buy {buy} get {free} free — for every {every} of the same item on a bill, {free} are free.", {
+                buy: f.buyQty || "X",
+                free: f.freeQty || "Y",
+                every: (Number(f.buyQty) || 0) + (Number(f.freeQty) || 0) || "X+Y",
+              })}
             </p>
           </div>
         )}
@@ -232,7 +240,7 @@ function PromoForm({ promo, products, categories, onClose, onSaved }: { promo: P
         )}
         {f.kind !== "bill" && (
           <div className="sm:col-span-2">
-            <div className="mb-1.5 text-sm font-medium text-slate-700">On which items</div>
+            <div className="mb-1.5 text-sm font-medium text-slate-700">{t("On which items")}</div>
             <Segmented
               value={f.appliesTo}
               onChange={(v) => set("appliesTo", v)}
@@ -244,7 +252,7 @@ function PromoForm({ promo, products, categories, onClose, onSaved }: { promo: P
             />
             {f.appliesTo === "products" && (
               <div className="mt-2 rounded-xl border border-slate-200 p-2">
-                <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search items" className="h-9" />
+                <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("Search items")} className="h-9" />
                 <div className="mt-2 flex max-h-48 flex-wrap gap-1.5 overflow-y-auto">
                   {shown.map((p) => (
                     <button type="button" key={p._id} onClick={() => toggleIn("products", p._id)} className={cn("rounded-lg border px-2.5 py-1 text-xs font-semibold", f.products.includes(p._id) ? "border-brand-500 bg-brand-50 text-brand-800" : "border-slate-200 text-slate-600")}>
@@ -273,9 +281,9 @@ function PromoForm({ promo, products, categories, onClose, onSaved }: { promo: P
         </Field>
         <label className="flex items-center gap-3 sm:col-span-2">
           <input type="checkbox" checked={f.active} onChange={(e) => set("active", e.target.checked)} className="h-5 w-5 accent-brand-600" />
-          <span className="font-medium">Offer is on</span>
+          <span className="font-medium">{t("Offer is on")}</span>
         </label>
-        <p className="text-xs text-slate-500 sm:col-span-2">An item gets only its best offer; a bill offer is added on top. Wholesale customers and prices typed by hand don&apos;t get offers.</p>
+        <p className="text-xs text-slate-500 sm:col-span-2">{t("An item gets only its best offer; a bill offer is added on top. Wholesale customers and prices typed by hand don't get offers.")}</p>
       </form>
     </Modal>
   );

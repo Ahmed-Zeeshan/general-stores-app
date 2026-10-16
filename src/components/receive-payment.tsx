@@ -110,12 +110,12 @@ export function ReceivePaymentModal({ open, party: given, onClose, onSaved }: { 
             {left > 0
               ? isCustomer
                 ? t("Still to collect: {amount}", { amount: formatPKR(left) })
-                : `Still to pay: ${formatPKR(left)}`
+                : t("Still to pay: {amount}", { amount: formatPKR(left) })
               : left < 0
-                ? `Advance: ${formatPKR(-left)}`
+                ? t("Advance: {amount}", { amount: formatPKR(-left) })
                 : isCustomer
                   ? t("Khata clear — fully paid ✓")
-                  : "Supplier fully paid ✓"}
+                  : t("Supplier fully paid ✓")}
           </div>
           <div className={cn("mt-6 grid gap-3", canWa ? "grid-cols-3" : "grid-cols-2")}>
             <Button variant="outline" icon={<Printer className="h-4 w-4" />} onClick={() => printPaymentReceipt(done._id)}>
@@ -127,7 +127,7 @@ export function ReceivePaymentModal({ open, party: given, onClose, onSaved }: { 
                 icon={<MessageCircle className="h-4 w-4 text-emerald-600" />}
                 onClick={() => {
                   sendPaymentWhatsApp(settings, party, done);
-                  toast.success("WhatsApp opened — press Send there");
+                  toast.success(t("WhatsApp opened — press Send there"));
                 }}
               >
                 WhatsApp
@@ -147,11 +147,11 @@ export function ReceivePaymentModal({ open, party: given, onClose, onSaved }: { 
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-100 font-bold text-brand-800">{party.name.slice(0, 1).toUpperCase()}</div>
           <div className="min-w-0 flex-1">
             <div className="truncate font-semibold text-slate-800">{party.name}</div>
-            <div className="text-xs text-slate-500">{party.phone || "No phone"}</div>
+            <div className="text-xs text-slate-500">{party.phone || t("No phone")}</div>
           </div>
           <div className="text-right">
             <div className={cn("font-bold", due > 0 ? "text-amber-700" : "text-emerald-700")}>{formatPKR(Math.abs(due))}</div>
-            <div className="text-xs text-slate-400">{due > 0 ? (isCustomer ? "udhaar" : "to pay") : due < 0 ? "advance" : "clear"}</div>
+            <div className="text-xs text-slate-400">{t(due > 0 ? (isCustomer ? "udhaar" : "to pay") : due < 0 ? "advance" : "clear")}</div>
           </div>
         </div>
 
@@ -177,20 +177,20 @@ export function ReceivePaymentModal({ open, party: given, onClose, onSaved }: { 
 
         {paid > 0 && (
           <div className="rounded-2xl border border-slate-200 p-3 text-sm">
-            <div className="flex justify-between"><span className="text-slate-500">Before</span><b>{formatPKR(due)}</b></div>
-            <div className="flex justify-between"><span className="text-slate-500">{isCustomer ? "Received" : "Paid"}</span><b className="text-emerald-700">−{formatPKR(paid)}</b></div>
+            <div className="flex justify-between"><span className="text-slate-500">{t("Before")}</span><b>{formatPKR(due)}</b></div>
+            <div className="flex justify-between"><span className="text-slate-500">{t(isCustomer ? "Received" : "Paid")}</span><b className="text-emerald-700">−{formatPKR(paid)}</b></div>
             <div className="mt-1.5 flex justify-between border-t border-dashed border-slate-200 pt-1.5">
-              <span className="font-semibold text-slate-700">{after > 0 ? "Remaining" : after < 0 ? "Advance (extra paid)" : "Remaining"}</span>
+              <span className="font-semibold text-slate-700">{t(after > 0 ? "Remaining" : after < 0 ? "Advance (extra paid)" : "Remaining")}</span>
               <b className={after > 0 ? "text-amber-700" : "text-emerald-700"}>{formatPKR(Math.abs(after))}</b>
             </div>
-            {after > 0 && due > 0 && <p className="mt-2 text-xs font-semibold text-amber-700">Part payment — {formatPKR(after)} will stay in the khata.</p>}
-            {after === 0 && <p className="mt-2 text-xs font-semibold text-emerald-700">Full payment — khata will be clear.</p>}
-            {after < 0 && <p className="mt-2 text-xs font-semibold text-sky-700">{formatPKR(-after)} more than due — it will be kept as advance.</p>}
+            {after > 0 && due > 0 && <p className="mt-2 text-xs font-semibold text-amber-700">{t("Part payment — {amount} will stay in the khata.", { amount: formatPKR(after) })}</p>}
+            {after === 0 && <p className="mt-2 text-xs font-semibold text-emerald-700">{t("Full payment — khata will be clear.")}</p>}
+            {after < 0 && <p className="mt-2 text-xs font-semibold text-sky-700">{t("{amount} more than due — it will be kept as advance.", { amount: formatPKR(-after) })}</p>}
           </div>
         )}
 
         <Button type="submit" size="lg" className="w-full" loading={saving} disabled={!(paid > 0)}>
-          {isCustomer ? t("Receive {amount}", { amount: paid > 0 ? formatPKR(paid) : "" }).trim() : `Pay ${paid > 0 ? formatPKR(paid) : ""}`}
+          {isCustomer ? t("Receive {amount}", { amount: paid > 0 ? formatPKR(paid) : "" }).trim() : t("Pay {amount}", { amount: paid > 0 ? formatPKR(paid) : "" })}
         </Button>
       </form>
     </Modal>
@@ -238,12 +238,12 @@ function PickCustomer({ onClose, onPick }: { onClose: () => void; onPick: (p: Pa
         <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         <Input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Name or phone")} className="pl-10" aria-label="Search customer" />
       </div>
-      <p className="mt-2 text-xs text-slate-500">{q ? "Matching customers" : "Customers with udhaar"}</p>
+      <p className="mt-2 text-xs text-slate-500">{t(q ? "Matching customers" : "Customers with udhaar")}</p>
       <div className="mt-2 max-h-[50vh] overflow-y-auto">
         {!list ? (
           <Spinner />
         ) : list.length === 0 ? (
-          <p className="py-8 text-center text-sm text-slate-500">{q ? "No customer found." : "No customer has udhaar right now."}</p>
+          <p className="py-8 text-center text-sm text-slate-500">{t(q ? "No customer found." : "No customer has udhaar right now.")}</p>
         ) : (
           <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200">
             {list.map((p) => (
@@ -252,7 +252,7 @@ function PickCustomer({ onClose, onPick }: { onClose: () => void; onPick: (p: Pa
                   <UserRound className="h-5 w-5 shrink-0 text-slate-400" />
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-semibold text-slate-800">{p.name}</div>
-                    <div className="text-xs text-slate-500">{p.phone || "No phone"}</div>
+                    <div className="text-xs text-slate-500">{p.phone || t("No phone")}</div>
                   </div>
                   <div className={cn("font-bold", p.balance > 0 ? "text-amber-700" : "text-slate-400")}>{formatPKR(Math.abs(p.balance))}</div>
                 </button>

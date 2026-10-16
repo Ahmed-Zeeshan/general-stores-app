@@ -11,6 +11,7 @@ import { useToast } from "@/components/toast";
 import { useConfirm } from "@/components/confirm";
 import { api, formatDate, todayISO } from "@/lib/client";
 import { formatPKR, round2 } from "@/lib/money";
+import { useT } from "@/lib/i18n";
 
 type Movement = { kind: "in" | "out"; amount: number; reason?: string; at: string; userName?: string };
 type Shift = {
@@ -40,14 +41,15 @@ type Current = { shift: Shift | null; summary?: Summary | null; branch: { name: 
 
 const NOTES = [5000, 1000, 500, 100, 50, 20, 10];
 
-function diffBadge(diff?: number) {
+function diffBadge(diff: number | undefined, tr: ReturnType<typeof useT>) {
   if (diff === undefined || diff === null) return null;
   if (Math.abs(diff) < 0.5) return <Badge color="green">Exact</Badge>;
-  return diff < 0 ? <Badge color="red">Short {formatPKR(-diff)}</Badge> : <Badge color="amber">Over {formatPKR(diff)}</Badge>;
+  return diff < 0 ? <Badge color="red">{tr("Short {amount}", { amount: formatPKR(-diff) })}</Badge> : <Badge color="amber">{tr("Over {amount}", { amount: formatPKR(diff) })}</Badge>;
 }
 
 export default function DrawerPage() {
   const toast = useToast();
+  const tr = useT();
   const can = useCan();
   const [current, setCurrent] = useState<Current | null>(null);
   const [history, setHistory] = useState<Shift[] | null>(null);
@@ -80,18 +82,18 @@ export default function DrawerPage() {
           <div className="flex flex-col gap-4 bg-linear-to-br from-emerald-700 to-emerald-900 p-6 text-white sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="flex items-center gap-2 text-sm text-emerald-100">
-                <LockOpen className="h-4 w-4" /> Drawer open · {shift.branchName} · {shift.shiftNo}
+                <LockOpen className="h-4 w-4" /> {tr("Drawer open")} · {shift.branchName} · {shift.shiftNo}
               </div>
-              <div className="mt-1 text-2xl font-bold">Since {formatDate(shift.openedAt, true)}</div>
-              <div className="text-sm text-emerald-100">Opened by {shift.openedByName} with {formatPKR(shift.openingCash)}</div>
+              <div className="mt-1 text-2xl font-bold">{tr("Since {date}", { date: formatDate(shift.openedAt, true) })}</div>
+              <div className="text-sm text-emerald-100">{tr("Opened by {name} with {amount}", { name: shift.openedByName ?? "", amount: formatPKR(shift.openingCash) })}</div>
             </div>
             {current.summary ? (
               <div className="sm:text-right">
-                <div className="text-sm text-emerald-100">Cash that should be in the drawer</div>
+                <div className="text-sm text-emerald-100">{tr("Cash that should be in the drawer")}</div>
                 <div className="text-4xl font-extrabold">{formatPKR(current.summary.expectedCash)}</div>
               </div>
             ) : (
-              <p className="max-w-xs text-sm text-emerald-100">The expected amount is shown after you count the cash and close the day.</p>
+              <p className="max-w-xs text-sm text-emerald-100">{tr("The expected amount is shown after you count the cash and close the day.")}</p>
             )}
           </div>
           <div className="flex flex-wrap gap-2 p-4">
@@ -106,7 +108,7 @@ export default function DrawerPage() {
           </div>
           {current.summary && (
             <div className="grid gap-4 border-t border-slate-100 p-4 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard label="Sales" value={formatPKR(current.summary.sales)} icon={<Banknote className="h-5 w-5" />} hint={<><Count n={current.summary.bills} one="{n} bill" many="{n} bills" />{current.summary.returns ? ` · ${formatPKR(current.summary.returns)} returned` : ""}</>} />
+              <StatCard label="Sales" value={formatPKR(current.summary.sales)} icon={<Banknote className="h-5 w-5" />} hint={<><Count n={current.summary.bills} one="{n} bill" many="{n} bills" />{current.summary.returns ? ` · ${tr("{amount} returned", { amount: formatPKR(current.summary.returns) })}` : ""}</>} />
               {current.summary.cashFlow.slice(1, 4).map((x) => (
                 <StatCard key={x.label} label={x.label} value={formatPKR(x.amount)} icon={<ArrowDownCircle className="h-5 w-5" />} tone="green" />
               ))}
@@ -114,7 +116,7 @@ export default function DrawerPage() {
           )}
           {shift.movements.length > 0 && (
             <div className="border-t border-slate-100 p-4">
-              <h3 className="mb-2 text-sm font-semibold text-slate-700">Cash in / out</h3>
+              <h3 className="mb-2 text-sm font-semibold text-slate-700">{tr("Cash in / out")}</h3>
               <ul className="space-y-1 text-sm">
                 {shift.movements.map((m, i) => (
                   <li key={i} className="flex justify-between gap-3">
@@ -135,7 +137,7 @@ export default function DrawerPage() {
 
       <Card className="mt-6">
         <div className="flex flex-col gap-3 border-b border-slate-100 p-4 lg:flex-row lg:items-center lg:justify-between">
-          <h2 className="font-bold text-slate-900">Day closes</h2>
+          <h2 className="font-bold text-slate-900">{tr("Day closes")}</h2>
           <div className="flex flex-wrap items-center gap-3">
             <DateRange from={range.from} to={range.to} onChange={setRange} />
             <BranchFilter value={branch} onChange={setBranch} />
@@ -177,7 +179,7 @@ export default function DrawerPage() {
                   <Td className="text-right">{formatPKR(h.openingCash)}</Td>
                   <Td className="text-right">{h.expectedCash !== undefined && h.status === "closed" ? formatPKR(h.expectedCash) : "—"}</Td>
                   <Td className="text-right font-semibold">{h.countedCash !== undefined ? formatPKR(h.countedCash) : "—"}</Td>
-                  <Td>{h.status === "closed" && diffBadge(h.difference)}</Td>
+                  <Td>{h.status === "closed" && diffBadge(h.difference, tr)}</Td>
                   <Td className="text-right">
                     {(h.status === "closed" || can.manage) && (
                       <a href={`/receipt/shift/${h._id}`} target="_blank" rel="noreferrer">
@@ -212,9 +214,9 @@ export default function DrawerPage() {
             <CheckCircle2 className="mx-auto h-14 w-14 text-brand-500" />
             <p className="mt-2 text-sm text-slate-500">{closed.shiftNo} · {closed.branchName}</p>
             <div className="mt-4 space-y-1.5 rounded-2xl bg-slate-50 p-4 text-left text-sm">
-              <div className="flex justify-between"><span className="text-slate-500">Should be in drawer</span><b>{formatPKR(closed.expectedCash ?? 0)}</b></div>
-              <div className="flex justify-between"><span className="text-slate-500">Counted</span><b>{formatPKR(closed.countedCash ?? 0)}</b></div>
-              <div className="flex items-center justify-between border-t border-dashed border-slate-200 pt-1.5"><span className="font-semibold text-slate-700">Result</span>{diffBadge(closed.difference)}</div>
+              <div className="flex justify-between"><span className="text-slate-500">{tr("Should be in drawer")}</span><b>{formatPKR(closed.expectedCash ?? 0)}</b></div>
+              <div className="flex justify-between"><span className="text-slate-500">{tr("Counted")}</span><b>{formatPKR(closed.countedCash ?? 0)}</b></div>
+              <div className="flex items-center justify-between border-t border-dashed border-slate-200 pt-1.5"><span className="font-semibold text-slate-700">{tr("Result")}</span>{diffBadge(closed.difference, tr)}</div>
             </div>
             <div className="mt-6 grid grid-cols-2 gap-3">
               <Button variant="outline" icon={<Printer className="h-4 w-4" />} onClick={() => window.open(`/receipt/shift/${closed._id}?print=1`, "_blank")}>Z report</Button>
@@ -230,6 +232,7 @@ export default function DrawerPage() {
 
 function OpenDrawer({ branchName, suggestion, onOpened }: { branchName: string; suggestion?: number; onOpened: () => void }) {
   const toast = useToast();
+  const tr = useT();
   const [cash, setCash] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -238,7 +241,7 @@ function OpenDrawer({ branchName, suggestion, onOpened }: { branchName: string; 
     setSaving(true);
     try {
       await api("/api/shifts", { body: { openingCash: Number(cash) || 0, note: note || undefined } });
-      toast.success("Cash drawer opened");
+      toast.success(tr("Cash drawer opened"));
       onOpened();
     } catch (err) {
       toast.error((err as Error).message);
@@ -254,10 +257,10 @@ function OpenDrawer({ branchName, suggestion, onOpened }: { branchName: string; 
         </div>
         <form onSubmit={open} className="grid flex-1 gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <h2 className="text-lg font-bold text-slate-900">Start the day — {branchName}</h2>
-            <p className="text-sm text-slate-500">Count the cash already in the drawer (change float) and enter it below.</p>
+            <h2 className="text-lg font-bold text-slate-900">{tr("Start the day — {branch}", { branch: branchName })}</h2>
+            <p className="text-sm text-slate-500">{tr("Count the cash already in the drawer (change float) and enter it below.")}</p>
           </div>
-          <Field label="Cash in drawer now (Rs)" hint={suggestion !== undefined ? `Last day closed with ${formatPKR(suggestion)}` : undefined}>
+          <Field label="Cash in drawer now (Rs)" hint={suggestion !== undefined ? tr("Last day closed with {amount}", { amount: formatPKR(suggestion) }) : undefined}>
             <Input autoFocus required type="number" inputMode="decimal" min="0" step="any" value={cash} onChange={(e) => setCash(e.target.value)} className="h-12 text-xl font-bold" aria-label="Opening cash" />
           </Field>
           <Field label="Note (optional)">
@@ -274,6 +277,7 @@ function OpenDrawer({ branchName, suggestion, onOpened }: { branchName: string; 
 
 function MoveModal({ shiftId, kind, onClose, onSaved }: { shiftId: string; kind: "in" | "out" | null; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
+  const tr = useT();
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
@@ -288,7 +292,7 @@ function MoveModal({ shiftId, kind, onClose, onSaved }: { shiftId: string; kind:
     setSaving(true);
     try {
       await api(`/api/shifts/${shiftId}/movement`, { body: { kind, amount: Number(amount), reason } });
-      toast.success(kind === "in" ? "Cash in recorded" : "Cash out recorded");
+      toast.success(tr(kind === "in" ? "Cash in recorded" : "Cash out recorded"));
       onSaved();
     } catch (err) {
       toast.error((err as Error).message);
@@ -307,10 +311,10 @@ function MoveModal({ shiftId, kind, onClose, onSaved }: { shiftId: string; kind:
         </Field>
         <div className="flex flex-wrap gap-2">
           {presets.map((p) => (
-            <button key={p} type="button" onClick={() => setReason(p)} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200">{p}</button>
+            <button key={p} type="button" onClick={() => setReason(tr(p))} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200">{tr(p)}</button>
           ))}
         </div>
-        <p className="text-xs text-slate-500">Sales, refunds, udhaar payments and expenses are counted automatically — use this only for other cash.</p>
+        <p className="text-xs text-slate-500">{tr("Sales, refunds, udhaar payments and expenses are counted automatically — use this only for other cash.")}</p>
         <Button type="submit" size="lg" className="w-full" loading={saving}>Save</Button>
       </form>
     </Modal>
@@ -319,6 +323,7 @@ function MoveModal({ shiftId, kind, onClose, onSaved }: { shiftId: string; kind:
 
 function CloseModal({ shift, open, onClose, onClosed }: { shift: Shift; open: boolean; onClose: () => void; onClosed: (s: Shift) => void }) {
   const toast = useToast();
+  const tr = useT();
   const confirm = useConfirm();
   const [mode, setMode] = useState<"notes" | "total">("notes");
   const [counts, setCounts] = useState<Record<string, string>>({});
@@ -342,10 +347,10 @@ function CloseModal({ shift, open, onClose, onClosed }: { shift: Shift; open: bo
 
   async function save() {
     const ok = await confirm({
-      title: "Close the day?",
-      message: "After closing, the counted cash and the Z report are saved and cannot be changed. Open a new day before the next bill if you use the drawer.",
-      details: [{ label: "Cash counted", value: formatPKR(counted), strong: true }],
-      confirmLabel: "Close day",
+      title: tr("Close the day?"),
+      message: tr("After closing, the counted cash and the Z report are saved and cannot be changed. Open a new day before the next bill if you use the drawer."),
+      details: [{ label: tr("Cash counted"), value: formatPKR(counted), strong: true }],
+      confirmLabel: tr("Close day"),
       tone: "warning",
     });
     if (!ok) return;
@@ -403,7 +408,7 @@ function CloseModal({ shift, open, onClose, onClosed }: { shift: Shift; open: bo
             </label>
           ))}
           <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2">
-            <span className="shrink-0 text-sm font-bold text-slate-700">Coins Rs</span>
+            <span className="shrink-0 text-sm font-bold text-slate-700">{tr("Coins Rs")}</span>
             <input
               type="number"
               inputMode="decimal"
@@ -422,7 +427,7 @@ function CloseModal({ shift, open, onClose, onClosed }: { shift: Shift; open: bo
         </Field>
       )}
       <div className="mt-4 flex items-center justify-between rounded-2xl bg-slate-900 px-5 py-4 text-white">
-        <span className="text-sm text-slate-300">Cash counted</span>
+        <span className="text-sm text-slate-300">{tr("Cash counted")}</span>
         <span className="text-3xl font-extrabold">{formatPKR(counted)}</span>
       </div>
       <Field label="Note (optional)" className="mt-4">

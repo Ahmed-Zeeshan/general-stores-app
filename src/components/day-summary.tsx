@@ -7,6 +7,7 @@ import { useSession } from "./session";
 import { api, PAYMENT_LABELS, todayISO } from "@/lib/client";
 import type { MobileReport } from "@/lib/mobile-report";
 import { daySummaryMessage, dayCloseMessage, openWhatsApp, waNumber } from "@/lib/whatsapp";
+import { useT } from "@/lib/i18n";
 
 type Report = {
   summary: { bills: number; netSales: number; returns: number; grossProfit: number; expenses: number; netProfit: number; credit: number; udhaarCollected: number };
@@ -19,6 +20,7 @@ type ShiftRow = { shiftNo: string; branchName?: string; status: string; expected
 /** Message editor + number, then open WhatsApp (to the owner by default). */
 function SendModal({ open, onClose, title, load }: { open: boolean; onClose: () => void; title: string; load: () => Promise<string> }) {
   const { settings } = useSession();
+  const t = useT();
   const [phone, setPhone] = useState("");
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -63,7 +65,7 @@ function SendModal({ open, onClose, title, load }: { open: boolean; onClose: () 
         <Spinner />
       ) : (
         <div className="space-y-4">
-          <Field label="Send to (WhatsApp)" hint="The owner's number from Settings → WhatsApp messages." error={phone && !number ? "Enter a Pakistani mobile number" : undefined}>
+          <Field label="Send to (WhatsApp)" hint="The owner's number from Settings → WhatsApp messages." error={phone && !number ? t("Enter a Pakistani mobile number") : undefined}>
             <Input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="03xx-xxxxxxx" aria-label="Send to number" />
           </Field>
           <Field label="Message">
