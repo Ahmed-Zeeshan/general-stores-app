@@ -4,7 +4,7 @@ import Link from "next/link";
 import { BookOpen, CalendarRange, HelpCircle, Keyboard, Languages, Package, Printer, Receipt, RotateCcw, Save, ScanBarcode, Search, ShoppingCart, Smartphone, Truck, Users, Wallet, Wrench, Zap } from "lucide-react";
 import { Card, PageHeader } from "@/components/ui";
 import { useSession } from "@/components/session";
-import { useLang } from "@/lib/i18n";
+import { useLang, useT } from "@/lib/i18n";
 
 type Topic = { id: string; icon: typeof HelpCircle; title: string; urdu: string; steps: string[]; link?: { href: string; label: string }; module?: "phones" | "repairs" | "wallets" | "installments" };
 
@@ -219,6 +219,7 @@ const TOPICS: Topic[] = [
 export default function HelpPage() {
   const { settings } = useSession();
   const { lang } = useLang();
+  const t = useT();
   const m = settings?.modules ?? {};
   const topics = TOPICS.filter((x) => !x.module || m[x.module]);
   return (
@@ -228,7 +229,7 @@ export default function HelpPage() {
         <div className="flex flex-wrap gap-2">
           {topics.map((x) => (
             <a key={x.id} href={`#${x.id}`} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-brand-50 hover:text-brand-800">
-              <x.icon className="h-4 w-4" /> {x.title}
+              <x.icon className="h-4 w-4" /> {t(x.title)}
             </a>
           ))}
         </div>
@@ -238,29 +239,29 @@ export default function HelpPage() {
           <Card key={x.id} className="scroll-mt-20 p-5">
             <section id={x.id}>
               <h2 className="flex items-center gap-2 font-bold text-slate-900">
-                <x.icon className="h-5 w-5 text-brand-600" /> {x.title}
+                <x.icon className="h-5 w-5 text-brand-600" /> {t(x.title)}
               </h2>
               <p className={lang === "ur" ? "urdu mt-1 text-base text-slate-700" : "urdu mt-1 text-sm text-slate-500"}>{x.urdu}</p>
               <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-slate-700">
                 {x.steps.map((s) => (
-                  <li key={s}>{s}</li>
+                  <li key={s}>{t(s)}</li>
                 ))}
               </ol>
               {x.link &&
                 (x.link.href.startsWith("/receipt") ? (
                   <a href={x.link.href} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-brand-700 hover:underline">
-                    <Receipt className="h-4 w-4" /> {x.link.label}
+                    <Receipt className="h-4 w-4" /> {t(x.link.label)}
                   </a>
                 ) : (
                   <Link href={x.link.href} className="mt-3 inline-block text-sm font-semibold text-brand-700 hover:underline">
-                    {x.link.label} →
+                    {t(x.link.label)} →
                   </Link>
                 ))}
             </section>
           </Card>
         ))}
       </div>
-      <p className="mt-6 text-center text-sm text-slate-500">Still stuck? Ask your shop owner, or the person who set up the app for you.</p>
+      <p className="mt-6 text-center text-sm text-slate-500">{t("Still stuck? Ask your shop owner, or the person who set up the app for you.")}</p>
     </div>
   );
 }
