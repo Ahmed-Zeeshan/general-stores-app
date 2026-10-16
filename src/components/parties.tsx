@@ -137,7 +137,7 @@ export function PartiesList({ type }: { type: PartyType }) {
         <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("Search by name or phone")} aria-label={tr("Search by name or phone")} className="pl-10" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("Search by name or phone")} aria-label="Search by name or phone" className="pl-10" />
           </div>
           <Segmented
             value={show}
