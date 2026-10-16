@@ -61,7 +61,11 @@ export type BranchContext = TenantContext & {
 
 /** Tenant context plus the branch this request works in (assigned branch, chosen branch, or main). */
 export async function requireBranch(roles?: ShopRole[]): Promise<BranchContext> {
-  const ctx = await requireTenant(roles);
+  return branchContext(await requireTenant(roles));
+}
+
+/** The branch a known shop user works in (used right after login, before the login cookie exists). */
+export async function branchContext(ctx: TenantContext): Promise<BranchContext> {
   await ensureMainBranch(ctx.tid);
   const branches = (await Branch.find({ tenant: ctx.tid, active: true }).sort({ isMain: -1, name: 1 }).select("name address phone isMain").lean()) as BranchLite[];
   const byId = new Map(branches.map((b) => [String(b._id), b]));

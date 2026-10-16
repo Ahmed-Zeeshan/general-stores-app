@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ApiError, handle, requireTenant } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
+import { checkPartyPhone } from "@/lib/phone";
 import { LedgerEntry, Party, PointsEntry, User } from "@/models";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -19,12 +20,12 @@ export const GET = handle<Ctx>(async (_req, { params }) => {
 });
 
 const Body = z.object({
-  name: z.string().trim().min(1),
-  phone: z.string().trim().optional(),
-  address: z.string().trim().optional(),
-  creditLimit: z.coerce.number().min(0).optional(),
+  name: z.string().trim().min(1).max(100),
+  phone: z.string().trim().max(30).optional(),
+  address: z.string().trim().max(300).optional(),
+  creditLimit: z.coerce.number().min(0).max(100_000_000).optional(),
   priceLevel: z.enum(["retail", "wholesale"]).optional(),
-  notes: z.string().trim().optional(),
+  notes: z.string().trim().max(1000).optional(),
   active: z.boolean().optional(),
 });
 
@@ -32,8 +33,15 @@ export const PUT = handle<Ctx>(async (req, { params }) => {
   const { tid, user } = await requireTenant(["owner", "manager"]);
   const { id } = await params;
   const body = Body.parse(await req.json());
-  const before = await Party.findOne({ _id: id, tenant: tid }).select("creditLimit priceLevel").lean();
-  const party = await Party.findOneAndUpdate({ _id: id, tenant: tid }, body, { new: true }).lean();
+  const before = await Party.findOne({ _id: id, tenant: tid }).select("type creditLimit priceLevel").lean();
+  if (!before) throw new ApiError(404, "Not found.");
+  const update: Record<string, unknown> = { ...body };
+  if (body.phone !== undefined) {
+    const phone = checkPartyPhone(before.type as "customer" | "supplier", body.phone);
+    if (phone.error) throw new ApiError(400, phone.error);
+    update.phone = phone.phone ?? "";
+  }
+  const party = await Party.findOneAndUpdate({ _id: id, tenant: tid }, update, { new: true }).lean();
   if (!party) throw new ApiError(404, "Not found.");
   const changes = [
     body.creditLimit !== undefined && body.creditLimit !== (before?.creditLimit ?? 0) && `udhaar limit ${before?.creditLimit ?? 0} → ${body.creditLimit}`,

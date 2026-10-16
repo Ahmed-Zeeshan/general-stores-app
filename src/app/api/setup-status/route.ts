@@ -1,10 +1,11 @@
 import { handle } from "@/lib/api";
 import { requireBranch } from "@/lib/branches";
-import { Device, Party, Product, Sale, Shift, Tenant, User, Wallet } from "@/models";
+import { openShift } from "@/lib/shifts";
+import { Device, Party, Product, Sale, Tenant, User, Wallet } from "@/models";
 
 /** What a new shop has set up so far, for the "Get your shop ready" guide on the dashboard. */
 export const GET = handle(async () => {
-  const { tid } = await requireBranch(["owner"]);
+  const { tid, branchId } = await requireBranch(["owner"]);
   const tenant = (await Tenant.findById(tid).select("phone address modules setupDismissedAt shopType").lean()) as {
     phone?: string;
     address?: string;
@@ -13,11 +14,12 @@ export const GET = handle(async () => {
     shopType?: string;
   } | null;
   const m = tenant?.modules ?? {};
-  const [products, customers, staff, shifts, bills, wallets, phones] = await Promise.all([
+  const [products, customers, staff, drawerNow, bills, wallets, phones] = await Promise.all([
     Product.countDocuments({ tenant: tid, active: true }),
     Party.countDocuments({ tenant: tid, type: "customer" }),
     User.countDocuments({ tenant: tid }),
-    Shift.countDocuments({ tenant: tid }),
+    // Same answer as the bill screen: a drawer open now at this branch.
+    openShift(tid, branchId),
     Sale.countDocuments({ tenant: tid }),
     m.wallets ? Wallet.countDocuments({ tenant: tid }) : 0,
     m.phones ? Device.countDocuments({ tenant: tid }) : 0,
@@ -31,7 +33,7 @@ export const GET = handle(async () => {
       products: products >= 5,
       customers: customers >= 1,
       staff: staff >= 2,
-      drawer: shifts >= 1,
+      drawer: !!drawerNow,
       bill: bills >= 1,
       wallets: wallets >= 1,
       phones: phones >= 1,

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Barcode, Boxes, Camera, ListPlus, Star, Package, Pencil, Plus, Printer, Search, SlidersHorizontal, Smartphone, Tags, Trash2, Wand2 } from "lucide-react";
 import { BarcodeSvg } from "@/components/barcode";
 import { CameraButton, CameraScanner, useBarcodeScanner } from "@/components/barcode-scanner";
-import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Spinner, Table, Td, Th, Textarea } from "@/components/ui";
+import { Badge, Button, Card, Count, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
 import { useCan, useSession } from "@/components/session";
 import { useToast } from "@/components/toast";
 import { useConfirm } from "@/components/confirm";
@@ -14,6 +14,7 @@ import { StarterItemsModal } from "@/components/starter-items";
 import { compressImage } from "@/lib/image";
 import { api, formatDate, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty } from "@/lib/money";
+import { extraName } from "@/lib/product-search";
 
 type Category = { _id: string; name: string };
 type Product = {
@@ -178,7 +179,7 @@ function ProductsPage() {
         urdu="اشیاء اور اسٹاک"
         subtitle={
           products
-            ? `${products.length} items${multiBranch ? ` · Stock at ${allBranches ? "all branches" : branch?.name}` : ""}${can.manage ? ` · Stock value ${formatPKR(stockValue)}` : ""}`
+            ? <><Count n={products.length} one="{n} item" many="{n} items" />{multiBranch ? ` · Stock at ${allBranches ? "all branches" : branch?.name}` : ""}{can.manage ? ` · Stock value ${formatPKR(stockValue)}` : ""}</>
             : undefined
         }
         actions={
@@ -291,11 +292,11 @@ function ProductsPage() {
                           p.favourite && <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
                         )}
                       </div>
-                      {(p.brand || p.fits) && (
-                        <div className="text-xs text-slate-500">{[p.brand, p.fits && `Fits ${p.fits}`].filter(Boolean).join(" · ")}</div>
+                      {(extraName(p.name, p.brand) || p.fits) && (
+                        <div className="text-xs text-slate-500">{[extraName(p.name, p.brand), p.fits && `Fits ${p.fits}`].filter(Boolean).join(" · ")}</div>
                       )}
                       <div className="text-xs text-slate-400">
-                        {p.nameUrdu && <span className="urdu mr-2">{p.nameUrdu}</span>}
+                        {extraName(p.name, p.nameUrdu) && <span className="urdu mr-2">{extraName(p.name, p.nameUrdu)}</span>}
                         {p.barcode}
                       </div>
                     </Td>

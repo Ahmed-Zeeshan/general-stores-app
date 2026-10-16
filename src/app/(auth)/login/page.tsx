@@ -8,7 +8,7 @@ import { LangSwitch, useT } from "@/lib/i18n";
 import { Logo } from "@/components/logo";
 import { useToast } from "@/components/toast";
 import { api } from "@/lib/client";
-import { clearOfflineCache } from "@/lib/offline";
+import { cache, clearOfflineCache } from "@/lib/offline";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,7 +33,9 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const r = await api<{ role: string }>("/api/auth/login", { body: { username, password } });
+      const r = await api<{ role: string; me?: unknown }>("/api/auth/login", { body: { username, password } });
+      // The app draws its menu from this at once instead of asking the server again.
+      if (r.me) cache.set("me", r.me);
       router.replace(r.role === "superadmin" ? "/admin" : "/");
       router.refresh();
     } catch (err) {

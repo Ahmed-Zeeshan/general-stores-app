@@ -151,7 +151,7 @@ export function PageHeader({
 }: {
   title: string;
   urdu?: string;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
   actions?: React.ReactNode;
 }) {
   const tx = useTx();
@@ -243,6 +243,12 @@ export function Modal({
     </div>,
     document.body,
   );
+}
+
+/** A count with the right word in the chosen language: <Count n={1} one="{n} bill" many="{n} bills" /> → "1 bill". */
+export function Count({ n, one, many }: { n: number; one: string; many: string }) {
+  const t = useT();
+  return <>{t(n === 1 ? one : many, { n })}</>;
 }
 
 export function EmptyState({

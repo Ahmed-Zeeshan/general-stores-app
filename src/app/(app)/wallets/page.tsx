@@ -350,7 +350,7 @@ function EntryPanel({ wallets, packages, canManage, onSaved, onCommission }: { w
                           <span className="whitespace-nowrap font-bold text-brand-700">{formatPKR(p.price)}</span>
                         </div>
                         <div className="mt-1 text-xs text-slate-500">
-                          {[p.data, p.minutes, p.sms, p.validityDays ? `${p.validityDays} days` : null].filter(Boolean).join(" · ") || PACKAGE_KIND_LABELS[p.kind]}
+                          {[p.data, p.minutes, p.sms, p.validityDays ? `${p.validityDays} ${p.validityDays === 1 ? "day" : "days"}` : null].filter(Boolean).join(" · ") || PACKAGE_KIND_LABELS[p.kind]}
                         </div>
                         {p.code && <div className="mt-0.5 text-[11px] text-slate-400">{p.code}</div>}
                       </button>

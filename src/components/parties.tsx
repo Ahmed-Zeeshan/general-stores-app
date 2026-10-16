@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, Ban, BookOpen, FileText, HandCoins, MessageCircle, Pencil, Phone, Plus, Printer, Search, Truck, UserRound } from "lucide-react";
-import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Spinner, StatCard, Table, Td, Th, Textarea } from "./ui";
+import { ArrowLeft, Ban, BookOpen, FileText, HandCoins, MessageCircle, Pencil, Phone, Plus, Printer, Search, Truck, UserRound, X } from "lucide-react";
+import { Badge, Button, Card, Count, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Spinner, StatCard, Table, Td, Th, Textarea } from "./ui";
 import { useCan, useSession } from "./session";
 import { useConfirm } from "./confirm";
 import { CustomerTabs } from "./customer-overview";
@@ -12,6 +12,8 @@ import { printPaymentReceipt, ReceivePaymentModal, sendPaymentWhatsApp } from ".
 import { useToast } from "./toast";
 import { api, formatDate, PAYMENT_LABELS } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
+import { useT } from "@/lib/i18n";
+import { checkPartyPhone, PHONE_HINT } from "@/lib/phone";
 import { openWhatsApp, reminderMessage, waNumber } from "@/lib/whatsapp";
 
 type PartyType = "customer" | "supplier";
@@ -36,6 +38,13 @@ const TEXT = {
     title: "Customers Khata",
     urdu: "گاہکوں کا کھاتہ",
     singular: "customer",
+    add: "Add customer",
+    total: "Total customers",
+    one: "{n} customer",
+    many: "{n} customers",
+    empty: "No customers yet",
+    emptyText: "Add regular customers to keep track of their udhaar.",
+    noMatch: "No customers match your search",
     owesLabel: "Udhaar to collect",
     oweHint: "Customer owes you",
     payLabel: "Receive payment",
@@ -47,6 +56,13 @@ const TEXT = {
     title: "Suppliers",
     urdu: "سپلائرز",
     singular: "supplier",
+    add: "Add supplier",
+    total: "Total suppliers",
+    one: "{n} supplier",
+    many: "{n} suppliers",
+    empty: "No suppliers yet",
+    emptyText: "Add the companies and dealers you buy stock from.",
+    noMatch: "No suppliers match your search",
     owesLabel: "You need to pay",
     oweHint: "You owe this supplier",
     payLabel: "Pay supplier",
@@ -57,14 +73,26 @@ const TEXT = {
 };
 
 
+type Summary = { count: number; dueCount: number; dueTotal: number };
+
 export function PartiesList({ type }: { type: PartyType }) {
   const t = TEXT[type];
+  const tr = useT();
   const toast = useToast();
   const params = useSearchParams();
   const [list, setList] = useState<Party[] | null>(null);
   const [q, setQ] = useState("");
   const [show, setShow] = useState<"all" | "due">(params.get("due") ? "due" : "all");
   const [adding, setAdding] = useState(params.get("new") === "1");
+
+  // Shop-wide totals for the cards: never affected by the search or the "has udhaar" filter.
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const loadSummary = useCallback(() => {
+    api<Summary>(`/api/parties?type=${type}&summary=1`)
+      .then(setSummary)
+      .catch(() => {});
+  }, [type]);
+  useEffect(loadSummary, [loadSummary]);
 
   const load = useCallback(() => {
     api<Party[]>(`/api/parties?type=${type}&q=${encodeURIComponent(q)}${show === "due" ? "&due=1" : ""}`)
@@ -73,12 +101,15 @@ export function PartiesList({ type }: { type: PartyType }) {
   }, [type, q, show, toast]);
 
   useEffect(() => {
-    const timer = setTimeout(load, 250);
+    const timer = setTimeout(load, q ? 250 : 0);
     return () => clearTimeout(timer);
-  }, [load]);
+  }, [load, q]);
 
-  const totalDue = list?.reduce((s, p) => s + Math.max(0, p.balance), 0) ?? 0;
-  const dueCount = list?.filter((p) => p.balance > 0).length ?? 0;
+  const filtered = !!q.trim() || show === "due";
+  const clearSearch = () => {
+    setQ("");
+    setShow("all");
+  };
 
   return (
     <div>
@@ -87,20 +118,26 @@ export function PartiesList({ type }: { type: PartyType }) {
         urdu={t.urdu}
         actions={
           <Button icon={<Plus className="h-4 w-4" />} onClick={() => setAdding(true)}>
-            Add {t.singular}
+            {t.add}
           </Button>
         }
       />
       <div className="mb-6 grid gap-4 sm:grid-cols-2">
-        <StatCard label={t.owesLabel} value={formatPKR(totalDue)} icon={<HandCoins className="h-5 w-5" />} tone={type === "customer" ? "amber" : "rose"} hint={`${dueCount} ${t.singular}s`} />
-        <StatCard label={`Total ${t.singular}s`} value={list?.length ?? "—"} icon={<t.icon className="h-5 w-5" />} tone="blue" />
+        <StatCard
+          label={t.owesLabel}
+          value={summary ? formatPKR(summary.dueTotal) : "—"}
+          icon={<HandCoins className="h-5 w-5" />}
+          tone={type === "customer" ? "amber" : "rose"}
+          hint={summary ? <Count n={summary.dueCount} one={t.one} many={t.many} /> : undefined}
+        />
+        <StatCard label={t.total} value={summary?.count ?? "—"} icon={<t.icon className="h-5 w-5" />} tone="blue" />
       </div>
 
       <Card>
         <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or phone" className="pl-10" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("Search by name or phone")} aria-label={tr("Search by name or phone")} className="pl-10" />
           </div>
           <Segmented
             value={show}
@@ -113,12 +150,20 @@ export function PartiesList({ type }: { type: PartyType }) {
         </div>
         {!list ? (
           <Spinner />
+        ) : list.length === 0 && filtered && (summary?.count ?? 1) > 0 ? (
+          // There are customers, just none that match.
+          <EmptyState
+            icon={<Search className="h-8 w-8" />}
+            title={t.noMatch}
+            text={q.trim() ? tr("Nothing found for “{q}”.", { q: q.trim() }) : undefined}
+            action={<Button variant="outline" icon={<X className="h-4 w-4" />} onClick={clearSearch}>Clear search</Button>}
+          />
         ) : list.length === 0 ? (
           <EmptyState
             icon={<t.icon className="h-8 w-8" />}
-            title={`No ${t.singular}s found`}
-            text={type === "customer" ? "Add regular customers to keep track of their udhaar." : "Add the companies and dealers you buy stock from."}
-            action={<Button icon={<Plus className="h-4 w-4" />} onClick={() => setAdding(true)}>Add {t.singular}</Button>}
+            title={t.empty}
+            text={t.emptyText}
+            action={<Button icon={<Plus className="h-4 w-4" />} onClick={() => setAdding(true)}>{t.add}</Button>}
           />
         ) : (
           <ul className="divide-y divide-slate-100">
@@ -133,13 +178,13 @@ export function PartiesList({ type }: { type: PartyType }) {
                       <span className="truncate font-semibold text-slate-800">{p.name}</span>
                       {p.priceLevel === "wholesale" && <Badge color="violet">Wholesale</Badge>}
                     </div>
-                    <div className="text-xs text-slate-500">{p.phone || "No phone"}</div>
+                    <div className="text-xs text-slate-500">{p.phone || tr("No phone")}</div>
                   </div>
                   <div className="text-right">
                     <div className={p.balance > 0 ? "font-bold text-amber-700" : p.balance < 0 ? "font-bold text-sky-700" : "font-semibold text-slate-400"}>
                       {formatPKR(Math.abs(p.balance))}
                     </div>
-                    <div className="text-xs text-slate-400">{p.balance > 0 ? (type === "customer" ? "will give" : "to pay") : p.balance < 0 ? "advance" : "clear"}</div>
+                    <div className="text-xs text-slate-400">{tr(p.balance > 0 ? (type === "customer" ? "will give" : "to pay") : p.balance < 0 ? "advance" : "clear")}</div>
                   </div>
                 </Link>
               </li>
@@ -148,17 +193,31 @@ export function PartiesList({ type }: { type: PartyType }) {
         )}
       </Card>
 
-      <PartyForm type={type} open={adding} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); load(); }} />
+      <PartyForm
+        type={type}
+        open={adding}
+        onClose={() => setAdding(false)}
+        onSaved={(saved) => {
+          setAdding(false);
+          // Show the new customer straight away (no waiting for the list to reload).
+          if (saved && !filtered) setList((l) => [saved, ...(l ?? []).filter((x) => x._id !== saved._id)]);
+          load();
+          loadSummary();
+        }}
+      />
     </div>
   );
 }
 
-function PartyForm({ type, open, party, onClose, onSaved }: { type: PartyType; open: boolean; party?: Party; onClose: () => void; onSaved: () => void }) {
+function PartyForm({ type, open, party, onClose, onSaved }: { type: PartyType; open: boolean; party?: Party; onClose: () => void; onSaved: (saved?: Party) => void }) {
   const toast = useToast();
   const can = useCan();
   const [form, setForm] = useState({ name: "", phone: "", address: "", creditLimit: "", notes: "", openingBalance: "", priceLevel: "retail" });
   const [saving, setSaving] = useState(false);
+  const [phoneError, setPhoneError] = useState("");
+  const tr = useT();
   useEffect(() => {
+    if (open) setPhoneError("");
     if (open)
       setForm({
         name: party?.name ?? "",
@@ -174,14 +233,23 @@ function PartyForm({ type, open, party, onClose, onSaved }: { type: PartyType; o
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    if (saving) return;
+    // Checked here first (instant), and again by the server.
+    const phone = checkPartyPhone(type, form.phone);
+    if (phone.error) {
+      setPhoneError(phone.error);
+      return;
+    }
     setSaving(true);
     try {
       const { priceLevel, ...rest } = form;
       const level = type === "customer" ? { priceLevel } : {};
-      if (party) await api(`/api/parties/${party._id}`, { method: "PUT", body: { ...rest, ...level, creditLimit: Number(form.creditLimit) || 0 } });
-      else await api("/api/parties", { body: { type, ...rest, ...level, creditLimit: Number(form.creditLimit) || 0, openingBalance: Number(form.openingBalance) || 0 } });
-      toast.success("Saved");
-      onSaved();
+      const body = { ...rest, phone: phone.phone ?? "", ...level, creditLimit: Number(form.creditLimit) || 0 };
+      const saved = party
+        ? await api<Party>(`/api/parties/${party._id}`, { method: "PUT", body })
+        : await api<Party>("/api/parties", { body: { type, ...body, openingBalance: Number(form.openingBalance) || 0 } });
+      toast.success(tr("Saved"));
+      onSaved(saved);
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -193,7 +261,7 @@ function PartyForm({ type, open, party, onClose, onSaved }: { type: PartyType; o
     <Modal
       open={open}
       onClose={onClose}
-      title={party ? "Edit details" : `Add ${TEXT[type].singular}`}
+      title={party ? "Edit details" : TEXT[type].add}
       footer={
         <>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
@@ -205,8 +273,24 @@ function PartyForm({ type, open, party, onClose, onSaved }: { type: PartyType; o
         <Field label="Name *" className="sm:col-span-2">
           <Input autoFocus required value={form.name} onChange={set("name")} />
         </Field>
-        <Field label="Phone" hint="Used for WhatsApp reminders">
-          <Input inputMode="tel" value={form.phone} onChange={set("phone")} placeholder="03xx xxxxxxx" />
+        <Field label="Phone" hint={type === "customer" ? "Used for WhatsApp reminders" : undefined} error={phoneError ? tr(phoneError) : undefined}>
+          <Input
+            inputMode="tel"
+            autoComplete="tel"
+            value={form.phone}
+            onChange={(e) => {
+              setForm({ ...form, phone: e.target.value });
+              setPhoneError("");
+            }}
+            onBlur={() => {
+              const r = checkPartyPhone(type, form.phone);
+              if (r.error) setPhoneError(r.error);
+              else if (r.phone) setForm((f) => ({ ...f, phone: r.phone! }));
+            }}
+            placeholder="0300-1234567"
+            aria-invalid={!!phoneError}
+            title={tr(PHONE_HINT)}
+          />
         </Field>
         {type === "customer" && can.manage && (
           <Field label="Udhaar limit" hint="0 = no limit">

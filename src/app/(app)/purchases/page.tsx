@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Ban, Eye, Minus, PackagePlus, Plus, RotateCcw, Undo2 } from "lucide-react";
-import { Badge, Button, Card, EmptyState, Field, Modal, PageHeader, Segmented, Select, Spinner, StatCard, Table, Td, Th, cn } from "@/components/ui";
+import { Badge, Button, Card, cn, Count, EmptyState, Field, Modal, PageHeader, Segmented, Select, Spinner, StatCard, Table, Td, Th } from "@/components/ui";
 import { DateRange } from "@/components/date-range";
 import { BranchFilter } from "@/components/branch-filter";
 import { useToast } from "@/components/toast";
@@ -125,7 +125,7 @@ export default function PurchasesPage() {
                     <Td>
                       <div className={cn("font-semibold text-slate-800", p.status === "void" && "line-through")}>{p.purchaseNo}</div>
                       <div className="text-xs text-slate-400">
-                        {p.items.length} items{p.supplierInvoice && ` · Inv ${p.supplierInvoice}`}
+                        <Count n={p.items.length} one="{n} item" many="{n} items" />{p.supplierInvoice && ` · Inv ${p.supplierInvoice}`}
                         {p.branchName && branch === "all" && ` · ${p.branchName}`}
                       </div>
                     </Td>

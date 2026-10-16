@@ -5,7 +5,9 @@ import { ApiError, handle, tenantBlockReason } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
 import { Tenant, User } from "@/models";
 import { clearLoginFailures, clientIp, loginBlocked, recordLoginFailure } from "@/lib/rate-limit";
-import { SESSION_COOKIE, sessionCookieOptions, signSession, type Role } from "@/lib/session";
+import { SESSION_COOKIE, sessionCookieOptions, signSession, type Role, type SessionUser } from "@/lib/session";
+import { branchContext } from "@/lib/branches";
+import { sessionData } from "@/lib/session-data";
 
 const Body = z.object({ username: z.string().trim().toLowerCase().min(1).max(100), password: z.string().min(1).max(200) });
 /** Checked when the username does not exist, so the answer takes as long as for a real account. */
@@ -42,15 +44,20 @@ export const POST = handle(async (req) => {
   if (user.tenant) {
     await logActivity({ tid: user.tenant, user: { id: String(user._id), name: user.name, role: user.role } }, { action: "login", summary: `${user.name} logged in`, meta: { ip } });
   }
-  const token = await signSession({
+  const who: SessionUser = {
     id: String(user._id),
     name: user.name,
     username: user.username,
     role: user.role as Role,
     tenantId: user.tenant ? String(user.tenant) : null,
     sv: user.sessionVersion ?? 0,
-  });
-  const res = NextResponse.json({ ok: true, role: user.role });
+  };
+  const token = await signSession(who);
+  // The app's first screen needs this straight away: sent with the login so it does not wait for another request.
+  const me = user.tenant
+    ? await sessionData({ ...who, branchId: user.branch ? String(user.branch) : null }, await branchContext({ user: { ...who, branchId: user.branch ? String(user.branch) : null }, tid: user.tenant }))
+    : await sessionData(who, null);
+  const res = NextResponse.json({ ok: true, role: user.role, me });
   res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(req));
   return res;
 });

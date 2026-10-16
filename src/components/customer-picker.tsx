@@ -8,6 +8,8 @@ import { api, NetworkError } from "@/lib/client";
 import { cache } from "@/lib/offline";
 import { useSession } from "./session";
 import { formatPKR } from "@/lib/money";
+import { useT } from "@/lib/i18n";
+import { checkPartyPhone } from "@/lib/phone";
 
 export type PartyLite = { _id: string; name: string; phone?: string; balance: number; creditLimit: number; priceLevel?: "retail" | "wholesale"; points?: number };
 
@@ -28,6 +30,8 @@ export function CustomerPicker({
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "" });
   const [saving, setSaving] = useState(false);
+  const [phoneError, setPhoneError] = useState("");
+  const tr = useT();
   const label = type === "customer" ? "customer" : "supplier";
   const { user } = useSession();
   const cacheKey = `${user.tenantId}:parties:${type}`;
@@ -56,14 +60,18 @@ export function CustomerPicker({
       setQ("");
       setAdding(false);
       setForm({ name: "", phone: "" });
+      setPhoneError("");
     }
   }, [open]);
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
+    if (saving) return;
+    const phone = checkPartyPhone(type, form.phone);
+    if (phone.error) return setPhoneError(phone.error);
     setSaving(true);
     try {
-      const p = await api<PartyLite>("/api/parties", { body: { type, ...form } });
+      const p = await api<PartyLite>("/api/parties", { body: { type, name: form.name, phone: phone.phone ?? "" } });
       toast.success(`${p.name} added`);
       onPick(p);
     } catch (err) {
@@ -80,8 +88,17 @@ export function CustomerPicker({
           <Field label="Name *">
             <Input autoFocus required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </Field>
-          <Field label="Phone">
-            <Input inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="03xx xxxxxxx" />
+          <Field label="Phone" error={phoneError ? tr(phoneError) : undefined}>
+            <Input
+              inputMode="tel"
+              value={form.phone}
+              onChange={(e) => {
+                setForm({ ...form, phone: e.target.value });
+                setPhoneError("");
+              }}
+              placeholder="0300-1234567"
+              aria-invalid={!!phoneError}
+            />
           </Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => setAdding(false)}>Back</Button>

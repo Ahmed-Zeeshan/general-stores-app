@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ClipboardList, MessageCircle, Printer, Truck } from "lucide-react";
-import { Badge, Button, Card, EmptyState, Input, PageHeader, Segmented, Spinner, Table, Td, Th } from "@/components/ui";
+import { Badge, Button, Card, Count, EmptyState, Input, PageHeader, Segmented, Spinner, Table, Td, Th } from "@/components/ui";
 import { useSession } from "@/components/session";
 import { useToast } from "@/components/toast";
 import { api, UNIT_LABELS } from "@/lib/client";
@@ -125,7 +125,7 @@ export default function ReorderPage() {
                         ) : r.daysLeft === 0 ? (
                           <Badge color="red">Out now</Badge>
                         ) : (
-                          <Badge color={(r.daysLeft ?? 99) <= 3 ? "red" : "amber"}>{r.daysLeft} days</Badge>
+                          <Badge color={(r.daysLeft ?? 99) <= 3 ? "red" : "amber"}><Count n={r.daysLeft ?? 0} one="{n} day" many="{n} days" /></Badge>
                         )}
                       </Td>
                       <Td className="text-right">

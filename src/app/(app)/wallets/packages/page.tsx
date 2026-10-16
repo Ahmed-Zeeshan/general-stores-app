@@ -67,7 +67,7 @@ export default function PackagesPage() {
                     {!p.active && <Badge color="slate">Not sold</Badge>}
                   </Td>
                   <Td>{OPERATOR_LABELS[p.operator]}</Td>
-                  <Td className="text-slate-600">{[p.data, p.minutes, p.sms, p.validityDays ? `${p.validityDays} days` : null].filter(Boolean).join(" · ") || "—"}</Td>
+                  <Td className="text-slate-600">{[p.data, p.minutes, p.sms, p.validityDays ? `${p.validityDays} ${p.validityDays === 1 ? "day" : "days"}` : null].filter(Boolean).join(" · ") || "—"}</Td>
                   <Td className="text-right font-semibold">{formatPKR(p.price)}</Td>
                   <Td className="text-right text-slate-500">{p.commission !== undefined && p.commission !== null ? formatPKR(p.commission) : "SIM %"}</Td>
                   <Td className="text-right">

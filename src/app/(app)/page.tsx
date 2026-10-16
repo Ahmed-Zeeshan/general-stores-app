@@ -20,13 +20,14 @@ import {
   UserPlus,
   Wallet,
 } from "lucide-react";
-import { Badge, Card, Spinner, StatCard } from "@/components/ui";
+import { Badge, Card, StatCard } from "@/components/ui";
 import { SalesBarChart } from "@/components/charts";
 import { SetupGuide } from "@/components/setup-guide";
 import { DaySummaryButton } from "@/components/day-summary";
 import { useCan, useSession } from "@/components/session";
 import { api, formatDate, PAYMENT_LABELS, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty } from "@/lib/money";
+import { plural, useT } from "@/lib/i18n";
 import { WALLET_TXN_LABELS, type WalletTxnType } from "@/lib/constants";
 import type { MobileReport } from "@/lib/mobile-report";
 
@@ -53,6 +54,7 @@ function greeting() {
 export default function DashboardPage() {
   const { user, settings } = useSession();
   const can = useCan();
+  const t = useT();
   const [data, setData] = useState<Dashboard | null>(null);
 
   useEffect(() => {
@@ -102,11 +104,19 @@ export default function DashboardPage() {
       </div>
 
       {!data ? (
-        <Spinner />
+        // The dashboard's outline while today's figures load.
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-busy="true">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i} className="h-28 animate-pulse rounded-2xl border border-slate-200 bg-white p-5">
+              <div className="h-4 w-24 rounded-lg bg-slate-200/70" />
+              <div className="mt-3 h-7 w-32 rounded-lg bg-slate-200/70" />
+            </div>
+          ))}
+        </div>
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard label="Today's Sales" value={formatPKR(data.today.sales)} icon={<TrendingUp className="h-5 w-5" />} hint={`${data.today.bills} bills${data.today.returnCount ? ` · ${formatPKR(data.today.returns)} returned` : ""} today`} />
+            <StatCard label="Today's Sales" value={formatPKR(data.today.sales)} icon={<TrendingUp className="h-5 w-5" />} hint={`${t(plural(data.today.bills, "{n} bill", "{n} bills"), { n: data.today.bills })}${data.today.returnCount ? ` · ${formatPKR(data.today.returns)} ${t("returned")}` : ""} ${t("today")}`} />
             {can.manage ? (
               <StatCard
                 label="Today's Profit"
@@ -130,7 +140,7 @@ export default function DashboardPage() {
                 value={formatPKR(data.receivable.total)}
                 icon={<BookOpen className="h-5 w-5" />}
                 tone="amber"
-                hint={`${data.receivable.count} customers owe you${data.today.collected ? ` · ${formatPKR(data.today.collected)} collected today` : ""}`}
+                hint={`${t(plural(data.receivable.count, "{n} customer owes you", "{n} customers owe you"), { n: data.receivable.count })}${data.today.collected ? ` · ${formatPKR(data.today.collected)} ${t("collected today")}` : ""}`}
               />
             </Link>
             {can.manage ? (
@@ -140,7 +150,7 @@ export default function DashboardPage() {
                   value={formatPKR(data.payable.total)}
                   icon={<Truck className="h-5 w-5" />}
                   tone="rose"
-                  hint={`${data.payable.count} suppliers`}
+                  hint={t(plural(data.payable.count, "{n} supplier", "{n} suppliers"), { n: data.payable.count })}
                 />
               </Link>
             ) : (

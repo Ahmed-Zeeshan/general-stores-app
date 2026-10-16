@@ -7,6 +7,7 @@ import { BookOpen, CalendarRange, CornerDownLeft, Loader2, Package, Receipt, Rep
 import { cn } from "./ui";
 import { api } from "@/lib/client";
 import type { SearchGroup, SearchHit } from "@/lib/search";
+import { useT } from "@/lib/i18n";
 
 const ICONS: Record<string, typeof Search> = {
   customer: BookOpen,
@@ -40,6 +41,7 @@ export function SearchHotkey() {
 /** "Search" button for the menu / header. */
 export function SearchButton({ compact }: { compact?: boolean }) {
   const [open, setOpen] = useState(false);
+  const t = useT();
   return (
     <>
       {compact ? (
@@ -54,7 +56,7 @@ export function SearchButton({ compact }: { compact?: boolean }) {
           aria-label="Search"
         >
           <Search className="h-4 w-4" />
-          <span className="flex-1 text-left">Search anything…</span>
+          <span className="flex-1 text-left">{t("Search anything…")}</span>
           <kbd className="rounded border border-slate-200 bg-slate-50 px-1.5 text-[10px] font-semibold text-slate-400">Ctrl K</kbd>
         </button>
       )}
@@ -65,6 +67,7 @@ export function SearchButton({ compact }: { compact?: boolean }) {
 
 function SearchDialog({ onClose }: { onClose: () => void }) {
   const router = useRouter();
+  const t = useT();
   const input = useRef<HTMLInputElement>(null);
   const [q, setQ] = useState("");
   const [groups, setGroups] = useState<SearchGroup[] | null>(null);
@@ -131,7 +134,7 @@ function SearchDialog({ onClose }: { onClose: () => void }) {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={onKey}
-            placeholder="Name, mobile, CNIC, IMEI, bill or job number…"
+            placeholder={t("Name, mobile, CNIC, IMEI, bill or job number…")}
             className="h-14 min-w-0 flex-1 bg-transparent text-base outline-none"
             aria-label="Search anything"
           />
@@ -142,9 +145,9 @@ function SearchDialog({ onClose }: { onClose: () => void }) {
         </div>
         <div className="scrollbar-thin flex-1 overflow-y-auto p-2">
           {!groups ? (
-            <p className="px-3 py-8 text-center text-sm text-slate-500">Type at least 2 letters or digits. Mobile numbers, CNIC and IMEI work with or without dashes.</p>
+            <p className="px-3 py-8 text-center text-sm text-slate-500">{t("Type at least 2 letters or digits. Mobile numbers, CNIC and IMEI work with or without dashes.")}</p>
           ) : groups.length === 0 ? (
-            <p className="px-3 py-8 text-center text-sm text-slate-500">Nothing found for “{q.trim()}”.</p>
+            <p className="px-3 py-8 text-center text-sm text-slate-500">{t("Nothing found for “{q}”.", { q: q.trim() })}</p>
           ) : (
             groups.map((g) => (
               <div key={g.type} className="mb-2">
@@ -175,7 +178,7 @@ function SearchDialog({ onClose }: { onClose: () => void }) {
             ))
           )}
         </div>
-        <div className="hidden border-t border-slate-100 px-4 py-2 text-xs text-slate-400 sm:block">↑ ↓ to move · Enter to open · Esc to close</div>
+        <div className="hidden border-t border-slate-100 px-4 py-2 text-xs text-slate-400 sm:block">{t("↑ ↓ to move · Enter to open · Esc to close")}</div>
       </div>
     </div>,
     document.body,

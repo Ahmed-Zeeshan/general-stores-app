@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, BellRing, Download, FileText, HandCoins, MessageCircle, Printer, Search, SkipForward, Users } from "lucide-react";
-import { Badge, Button, Card, EmptyState, Input, Modal, PageHeader, Select, Spinner, StatCard, Table, Td, Th } from "@/components/ui";
+import { Badge, Button, Card, Count, EmptyState, Input, Modal, PageHeader, Select, Spinner, StatCard, Table, Td, Th } from "@/components/ui";
 import { WaModePicker } from "@/components/wa-mode";
 import { ReceivePaymentModal, type PayParty } from "@/components/receive-payment";
 import { useSession } from "@/components/session";
@@ -113,7 +113,7 @@ export default function UdhaarReportPage() {
       ) : (
         <>
           <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard label="Total udhaar" value={formatPKR(t.balance)} icon={<Users className="h-5 w-5" />} tone="amber" hint={`${t.customers} customers`} />
+            <StatCard label="Total udhaar" value={formatPKR(t.balance)} icon={<Users className="h-5 w-5" />} tone="amber" hint={<Count n={t.customers} one="{n} customer" many="{n} customers" />} />
             <StatCard label="Due 0–30 days" value={formatPKR(t.d0_30)} icon={<FileText className="h-5 w-5" />} tone="green" />
             <StatCard label="Due 31–90 days" value={formatPKR(t.d31_60 + t.d61_90)} icon={<FileText className="h-5 w-5" />} tone="violet" />
             <StatCard label="Over 90 days" value={formatPKR(t.d90)} icon={<AlertTriangle className="h-5 w-5" />} tone="rose" hint="Follow up first" />
@@ -164,7 +164,7 @@ export default function UdhaarReportPage() {
                           <Link href={`/customers/${r._id}`} className="font-semibold text-slate-800 hover:text-brand-700">{r.name}</Link>
                           <div className="text-xs text-slate-400">
                             {r.phone || <span className="text-rose-500">No phone</span>}
-                            {r.daysOverdue > 0 && ` · oldest ${r.daysOverdue} days`}
+                            {r.daysOverdue > 0 && <> · oldest <Count n={r.daysOverdue} one="{n} day" many="{n} days" /></>}
                           </div>
                         </Td>
                         <Td className="text-right font-bold text-slate-900">
@@ -232,7 +232,7 @@ function ReminderQueue({ queue, onClose, message, onSend }: { queue: Row[] | nul
       {!r ? (
         <div className="py-6 text-center">
           <p className="text-lg font-bold text-slate-900">Done</p>
-          <p className="text-sm text-slate-500">WhatsApp opened for {sent} of {queue.length} customers.</p>
+          <p className="text-sm text-slate-500">WhatsApp opened for {sent} of <Count n={queue.length} one="{n} customer" many="{n} customers" />.</p>
           <Button className="mt-5" onClick={onClose}>Close</Button>
         </div>
       ) : (

@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { BadgeDollarSign, Printer, Receipt, ShoppingBag, TrendingDown, TrendingUp, Wallet } from "lucide-react";
-import { Button, Card, PageHeader, Spinner, StatCard, Table, Td, Th } from "@/components/ui";
+import { Button, Card, Count, PageHeader, Spinner, StatCard, Table, Td, Th } from "@/components/ui";
 import { DateRange } from "@/components/date-range";
 import { BranchFilter } from "@/components/branch-filter";
 import { SalesBarChart } from "@/components/charts";
 import { useToast } from "@/components/toast";
 import { api, PAYMENT_LABELS, todayISO, UNIT_LABELS } from "@/lib/client";
+import { useT } from "@/lib/i18n";
 import { formatPKR, formatQty } from "@/lib/money";
 import { WALLET_TXN_LABELS, type WalletTxnType } from "@/lib/constants";
 import type { MobileReport } from "@/lib/mobile-report";
@@ -75,7 +76,7 @@ export default function ReportsPage() {
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0">
-            <StatCard label="Net sales" value={formatPKR(s.netSales)} icon={<TrendingUp className="h-5 w-5" />} hint={`${s.bills} bills · avg ${formatPKR(s.avgBill)}`} />
+            <StatCard label="Net sales" value={formatPKR(s.netSales)} icon={<TrendingUp className="h-5 w-5" />} hint={<><Count n={s.bills} one="{n} bill" many="{n} bills" /> · avg {formatPKR(s.avgBill)}</>} />
             <StatCard label="Gross profit" value={formatPKR(s.grossProfit)} icon={<BadgeDollarSign className="h-5 w-5" />} tone="violet" hint="Sales − cost of goods − tax" />
             <StatCard label="Expenses" value={formatPKR(s.expenses)} icon={<Wallet className="h-5 w-5" />} tone="amber" />
             <StatCard
@@ -250,11 +251,22 @@ export default function ReportsPage() {
   );
 }
 
+/**
+ * One line of the profit & loss. A line labelled "− …" is taken away; its label already says so, so
+ * the amount is shown without a second minus ("− Returns (1)  Rs 600", not "Rs -600").
+ */
 function PL({ label, value, bold, big }: { label: string; value: number; bold?: boolean; big?: boolean }) {
+  const t = useT();
+  const minus = /^[−-]\s*/.test(label);
+  const text = label.replace(/^[−-]\s*/, "");
+  const shown = minus ? -value : value;
   return (
     <div className="flex justify-between">
-      <dt className={bold ? "font-semibold text-slate-800" : "text-slate-500"}>{label}</dt>
-      <dd className={`${bold ? "font-bold" : "font-medium"} ${big ? "text-lg" : ""} ${value < 0 && big ? "text-rose-600" : "text-slate-900"}`}>{formatPKR(value)}</dd>
+      <dt className={bold ? "font-semibold text-slate-800" : "text-slate-500"}>
+        {minus && "− "}
+        {t(text)}
+      </dt>
+      <dd className={`${bold ? "font-bold" : "font-medium"} ${big ? "text-lg" : ""} ${value < 0 && big ? "text-rose-600" : "text-slate-900"}`}>{formatPKR(shown)}</dd>
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Ban, HandCoins, MessageCircle, Printer, RotateCcw } from "lucide-react";
-import { Badge, Button, Card, Field, Input, Modal, Select, Spinner, Table, Td, Textarea, Th, cn } from "@/components/ui";
+import { Badge, Button, Card, cn, Count, Field, Input, Modal, Select, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
 import { PlanStatus, sendInstallmentWhatsApp, type PlanRow } from "@/components/installments";
 import { useCan, useSession } from "@/components/session";
 import { useShareLink } from "@/components/send-whatsapp";
@@ -88,7 +88,7 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
       {plan.status === "active" && plan.lateCount > 0 && (
         <div className="mb-6 flex flex-col gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-800 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <b>{formatPKR(plan.overdue)} late</b> — {plan.lateCount} installment{plan.lateCount > 1 ? "s" : ""}, oldest {plan.daysLate} days ago.
+            <b>{formatPKR(plan.overdue)} late</b> — <Count n={plan.lateCount} one="{n} installment" many="{n} installments" />, oldest <Count n={plan.daysLate} one="{n} day ago" many="{n} days ago" />.
             {plan.lastReminderAt && <span className="text-sm"> Last reminder {formatDate(plan.lastReminderAt)}.</span>}
           </div>
           <Button size="sm" variant="outline" icon={<MessageCircle className="h-4 w-4 text-emerald-600" />} onClick={remind}>

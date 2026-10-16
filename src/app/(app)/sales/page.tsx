@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Eye, MessageCircle, Receipt, RotateCcw, Search, Undo2 } from "lucide-react";
-import { Badge, Button, Card, EmptyState, Input, PageHeader, Segmented, Spinner, StatCard, Table, Td, Th } from "@/components/ui";
+import { Badge, Button, Card, Count, EmptyState, Input, PageHeader, Segmented, Spinner, StatCard, Table, Td, Th } from "@/components/ui";
 import { DateRange } from "@/components/date-range";
 import { BranchFilter } from "@/components/branch-filter";
 import { ReturnModal, type ReturnableSale } from "@/components/return-modal";
@@ -77,7 +77,7 @@ export default function SalesPage() {
     <div>
       <PageHeader title="Sales History" urdu="فروخت" subtitle="All bills and returns in your shop" />
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Sales" value={formatPKR(gross)} icon={<Receipt className="h-5 w-5" />} hint={`${sales?.length ?? 0} bills`} />
+        <StatCard label="Sales" value={formatPKR(gross)} icon={<Receipt className="h-5 w-5" />} hint={<Count n={sales?.length ?? 0} one="{n} bill" many="{n} bills" />} />
         <StatCard label="Returns" value={formatPKR(returned)} icon={<Undo2 className="h-5 w-5" />} tone="rose" hint={`${returns?.length ?? 0} returns`} />
         <StatCard label="Net sales" value={formatPKR(gross - returned)} icon={<Receipt className="h-5 w-5" />} tone="violet" hint="Sales − returns" />
         <StatCard label="Average bill" value={formatPKR(sales?.length ? gross / sales.length : 0)} icon={<Receipt className="h-5 w-5" />} tone="blue" />
@@ -125,7 +125,7 @@ export default function SalesPage() {
                     <Td>
                       <div className="font-semibold text-slate-800">{s.invoiceNo}</div>
                       <div className="text-xs text-slate-400">
-                        {s.items.length} items · {s.cashierName}
+                        <Count n={s.items.length} one="{n} item" many="{n} items" /> · {s.cashierName}
                         {showBranch && s.branchName && ` · ${s.branchName}`}
                         {s.offline && " · made offline"}
                       </div>

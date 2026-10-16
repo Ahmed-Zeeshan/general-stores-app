@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowDownCircle, ArrowUpCircle, Banknote, CheckCircle2, FileText, Lock, LockOpen, Printer } from "lucide-react";
 import { DayCloseWhatsApp } from "@/components/day-summary";
-import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Segmented, Spinner, StatCard, Table, Td, Th, Textarea, cn } from "@/components/ui";
+import { Badge, Button, Card, cn, Count, EmptyState, Field, Input, Modal, PageHeader, Segmented, Spinner, StatCard, Table, Td, Textarea, Th } from "@/components/ui";
 import { DateRange } from "@/components/date-range";
 import { BranchFilter } from "@/components/branch-filter";
 import { useCan } from "@/components/session";
@@ -106,7 +106,7 @@ export default function DrawerPage() {
           </div>
           {current.summary && (
             <div className="grid gap-4 border-t border-slate-100 p-4 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard label="Sales" value={formatPKR(current.summary.sales)} icon={<Banknote className="h-5 w-5" />} hint={`${current.summary.bills} bills${current.summary.returns ? ` · ${formatPKR(current.summary.returns)} returned` : ""}`} />
+              <StatCard label="Sales" value={formatPKR(current.summary.sales)} icon={<Banknote className="h-5 w-5" />} hint={<><Count n={current.summary.bills} one="{n} bill" many="{n} bills" />{current.summary.returns ? ` · ${formatPKR(current.summary.returns)} returned` : ""}</>} />
               {current.summary.cashFlow.slice(1, 4).map((x) => (
                 <StatCard key={x.label} label={x.label} value={formatPKR(x.amount)} icon={<ArrowDownCircle className="h-5 w-5" />} tone="green" />
               ))}

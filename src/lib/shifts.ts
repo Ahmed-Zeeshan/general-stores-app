@@ -1,7 +1,15 @@
 import type { Types } from "mongoose";
 import { round2 } from "./money";
 import { khataPaymentsPipeline, PAYMENTS_EXPR } from "./report-agg";
-import { Expense, InstallmentPlan, LedgerEntry, Purchase, PurchaseReturn, Repair, Sale, SaleReturn, UsedPurchase, WalletTxn } from "@/models";
+import { Expense, InstallmentPlan, LedgerEntry, Purchase, PurchaseReturn, Repair, Sale, SaleReturn, Shift, UsedPurchase, WalletTxn } from "@/models";
+
+/**
+ * The cash drawer open right now at this branch, or null. The one place that decides "is the drawer
+ * open" — the bill screen, the drawer page and the dashboard checklist all ask this.
+ */
+export function openShift(tid: Types.ObjectId, branch: Types.ObjectId) {
+  return Shift.findOne({ tenant: tid, branch, status: "open" }).lean();
+}
 
 type Money = { method: string; total: number; count: number };
 

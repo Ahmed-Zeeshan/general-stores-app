@@ -15,6 +15,21 @@ type Status = {
   counts: { products: number };
 };
 
+/** The checklist for this shop (mobile-shop steps only when those features are on). */
+function stepsFor(s: Status, printed: boolean) {
+  return [
+    { key: "shop", done: s.done.shop, title: "Add your shop's phone and address", text: "They print on every receipt and WhatsApp message.", href: "/settings", action: "Open Settings" },
+    { key: "printer", done: printed, title: "Test the receipt printer", text: "Print a sample receipt to check paper size and printer.", href: "/receipt/test", action: "Print test receipt", newTab: true },
+    { key: "products", done: s.done.products, title: "Add the items you sell", text: `Pick from a ready-made list and type your prices, or add your own (${s.counts.products} so far).`, starter: true, href: "/products", action: "Open Products" },
+    ...(s.modules.phones ? [{ key: "phones", done: s.done.phones, title: "Add the phones in stock by IMEI", text: "Each handset is sold and tracked by its IMEI.", href: "/phones", action: "Open Phones" }] : []),
+    ...(s.modules.wallets ? [{ key: "wallets", done: s.done.wallets, title: "Add your Easyload SIMs and JazzCash / Easypaisa accounts", text: "With their current balance and commission.", href: "/wallets", action: "Open Easyload" }] : []),
+    { key: "customers", done: s.done.customers, title: "Add customers who buy on udhaar", text: "With their old balance from your register.", href: "/customers?new=1", action: "Add a customer" },
+    { key: "staff", done: s.done.staff, title: "Give your staff their own login", text: "Cashiers can bill but can't change prices or see profit.", href: "/settings", action: "Add staff" },
+    { key: "drawer", done: s.done.drawer, title: "Open the cash drawer", text: "Count the cash at the start of the day; the day close shows if anything is short.", href: "/drawer", action: "Open the drawer" },
+    { key: "bill", done: s.done.bill, title: "Make your first bill", text: "Scan a barcode or tap an item, then Take Payment.", href: "/pos", action: "New Bill" },
+  ];
+}
+
 /** "Get your shop ready" checklist for a new shop's owner, on the dashboard until done or hidden. */
 export function SetupGuide() {
   const [s, setS] = useState<Status | null>(null);
@@ -33,19 +48,14 @@ export function SetupGuide() {
       /* ignore */
     }
   }, [load]);
+  // Everything done once: the guide is finished for good (it does not come back when, say, the drawer is closed at night).
+  const allDone = !!s && !s.dismissed && stepsFor(s, printed).every((x) => x.done);
+  useEffect(() => {
+    if (allDone) api("/api/setup-status", { method: "POST" }).catch(() => {});
+  }, [allDone]);
   if (!s || s.dismissed) return null;
 
-  const steps = [
-    { key: "shop", done: s.done.shop, title: "Add your shop's phone and address", text: "They print on every receipt and WhatsApp message.", href: "/settings", action: "Open Settings" },
-    { key: "printer", done: printed, title: "Test the receipt printer", text: "Print a sample receipt to check paper size and printer.", href: "/receipt/test", action: "Print test receipt", newTab: true },
-    { key: "products", done: s.done.products, title: "Add the items you sell", text: `Pick from a ready-made list and type your prices, or add your own (${s.counts.products} so far).`, starter: true, href: "/products", action: "Open Products" },
-    ...(s.modules.phones ? [{ key: "phones", done: s.done.phones, title: "Add the phones in stock by IMEI", text: "Each handset is sold and tracked by its IMEI.", href: "/phones", action: "Open Phones" }] : []),
-    ...(s.modules.wallets ? [{ key: "wallets", done: s.done.wallets, title: "Add your Easyload SIMs and JazzCash / Easypaisa accounts", text: "With their current balance and commission.", href: "/wallets", action: "Open Easyload" }] : []),
-    { key: "customers", done: s.done.customers, title: "Add customers who buy on udhaar", text: "With their old balance from your register.", href: "/customers?new=1", action: "Add a customer" },
-    { key: "staff", done: s.done.staff, title: "Give your staff their own login", text: "Cashiers can bill but can't change prices or see profit.", href: "/settings", action: "Add staff" },
-    { key: "drawer", done: s.done.drawer, title: "Open the cash drawer", text: "Count the cash at the start of the day; the day close shows if anything is short.", href: "/drawer", action: "Open the drawer" },
-    { key: "bill", done: s.done.bill, title: "Make your first bill", text: "Scan a barcode or tap an item, then Take Payment.", href: "/pos", action: "New Bill" },
-  ];
+  const steps = stepsFor(s, printed);
   const doneCount = steps.filter((x) => x.done).length;
   if (doneCount === steps.length) return null;
   async function hide() {

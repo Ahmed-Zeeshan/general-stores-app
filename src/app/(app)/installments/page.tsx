@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlarmClock, CalendarClock, CalendarRange, Search, Wallet } from "lucide-react";
-import { Badge, Button, Card, EmptyState, Input, PageHeader, Segmented, Spinner, StatCard, Table, Td, Th } from "@/components/ui";
+import { Badge, Button, Card, Count, EmptyState, Input, PageHeader, Segmented, Spinner, StatCard, Table, Td, Th } from "@/components/ui";
 import { PlanStatus, type PlanRow } from "@/components/installments";
 import { useToast } from "@/components/toast";
 import { api, formatDate } from "@/lib/client";
@@ -135,7 +135,7 @@ export default function InstallmentsPage() {
                     ) : p.lateCount > 0 ? (
                       <div>
                         <Badge color="red">
-                          {p.lateCount} late · {p.daysLate} days
+                          {p.lateCount} late · <Count n={p.daysLate} one="{n} day" many="{n} days" />
                         </Badge>
                         <div className="text-xs font-semibold text-rose-600">{formatPKR(p.overdue)} overdue</div>
                       </div>

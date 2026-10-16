@@ -40,7 +40,7 @@ import { ToastProvider, useToast } from "@/components/toast";
 import { useConfirm } from "@/components/confirm";
 import { SessionContext, type SessionData } from "@/components/session";
 import { Logo } from "@/components/logo";
-import { Button, Field, Input, Modal, Spinner, cn } from "@/components/ui";
+import { Button, Field, Input, Modal, cn } from "@/components/ui";
 import { api, NetworkError } from "@/lib/client";
 import { cache, clearOfflineCache, getOutbox, onOutboxChange, syncOutbox } from "@/lib/offline";
 import type { Role } from "@/lib/session";
@@ -110,7 +110,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }
       });
   }, []);
-  useEffect(load, [load]);
+  useEffect(() => {
+    // Draw the app at once from the details saved at login (or the last visit), then refresh them.
+    const saved = cache.get<SessionData | null>("me", null);
+    if (saved?.user) setData((d) => d ?? saved);
+    load();
+  }, [load]);
   useEffect(() => setOpen(false), [pathname]);
 
   async function logout() {
@@ -132,7 +137,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     router.replace("/login");
   }
 
-  if (!data) return <Spinner className="min-h-screen" />;
+  if (!data) return <AppSkeleton />;
   const multiBranch = (data.branches?.length ?? 0) > 1;
   const modules = data.settings?.modules ?? {};
   const nav = NAV.filter(
@@ -417,4 +422,41 @@ function OfflineSync({ tenantId, offline, onOnline }: { tenantId: string; offlin
 /** Today's tasks are loaded only for shop users (not the super admin). */
 function MaybeTasks({ enabled, children }: { enabled: boolean; children: React.ReactNode }) {
   return enabled ? <TasksProvider>{children}</TasksProvider> : <>{children}</>;
+}
+
+/** The app's outline (menu, header, cards) while the first details load: the page appears in place instead of a blank spinner. */
+function AppSkeleton() {
+  const bar = "animate-pulse rounded-lg bg-slate-200/70";
+  return (
+    <div className="min-h-screen lg:pl-72" aria-busy="true" aria-label="Loading">
+      <aside className="fixed inset-y-0 left-0 hidden w-72 border-r border-slate-200 bg-white p-5 lg:block">
+        <div className={`${bar} h-9 w-40`} />
+        <div className={`${bar} mt-6 h-14 w-full rounded-xl`} />
+        <div className={`${bar} mt-3 h-9 w-full rounded-xl`} />
+        <div className="mt-5 space-y-3">
+          {Array.from({ length: 9 }, (_, i) => (
+            <div key={i} className={`${bar} h-8`} style={{ width: `${70 + ((i * 17) % 30)}%` }} />
+          ))}
+        </div>
+      </aside>
+      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
+        <div className={`${bar} h-8 w-8`} />
+        <div className={`${bar} h-5 w-32`} />
+        <div className={`${bar} h-8 w-24`} />
+      </header>
+      <main className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
+        <div className={`${bar} h-8 w-56`} />
+        <div className={`${bar} mt-2 h-4 w-72`} />
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i} className="h-28 animate-pulse rounded-2xl border border-slate-200 bg-white p-5">
+              <div className={`${bar} h-4 w-24`} />
+              <div className={`${bar} mt-3 h-7 w-32`} />
+            </div>
+          ))}
+        </div>
+        <div className="mt-6 h-72 animate-pulse rounded-2xl border border-slate-200 bg-white" />
+      </main>
+    </div>
+  );
 }

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ApiError, escapeRegex, handle, requireTenant } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
+import { checkPartyPhone } from "@/lib/phone";
 import { postLedger } from "@/lib/services";
 import { Party } from "@/models";
 
@@ -8,11 +9,22 @@ export const GET = handle(async (req) => {
   const { tid } = await requireTenant();
   const url = new URL(req.url);
   const type = url.searchParams.get("type") === "supplier" ? "supplier" : "customer";
-  const q = url.searchParams.get("q")?.trim();
+  // Shop-wide totals for the cards above the list (never affected by the search).
+  if (url.searchParams.get("summary") === "1") {
+    const [s] = await Party.aggregate<{ count: number; dueCount: number; dueTotal: number }>([
+      { $match: { tenant: tid, type, active: true } },
+      { $group: { _id: null, count: { $sum: 1 }, dueCount: { $sum: { $cond: [{ $gt: ["$balance", 0] }, 1, 0] } }, dueTotal: { $sum: { $max: ["$balance", 0] } } } },
+    ]);
+    return { count: s?.count ?? 0, dueCount: s?.dueCount ?? 0, dueTotal: Math.round((s?.dueTotal ?? 0) * 100) / 100 };
+  }
+  const q = url.searchParams.get("q")?.trim().slice(0, 100);
   const query: Record<string, unknown> = { tenant: tid, type, active: true };
   if (q) {
     const rx = new RegExp(escapeRegex(q), "i");
-    query.$or = [{ name: rx }, { phone: rx }];
+    // "03001234", "0300-1234" and "0300 1234" all find 0300-1234567.
+    const digits = q.replace(/\D/g, "");
+    const phoneRx = /^[\d\s+()-]+$/.test(q) && digits.length >= 3 ? new RegExp(digits.split("").join("[\\s()-]*")) : rx;
+    query.$or = [{ name: rx }, { phone: phoneRx }];
   }
   if (url.searchParams.get("due") === "1") query.balance = { $gt: 0 };
   return Party.find(query).sort({ balance: -1, name: 1 }).limit(2000).lean();
@@ -32,6 +44,9 @@ const Body = z.object({
 export const POST = handle(async (req) => {
   const { user, tid } = await requireTenant();
   const { openingBalance, ...body } = Body.parse(await req.json());
+  const phone = checkPartyPhone(body.type, body.phone);
+  if (phone.error) throw new ApiError(400, phone.error);
+  body.phone = phone.phone;
   if (body.type === "supplier" && user.role === "cashier") {
     throw new ApiError(403, "Only owner or manager can add suppliers.");
   }

@@ -54,6 +54,14 @@ export function useLang() {
   return useContext(LangContext);
 }
 
+/**
+ * The right English form for a count: t(plural(n, "{n} customer", "{n} customers"), { n }).
+ * Both forms are in the dictionary, so Urdu and Roman Urdu get their own wording.
+ */
+export function plural(n: number, one: string, many: string) {
+  return n === 1 ? one : many;
+}
+
 /** t("Old udhaar: {amount}", { amount: "Rs 500" }) — Urdu when chosen, English otherwise. */
 export function useT() {
   const { lang } = useContext(LangContext);

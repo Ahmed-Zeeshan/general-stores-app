@@ -28,7 +28,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { Badge, Button, Field, Input, Modal, Segmented, Spinner, cn } from "@/components/ui";
+import { Badge, Button, cn, Count, Field, Input, Modal, Segmented, Spinner } from "@/components/ui";
 import { CustomerPicker, type PartyLite } from "@/components/customer-picker";
 import { CameraButton, CameraScanner, beep, useBarcodeScanner } from "@/components/barcode-scanner";
 import { useCan, useSession } from "@/components/session";
@@ -40,7 +40,7 @@ import { DevicePicker, DeviceTags, type DeviceRow } from "@/components/devices";
 import { InstallmentSaleModal } from "@/components/installments";
 import { SendBillModal } from "@/components/send-whatsapp";
 import { cleanImei } from "@/lib/imei";
-import { productMatches } from "@/lib/product-search";
+import { extraName, productMatches } from "@/lib/product-search";
 import { api, formatDate, LOOSE_UNITS, NetworkError, UNIT_LABELS } from "@/lib/client";
 import {
   addToOutbox,
@@ -619,10 +619,10 @@ export default function PosPage() {
                       </span>
                     )}
                     <span className={cn("line-clamp-2 font-semibold leading-tight text-slate-800", big ? "min-h-12 text-lg" : "min-h-10")}>{p.name}</span>
-                    {p.nameUrdu && <span className="urdu truncate text-xs text-slate-400">{p.nameUrdu}</span>}
-                    {(p.brand || p.fits) && (
+                    {extraName(p.name, p.nameUrdu) && <span className="urdu truncate text-xs text-slate-400">{extraName(p.name, p.nameUrdu)}</span>}
+                    {(extraName(p.name, p.brand) || p.fits) && (
                       <span className="truncate text-xs text-slate-500" title={p.fits ? `Fits ${p.fits}` : undefined}>
-                        {[p.brand, p.fits && `Fits ${p.fits}`].filter(Boolean).join(" · ")}
+                        {[extraName(p.name, p.brand), p.fits && `Fits ${p.fits}`].filter(Boolean).join(" · ")}
                       </span>
                     )}
                     <span className={cn("mt-2 font-bold text-brand-700", big ? "text-2xl" : "text-lg")}>
@@ -998,7 +998,7 @@ export default function PosPage() {
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-semibold text-slate-800">{h.label}</div>
                   <div className="text-xs text-slate-500">
-                    {h.items.length} items · {heldAgo(h.at)}
+                    <Count n={h.items.length} one="{n} item" many="{n} items" /> · {heldAgo(h.at)}
                     {h.userName && ` · ${h.userName}`}
                   </div>
                   <div className="truncate text-xs text-slate-400">{h.items.map((i) => i.product.name).join(", ")}</div>

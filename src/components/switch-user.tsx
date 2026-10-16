@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Delete, UserRound, Users } from "lucide-react";
 import { Button, Modal, Spinner, cn } from "./ui";
 import { useT } from "@/lib/i18n";
+import { cache } from "@/lib/offline";
 
 type Person = { _id: string; name: string; role: string; current: boolean };
 
@@ -42,6 +43,8 @@ function SwitchUserModal({ onClose }: { onClose: () => void }) {
       const j = await r.json();
       if (!r.ok) throw new Error(j.error ?? "Could not switch.");
       // Fresh start for the new person (menu, permissions, branch).
+      // The saved details are the previous person's: drop them so the menu is drawn for the new one.
+      cache.remove("me");
       window.location.reload();
     } catch (e) {
       setError((e as Error).message);
