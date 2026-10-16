@@ -27,7 +27,9 @@ jobs:
       - name: Start MongoDB
         run: |
           docker run -d --name mongo -p 27017:27017 mongo:7 --quiet
-          for i in $(seq 1 30); do docker exec mongo mongosh --quiet --eval 'db.runCommand({ ping: 1 })' >/dev/null 2>&1 && break; sleep 1; done
+          # Wait for MongoDB (up to 2 minutes); stop here with its log if it never answers.
+          for i in $(seq 1 120); do docker exec mongo mongosh --quiet --eval 'db.runCommand({ ping: 1 })' >/dev/null 2>&1 && echo "MongoDB ready after ${i}s" && exit 0; sleep 1; done
+          echo "MongoDB did not start"; docker ps -a; docker logs mongo | tail -50; exit 1
       - run: npm ci
       # Fails on known security holes in the packages the app runs with.
       - run: npm audit --omit=dev --audit-level=high
