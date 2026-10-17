@@ -72,7 +72,8 @@ const s = rep.summary;
 ok(s.repairProfit === 3000 && s.walletProfit === 28, "report: repairs Rs 3,000 and Easyload Rs 28 profit");
 // Sales profit: cover Rs 300 + phone (45,000 − 38,000) Rs 7,000 = Rs 7,300.
 eq(s.grossProfit, 7300, "gross profit from bills Rs 7,300");
-eq(s.netProfit, 7300 + 3000 + 28, "net profit includes repairs and Easyload (Rs 10,328)");
+eq(s.installmentProfit, 3000, "installment markup Rs 3,000 (10% of the Rs 30,000 left after the advance)");
+eq(s.netProfit, 7300 + 3000 + 28 + 3000, "net profit includes repairs, Easyload and installment markup (Rs 13,328)");
 ok(rep.mobile.installments.sold === 1 && rep.mobile.usedPhones.count === 1, "report has the installments and used phones sections");
 const old = await owner.call(`/api/reports?from=${day(-10)}&to=${day(-5)}`);
 ok(old.summary.repairProfit === 0 && old.mobile.repairs.delivered === 0 && old.mobile.installments.outstanding === 27500, "an earlier period has no repair profit (outstanding is always today's)");
