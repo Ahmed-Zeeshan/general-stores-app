@@ -6,6 +6,8 @@ import { syncSaleToFbr } from "./fbr";
 import { round2 } from "./money";
 import { recordPoints } from "./loyalty";
 import { findPack, sellPrice, specialPrices } from "./pricing";
+import { openShift } from "./shifts";
+import { DRAWER_CLOSED } from "./drawer-rule";
 import { applyPromotions, pointsEarned, type PromoLike, type PromoLine } from "./promotions";
 import { optionalId } from "./schemas";
 import { moveStock, postLedger } from "./services";
@@ -80,6 +82,9 @@ export async function createSale(ctx: BranchContext, body: SaleInput, opts: { in
     branch = b;
   }
   const settings = await Tenant.findById(tid).lean();
+  // The owner can allow bills only while this branch's cash drawer is open. Bills made offline are
+  // always accepted when they arrive, so nothing sold is lost.
+  if (settings?.requireOpenDrawer && !offline && !(await openShift(tid, branch._id))) throw new ApiError(409, DRAWER_CLOSED);
 
   const products = await Product.find({ tenant: tid, _id: { $in: body.items.map((i) => i.productId) } }).lean();
   const byId = new Map(products.map((p) => [String(p._id), p]));

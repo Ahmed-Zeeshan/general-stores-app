@@ -27,6 +27,7 @@ export type ShopSettings = {
   ownerPhone?: string;
   waPaymentTemplate?: string;
   loyaltyEnabled?: boolean;
+  requireOpenDrawer?: boolean;
   loyaltyEarnPer?: number;
   loyaltyPointValue?: number;
   loyaltyMinRedeem?: number;

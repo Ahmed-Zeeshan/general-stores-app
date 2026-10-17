@@ -91,6 +91,7 @@ const RESTORABLE_SETTINGS = [
   "waTemplate",
   "waPaymentTemplate",
   "loyaltyEnabled",
+  "requireOpenDrawer",
   "loyaltyEarnPer",
   "loyaltyPointValue",
   "loyaltyMinRedeem",

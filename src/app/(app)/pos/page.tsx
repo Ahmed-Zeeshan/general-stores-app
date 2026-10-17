@@ -61,6 +61,7 @@ import {
 } from "@/lib/offline";
 import { formatPKR, formatQty, round2 } from "@/lib/money";
 import { CORRECT_KEY, type CorrectionDraft } from "@/lib/correction";
+import { DRAWER_CLOSED } from "@/lib/drawer-rule";
 import { sellPrice, specialPrices, type PackLike } from "@/lib/pricing";
 import { applyPromotions, type PromoLike } from "@/lib/promotions";
 import { getPrintPrefs, printInFrame, receiptUrl, setPrintPrefs } from "@/lib/print";
@@ -165,6 +166,7 @@ export default function PosPage() {
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [heldOpen, setHeldOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState<boolean | null>(null);
+  const [drawerAsk, setDrawerAsk] = useState(false);
   useEffect(() => {
     api<{ shift: unknown }>("/api/shifts/current")
       .then((r) => setDrawerOpen(!!r.shift))
@@ -173,6 +175,11 @@ export default function PosPage() {
   const ask = useConfirm();
   // Latest "hold" action for the keyboard shortcut.
   const holdRef = useRef<() => void>(() => {});
+  // Take Payment: when the owner allows bills only with an open drawer and it is closed, open it first.
+  const mustOpenDrawer = !!settings?.requireOpenDrawer && drawerOpen === false && !usingSaved;
+  const startPayment = () => (mustOpenDrawer ? setDrawerAsk(true) : setPayOpen(true));
+  const payRef = useRef(startPayment);
+  payRef.current = startPayment;
   const [held, setHeld] = useState<Held[]>([]);
   const branchId = branch?._id ?? "";
   useEffect(() => {
@@ -243,7 +250,7 @@ export default function PosPage() {
       }
       if (e.key === "F9" && cart.length) {
         e.preventDefault();
-        setPayOpen(true);
+        payRef.current();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -573,7 +580,11 @@ export default function PosPage() {
                 {t("{n} waiting", { n: outbox.length })}
               </Button>
             )}
-            {drawerOpen === false && !usingSaved && (
+            {mustOpenDrawer ? (
+              <button type="button" onClick={() => setDrawerAsk(true)} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-rose-100 px-3 py-1.5 text-xs font-semibold text-rose-800 hover:bg-rose-200">
+                <Banknote className="h-4 w-4" /> {t("Open the drawer to make bills")}
+              </button>
+            ) : drawerOpen === false && !usingSaved && (
               <Link href="/drawer" className="hidden items-center gap-1.5 whitespace-nowrap rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200 md:inline-flex" title={t("Open the cash drawer to track cash for the day close")}>
                 <Banknote className="h-4 w-4" /> {t("Drawer not open")}
               </Link>
@@ -938,12 +949,22 @@ export default function PosPage() {
             <Button size="xl" variant="outline" className="shrink-0 px-4" disabled={!cart.length} onClick={() => holdBill()} icon={<PauseCircle className="h-5 w-5" />} title={t("Put this bill aside and serve the next customer (F4)")}>
               {t("Hold")}
             </Button>
-            <Button size="xl" className="flex-1" disabled={!cart.length || cart.some((i) => i.qty <= 0)} onClick={() => setPayOpen(true)}>
+            <Button size="xl" className="flex-1" disabled={!cart.length || cart.some((i) => i.qty <= 0)} onClick={startPayment}>
               {t("Take Payment")}
             </Button>
           </div>
         </div>
       </aside>
+
+      <OpenDrawerModal
+        open={drawerAsk}
+        onClose={() => setDrawerAsk(false)}
+        onOpened={() => {
+          setDrawerAsk(false);
+          setDrawerOpen(true);
+          if (cart.length) setPayOpen(true);
+        }}
+      />
 
       <LooseQtyModal
         product={looseFor}
@@ -979,6 +1000,11 @@ export default function PosPage() {
         customer={customer}
         onChooseCustomer={() => setPickCustomer(true)}
         payload={billPayload}
+        onDrawerClosed={() => {
+          setPayOpen(false);
+          setDrawerOpen(false);
+          setDrawerAsk(true);
+        }}
         onInstallments={
           settings?.modules?.installments
             ? () => {
@@ -1200,6 +1226,46 @@ function CatChip({ active, onClick, children }: { active: boolean; onClick: () =
   );
 }
 
+/** The owner allows bills only with an open drawer: open it here (count the cash in it) and carry on. */
+function OpenDrawerModal({ open, onClose, onOpened }: { open: boolean; onClose: () => void; onOpened: () => void }) {
+  const t = useT();
+  const toast = useToast();
+  const [cash, setCash] = useState("");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (open) setCash("");
+  }, [open]);
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api("/api/shifts", { body: { openingCash: Number(cash) || 0 } });
+      toast.success(t("Cash drawer opened"));
+      onOpened();
+    } catch (err) {
+      // Someone else opened it a moment ago: carry on.
+      if (/already open/i.test((err as Error).message)) onOpened();
+      else toast.error((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+  if (!open) return null;
+  return (
+    <Modal open onClose={onClose} title="Open the cash drawer first" size="sm">
+      <form onSubmit={submit}>
+        <p className="mb-4 text-sm text-slate-600">{t("The shop owner has set bills to be made only while the cash drawer is open. Count the cash in the drawer now and open it.")}</p>
+        <Field label="Cash in the drawer now (Rs)">
+          <Input type="number" inputMode="decimal" min="0" step="any" autoFocus value={cash} onChange={(e) => setCash(e.target.value)} placeholder="0" aria-label="Opening cash" className="h-14 text-2xl font-bold" />
+        </Field>
+        <Button type="submit" size="lg" className="mt-4 w-full" loading={saving} icon={<Banknote className="h-5 w-5" />}>
+          Open drawer & continue
+        </Button>
+      </form>
+    </Modal>
+  );
+}
+
 /** `price`: what this customer pays per unit (special / wholesale / normal). */
 function LooseQtyModal({ product, price, onClose, onAdd }: { product: Product | null; price: number; onClose: () => void; onAdd: (qty: number) => void }) {
   const t = useT();
@@ -1272,6 +1338,7 @@ function PaymentModal({
   onDone,
   onOffline,
   onInstallments,
+  onDrawerClosed,
 }: {
   open: boolean;
   onClose: () => void;
@@ -1283,6 +1350,8 @@ function PaymentModal({
   onOffline: (bill: Omit<OutboxBill, "lines">) => void;
   /** Shown when the installments feature is on: sell this bill on monthly installments instead. */
   onInstallments?: () => void;
+  /** The server says the drawer must be open first (the owner's rule). */
+  onDrawerClosed: () => void;
 }) {
   const toast = useToast();
   const t = useT();
@@ -1343,7 +1412,8 @@ function PaymentModal({
         if ((payload.items as { serials?: string[] }[]).some((i) => i.serials?.length)) {
           toast.error(t("No connection to the shop server. Phones sold by IMEI need the connection — try again when it is back."));
         } else onOffline({ clientId: clientId.current, soldAt: new Date().toISOString(), payload: body, total, change, status: "pending" });
-      } else toast.error((err as Error).message);
+      } else if ((err as Error).message === DRAWER_CLOSED) onDrawerClosed();
+      else toast.error((err as Error).message);
     } finally {
       setSaving(false);
     }

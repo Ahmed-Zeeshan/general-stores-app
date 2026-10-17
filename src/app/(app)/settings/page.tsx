@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Database, Download, FileUp, Gift, KeyRound, LayoutGrid, Printer, MapPin, MessageCircle, Pencil, Plus, RefreshCw, Save, ShieldCheck, Store, UserCog, Users } from "lucide-react";
+import { Banknote, Database, Download, FileUp, Gift, KeyRound, LayoutGrid, Printer, MapPin, MessageCircle, Pencil, Plus, RefreshCw, Save, ShieldCheck, Store, UserCog, Users } from "lucide-react";
 import { MODULE_INFO, MODULES, SHOP_TYPE_LABELS, SHOP_TYPES } from "@/lib/constants";
 import { Badge, Button, Card, Field, Input, Modal, PageHeader, Select, Spinner, Table, Td, Th, Textarea } from "@/components/ui";
 import { useSession, type ShopSettings } from "@/components/session";
@@ -88,6 +88,7 @@ export default function SettingsPage() {
           publicUrl: form.publicUrl ?? "",
           ownerPhone: form.ownerPhone ?? "",
           loyaltyEnabled: !!form.loyaltyEnabled,
+          requireOpenDrawer: !!form.requireOpenDrawer,
           loyaltyEarnPer: Number(form.loyaltyEarnPer) || 100,
           loyaltyPointValue: Number(form.loyaltyPointValue) || 0,
           loyaltyMinRedeem: Number(form.loyaltyMinRedeem) || 0,
@@ -199,6 +200,15 @@ export default function SettingsPage() {
                 />
               ))}
             </div>
+          </Card>
+          <Card className="p-6">
+            <h2 className="mb-5 flex items-center gap-2 font-bold text-slate-900"><Banknote className="h-5 w-5 text-brand-600" /> {t("Cash drawer")}</h2>
+            <Toggle
+              checked={!!form.requireOpenDrawer}
+              onChange={(v) => setForm({ ...form, requireOpenDrawer: v })}
+              title="Make bills only when the cash drawer is open"
+              text="Before the first bill of the day, the cashier must open the drawer and count the cash in it, so every rupee is tracked for the day close. Bills made while the internet was off are still accepted."
+            />
           </Card>
           <Card className="p-6">
             <h2 className="mb-5 flex items-center gap-2 font-bold text-slate-900"><Gift className="h-5 w-5 text-violet-600" /> {t("Loyalty points")}</h2>

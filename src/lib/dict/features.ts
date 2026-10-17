@@ -138,4 +138,23 @@ export const DICT_FEATURES: Record<string, [string, string]> = {
     "بل آپ کے Downloads میں محفوظ ہو گیا ({file})۔ اسے واٹس ایپ چیٹ میں کھینچ کر ڈالیں، پھر بھیجیں۔",
     "Bill aap ke Downloads mein save ho gaya ({file}). Isay WhatsApp chat mein kheench kar daalein, phir Send karein.",
   ],
+
+  // ----- Bills only with an open cash drawer -----
+  "Make bills only when the cash drawer is open": ["بل صرف تب بنیں جب کیش دراز کھلا ہو", "Bill sirf tab banein jab cash daraz khula ho"],
+  "Before the first bill of the day, the cashier must open the drawer and count the cash in it, so every rupee is tracked for the day close. Bills made while the internet was off are still accepted.": [
+    "دن کے پہلے بل سے پہلے کیشیئر دراز کھولے اور اس میں موجود رقم گنے، تاکہ دن کے اختتام پر ہر روپے کا حساب رہے۔ انٹرنیٹ بند ہونے کے دوران بنے بل پھر بھی قبول ہوں گے۔",
+    "Din ke pehle bill se pehle cashier daraz khole aur us mein mojood raqam gine, taake din ke ikhtitam par har rupay ka hisaab rahe. Internet band hone ke dauran bane bill phir bhi qabool honge.",
+  ],
+  "Open the drawer to make bills": ["بل بنانے کے لیے دراز کھولیں", "Bill banane ke liye daraz kholein"],
+  "Open the cash drawer first": ["پہلے کیش دراز کھولیں", "Pehle cash daraz kholein"],
+  "The shop owner has set bills to be made only while the cash drawer is open. Count the cash in the drawer now and open it.": [
+    "دکان کے مالک نے رکھا ہے کہ بل صرف کیش دراز کھلا ہونے پر بنیں۔ ابھی دراز میں موجود رقم گنیں اور اسے کھولیں۔",
+    "Dukaan ke malik ne rakha hai ke bill sirf cash daraz khula hone par banein. Abhi daraz mein mojood raqam ginein aur isay kholein.",
+  ],
+  "Cash in the drawer now (Rs)": ["دراز میں ابھی رقم (روپے)", "Daraz mein abhi raqam (Rs)"],
+  "Open drawer & continue": ["دراز کھولیں اور آگے بڑھیں", "Daraz kholein aur aage barhein"],
+  "The cash drawer is not open. Open the drawer first (count the opening cash), then make the bill.": [
+    "کیش دراز کھلا نہیں ہے۔ پہلے دراز کھولیں (شروع کی رقم گنیں)، پھر بل بنائیں۔",
+    "Cash daraz khula nahi hai. Pehle daraz kholein (shuru ki raqam ginein), phir bill banayein.",
+  ],
 };
