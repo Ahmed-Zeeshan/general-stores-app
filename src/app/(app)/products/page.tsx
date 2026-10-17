@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Barcode, Boxes, Camera, ListPlus, Star, Package, Pencil, Plus, Printer, Search, SlidersHorizontal, Smartphone, Tags, Trash2, Wand2 } from "lucide-react";
+import { Barcode, Boxes, Camera, History, ListPlus, Star, Package, Pencil, Plus, Printer, Search, SlidersHorizontal, Smartphone, Tags, Trash2, TrendingUp, Wand2 } from "lucide-react";
 import { BarcodeSvg } from "@/components/barcode";
 import { CameraButton, CameraScanner, useBarcodeScanner } from "@/components/barcode-scanner";
 import { Badge, Button, Card, Count, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
@@ -11,6 +11,8 @@ import { useCan, useSession } from "@/components/session";
 import { useToast } from "@/components/toast";
 import { useConfirm } from "@/components/confirm";
 import { StarterItemsModal } from "@/components/starter-items";
+import { PriceHistoryModal } from "@/components/price-history";
+import { BulkPriceModal } from "@/components/bulk-prices";
 import { compressImage } from "@/lib/image";
 import { api, formatDate, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty } from "@/lib/money";
@@ -86,6 +88,8 @@ function ProductsPage() {
   const [filter, setFilter] = useState<"all" | "low" | "expiring">((params.get("filter") as "low" | "expiring") ?? "all");
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [adjusting, setAdjusting] = useState<Product | null>(null);
+  const [historyOf, setHistoryOf] = useState<string | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [catsOpen, setCatsOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [assigning, setAssigning] = useState(false);
@@ -189,6 +193,9 @@ function ProductsPage() {
             <>
               <Button variant="outline" icon={<Tags className="h-4 w-4" />} onClick={() => setCatsOpen(true)}>
                 Categories
+              </Button>
+              <Button variant="outline" icon={<TrendingUp className="h-4 w-4" />} onClick={() => setBulkOpen(true)}>
+                Update prices
               </Button>
               <Button variant="outline" icon={<Wand2 className="h-4 w-4" />} loading={assigning} onClick={assignMissing}>
                 Create barcodes
@@ -333,6 +340,9 @@ function ProductsPage() {
                               <Barcode className="h-4 w-4" />
                             </Button>
                           </Link>
+                          <Button size="sm" variant="ghost" onClick={() => setHistoryOf(p._id)} aria-label="Price history" title={t("Price history")}>
+                            <History className="h-4 w-4" />
+                          </Button>
                           <Button size="sm" variant="ghost" onClick={() => setEditing(p)} aria-label="Edit">
                             <Pencil className="h-4 w-4" />
                           </Button>
@@ -349,6 +359,17 @@ function ProductsPage() {
           </Table>
         )}
       </Card>
+
+      <PriceHistoryModal productId={historyOf} onClose={() => setHistoryOf(null)} />
+      <BulkPriceModal
+        open={bulkOpen}
+        categories={categories}
+        onClose={() => setBulkOpen(false)}
+        onDone={() => {
+          setBulkOpen(false);
+          load();
+        }}
+      />
 
       <ProductForm
         open={editing !== null}

@@ -6,6 +6,7 @@ import { UNITS } from "@/lib/constants";
 import { parseCsv } from "@/lib/csv";
 import { moveStock } from "@/lib/services";
 import { Category, Product } from "@/models";
+import { recordPriceChanges } from "@/lib/price-history";
 
 const Body = z.object({ csv: z.string().min(1, "The file is empty").max(5_000_000, "File is too large (max 5 MB)") });
 
@@ -102,11 +103,13 @@ export const POST = handle(async (req) => {
       let currentStock = 0;
       if (existing) {
         await Product.updateOne({ _id: existing._id, tenant: tid }, { $set: data });
+        await recordPriceChanges({ tid, user }, existing._id, existing, { ...existing, ...data }, "import");
         productId = existing._id;
         currentStock = (await branchStock(tid, branchId, [existing._id])).get(String(existing._id)) ?? 0;
         updated++;
       } else {
         const p = await Product.create({ ...data, tenant: tid, stock: 0 });
+        await recordPriceChanges({ tid, user }, p._id, null, p, "import");
         productId = p._id;
         created++;
       }

@@ -6,6 +6,7 @@ import { assertBarcodesFree } from "@/lib/barcode-server";
 import { ProductInput } from "@/lib/schemas";
 import { startBatches } from "@/lib/batches";
 import { Product, StockLevel, StockMovement } from "@/models";
+import { recordPriceChanges } from "@/lib/price-history";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -72,6 +73,7 @@ export const PUT = handle<Ctx>(async (req, { params }) => {
   const product = await Product.findOneAndUpdate({ _id: id, tenant: tid }, { $set: update, $unset: unset }, { new: true, runValidators: true }).lean();
   if (!product) throw new ApiError(404, "Product not found.");
   if (product.trackExpiry && !before?.trackExpiry) await startBatches(tid, product);
+  await recordPriceChanges({ tid, user }, product._id, before, product, "edit");
   const priceChanges = (
     [
       ["sale price", before?.salePrice, product.salePrice],

@@ -11,7 +11,17 @@ import { formatPKR } from "@/lib/money";
 import { useT } from "@/lib/i18n";
 import { checkPartyPhone } from "@/lib/phone";
 
-export type PartyLite = { _id: string; name: string; phone?: string; balance: number; creditLimit: number; priceLevel?: "retail" | "wholesale"; points?: number };
+export type PartyLite = {
+  _id: string;
+  name: string;
+  phone?: string;
+  balance: number;
+  creditLimit: number;
+  priceLevel?: "retail" | "wholesale";
+  points?: number;
+  /** The customer's own prices (per loose unit). */
+  prices?: { product: string; price: number }[];
+};
 
 export function CustomerPicker({
   open,

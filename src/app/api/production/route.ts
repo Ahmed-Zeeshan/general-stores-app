@@ -5,6 +5,7 @@ import { round2 } from "@/lib/money";
 import { recipesWithDetails } from "@/lib/recipes";
 import { moveStock } from "@/lib/services";
 import { nextNumber, Product, Production } from "@/models";
+import { recordPriceChanges } from "@/lib/price-history";
 
 export const GET = handle(async (req) => {
   const ctx = await requireBranch(["owner", "manager"]);
@@ -73,7 +74,8 @@ export const POST = handle(async (req) => {
   }
   await moveStock({ tid, branch: branchId, productId: recipe.output, qty: outputQty, type: "production", refNo: productionNo, note: `Made from ${recipe.name}`, userId: user.id });
   if (body.updateCost && unitCost > 0) {
-    await Product.updateOne({ _id: recipe.output, tenant: tid }, { costPrice: unitCost });
+    const was = await Product.findOneAndUpdate({ _id: recipe.output, tenant: tid }, { costPrice: unitCost }).select("costPrice").lean();
+    await recordPriceChanges({ tid, user }, recipe.output, { costPrice: was?.costPrice }, { costPrice: unitCost }, "production", productionNo);
   }
   return run.toObject();
 });

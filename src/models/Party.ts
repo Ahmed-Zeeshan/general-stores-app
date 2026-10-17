@@ -18,6 +18,11 @@ const PartySchema = new Schema(
     creditLimit: { type: Number, default: 0, min: 0 },
     balance: { type: Number, default: 0 },
     notes: { type: String, trim: true },
+    /** This customer's own prices (per loose unit), used on every bill before wholesale / normal prices. */
+    prices: {
+      type: [{ _id: false, product: { type: Schema.Types.ObjectId, ref: "Product", required: true }, price: { type: Number, required: true, min: 0 } }],
+      default: undefined,
+    },
     active: { type: Boolean, default: true },
   },
   { timestamps: true },

@@ -8,6 +8,7 @@ import { Badge, Button, Card, Count, EmptyState, Field, Input, Modal, PageHeader
 import { useCan, useSession } from "./session";
 import { useConfirm } from "./confirm";
 import { CustomerTabs } from "./customer-overview";
+import { SpecialPrices } from "./special-prices";
 import { printPaymentReceipt, ReceivePaymentModal, sendPaymentWhatsApp } from "./receive-payment";
 import { useToast } from "./toast";
 import { api, formatDate, PAYMENT_LABELS } from "@/lib/client";
@@ -554,7 +555,7 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
       </Card>
 
       {type === "customer" ? (
-        <CustomerTabs id={party._id} khata={khataCard} points={(data.points?.length ?? 0) > 0 ? pointsCard : null} />
+        <CustomerTabs id={party._id} khata={khataCard} points={(data.points?.length ?? 0) > 0 ? pointsCard : null} special={<SpecialPrices partyId={party._id} name={party.name} />} />
       ) : (
         <div className="mt-6">{khataCard}</div>
       )}

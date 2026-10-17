@@ -28,3 +28,4 @@ export * from "./Repair";
 export * from "./Wallet";
 export * from "./InstallmentPlan";
 export * from "./AuthThrottle";
+export * from "./PriceChange";

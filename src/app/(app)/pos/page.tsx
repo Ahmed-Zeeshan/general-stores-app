@@ -60,7 +60,8 @@ import {
   type OutboxBill,
 } from "@/lib/offline";
 import { formatPKR, formatQty, round2 } from "@/lib/money";
-import { sellPrice, type PackLike } from "@/lib/pricing";
+import { CORRECT_KEY, type CorrectionDraft } from "@/lib/correction";
+import { sellPrice, specialPrices, type PackLike } from "@/lib/pricing";
 import { applyPromotions, type PromoLike } from "@/lib/promotions";
 import { getPrintPrefs, printInFrame, receiptUrl, setPrintPrefs } from "@/lib/print";
 
@@ -128,6 +129,10 @@ export default function PosPage() {
   const [cat, setCat] = useState<string>("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customer, setCustomer] = useState<PartyLite | null>(null);
+  // Correcting a saved bill (Sales History → Correct): the old bill was returned in full; this one replaces it.
+  const [correcting, setCorrecting] = useState<{ sale: { _id: string; invoiceNo: string }; returnNo: string; phones: string[] } | null>(null);
+  // Lines whose "discount on this item" box is open.
+  const [discOpen, setDiscOpen] = useState<Set<string>>(new Set());
   const [billDiscount, setBillDiscount] = useState("");
   const [pickCustomer, setPickCustomer] = useState(false);
   const [looseFor, setLooseFor] = useState<Product | null>(null);
@@ -260,18 +265,22 @@ export default function PosPage() {
   const hasFavourites = !!products?.some((p) => p.favourite);
 
   const wholesale = customer?.priceLevel === "wholesale";
+  // The customer's own prices (Customers → Special prices) come first.
+  const specials = useMemo(() => specialPrices(customer), [customer]);
+  const priceOf = useCallback((p: Product, pack: PackLike | null | undefined) => sellPrice(p, pack, wholesale, specials.get(p._id)), [wholesale, specials]);
   function addToCart(p: Product, qty = 1, pack: PackLike | null = null) {
     const key = lineKey(p, pack);
     setCart((c) => {
       const existing = c.find((i) => i.key === key);
       if (existing) return c.map((i) => (i.key === key ? { ...i, qty: round2(i.qty + qty) } : i));
-      return [...c, { key, product: p, qty, price: sellPrice(p, pack, wholesale), discount: 0, pack }];
+      return [...c, { key, product: p, qty, price: priceOf(p, pack), discount: 0, pack }];
     });
   }
-  // A wholesale customer gets wholesale prices (lines whose price was typed by hand stay as they are).
+  // A wholesale customer gets wholesale prices, a customer with special prices gets those (lines whose
+  // price was typed by hand stay as they are).
   useEffect(() => {
-    setCart((c) => c.map((i) => (i.custom || i.device?.price ? i : { ...i, price: sellPrice(i.product, i.pack, wholesale) })));
-  }, [wholesale]);
+    setCart((c) => c.map((i) => (i.custom || i.device?.price ? i : { ...i, price: priceOf(i.product, i.pack) })));
+  }, [priceOf]);
 
   /** Switch a line between the loose unit and a pack size (merging with an existing line). */
   function changeUnit(item: CartItem, packName: string) {
@@ -281,7 +290,7 @@ export default function PosPage() {
     setCart((c) => {
       const other = c.find((i) => i.key === key);
       if (other) return c.filter((i) => i.key !== item.key).map((i) => (i.key === key ? { ...i, qty: round2(i.qty + item.qty) } : i));
-      return c.map((i) => (i.key === item.key ? { ...i, key, pack, custom: false, price: sellPrice(i.product, pack, wholesale) } : i));
+      return c.map((i) => (i.key === item.key ? { ...i, key, pack, custom: false, price: priceOf(i.product, pack) } : i));
     });
   }
 
@@ -373,7 +382,15 @@ export default function PosPage() {
     }
   }
 
-  const updateItem = (key: string, patch: Partial<CartItem>) => setCart((c) => c.map((i) => (i.key === key ? { ...i, ...patch } : i)));
+  // A line's discount can never be more than the line itself (e.g. after lowering the quantity).
+  const updateItem = (key: string, patch: Partial<CartItem>) =>
+    setCart((c) =>
+      c.map((i) => {
+        if (i.key !== key) return i;
+        const next = { ...i, ...patch };
+        return { ...next, discount: Math.min(next.discount, round2(next.qty * next.price)) };
+      }),
+    );
   const removeItem = (key: string) => setCart((c) => c.filter((i) => i.key !== key));
 
   const offers = useMemo(
@@ -387,12 +404,13 @@ export default function PosPage() {
           gross: round2(i.qty * i.price),
           manualDiscount: i.discount,
           isPack: !!i.pack,
-          customPrice: !!i.custom,
+          // Offers do not stack on a typed price or the customer's special price.
+          customPrice: !!i.custom || specials.has(i.product._id),
         })),
         promos,
         { wholesale },
       ),
-    [cart, promos, wholesale],
+    [cart, promos, wholesale, specials],
   );
   const subtotal = round2(cart.reduce((s, i, idx) => s + round2(i.qty * i.price) - i.discount - (offers.lines[idx]?.discount ?? 0), 0));
   const billOffer = offers.bill ? Math.min(offers.bill.discount, subtotal) : 0;
@@ -423,9 +441,11 @@ export default function PosPage() {
     discount: manualDiscount,
     customerId: customer?._id,
     ...(redeemPoints > 0 ? { redeemPoints } : {}),
+    ...(correcting ? { correctionOf: correcting.sale._id } : {}),
   };
 
   function resetBill() {
+    setCorrecting(null);
     setCart([]);
     setCustomer(null);
     setUsePoints(false);
@@ -459,6 +479,45 @@ export default function PosPage() {
   }
 
   holdRef.current = () => holdBill();
+
+  // A bill being corrected opens here once the product list is ready (sent from Sales History).
+  useEffect(() => {
+    if (!products) return;
+    let raw: string | null = null;
+    try {
+      raw = localStorage.getItem(CORRECT_KEY);
+      localStorage.removeItem(CORRECT_KEY);
+    } catch {
+      /* ignore */
+    }
+    if (!raw) return;
+    const c = JSON.parse(raw) as CorrectionDraft;
+    const byId = new Map(products.map((p) => [p._id, p]));
+    const cust = (c.customer as PartyLite | null) ?? null;
+    const wholesaleNow = cust?.priceLevel === "wholesale";
+    const sp = specialPrices(cust);
+    const lines: CartItem[] = [];
+    const phones: string[] = [];
+    for (const l of c.lines) {
+      const p = byId.get(l.productId);
+      if (!p || l.phone) {
+        phones.push(l.name);
+        continue;
+      }
+      const pack = l.pack ? (p.packs?.find((k) => k.name === l.pack) ?? null) : null;
+      const usual = sellPrice(p, pack, wholesaleNow, sp.get(p._id));
+      const price = l.price ?? usual;
+      // The old bill can have the same item twice (e.g. at two prices) — keep both lines.
+      const key = lines.some((x) => x.key === lineKey(p, pack)) ? `${lineKey(p, pack)}#${lines.length}` : lineKey(p, pack);
+      lines.push({ key, product: p, qty: l.qty, price, discount: l.discount ?? 0, pack, custom: Math.abs(price - usual) > 0.004 });
+    }
+    setCart(lines);
+    setCustomer(cust);
+    setBillDiscount(c.discount ? String(c.discount) : "");
+    setCorrecting({ sale: c.sale, returnNo: c.returnNo, phones });
+    // Runs once, when the products first arrive.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products === null]);
 
   async function resumeHeld(h: Held) {
     if (cart.length) {
@@ -687,6 +746,13 @@ export default function PosPage() {
         </button>
 
         <div className="scrollbar-thin flex-1 overflow-y-auto px-5 py-3 lg:min-h-0">
+          {correcting && (
+            <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="status">
+              <div className="font-semibold">{t("Correcting bill {no}", { no: correcting.sale.invoiceNo })}</div>
+              <p className="mt-0.5 text-xs">{t("The old bill was returned in full ({no}). Fix the items below and save — the new bill is linked to the old one.", { no: correcting.returnNo })}</p>
+              {correcting.phones.length > 0 && <p className="mt-1 text-xs font-semibold">{t("Add these again from the list (by IMEI): {items}", { items: correcting.phones.join(", ") })}</p>}
+            </div>
+          )}
           {cart.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center py-12 text-center text-slate-400">
               <Search className="mb-3 h-10 w-10" />
@@ -707,7 +773,11 @@ export default function PosPage() {
                           <span>
                             {formatPKR(item.price)} / {item.pack ? `${item.pack.name} (${formatQty(item.pack.size)} ${t(UNIT_LABELS[item.product.unit] ?? item.product.unit)})` : unitLabel(item.product.unit, t)}
                           </span>
-                          {wholesale && !item.custom && <Badge color="violet">{t("Wholesale")}</Badge>}
+                          {!item.custom && !item.device && specials.has(item.product._id) ? (
+                            <Badge color="amber">{t("Special price")}</Badge>
+                          ) : (
+                            wholesale && !item.custom && <Badge color="violet">{t("Wholesale")}</Badge>
+                          )}
                           {offer && <Badge color="green">{offer.name} −{formatPKR(offer.discount)}</Badge>}
                         </div>
                         {item.device && (
@@ -779,6 +849,46 @@ export default function PosPage() {
                       )}
                       <span className="min-w-[80px] text-right font-bold text-slate-900">{formatPKR(line)}</span>
                     </div>
+                    {/* Discount on this item only (staff discount limits still apply when the bill is saved). */}
+                    {item.discount > 0 || discOpen.has(item.key) ? (
+                      <div className="mt-2 flex items-center justify-end gap-2 text-xs text-slate-600">
+                        <span>{t("Discount on this item")}</span>
+                        <span className="font-semibold">Rs</span>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          step="any"
+                          autoFocus={item.discount === 0}
+                          value={item.discount || ""}
+                          onChange={(e) => updateItem(item.key, { discount: Math.min(round2(item.qty * item.price), Math.max(0, Number(e.target.value) || 0)) })}
+                          aria-label={`Discount on ${item.product.name}`}
+                          className="h-8 w-20 rounded-lg border border-slate-200 px-2 text-right text-sm focus:border-brand-500 focus:outline-hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            updateItem(item.key, { discount: 0 });
+                            setDiscOpen((s) => new Set([...s].filter((k) => k !== item.key)));
+                          }}
+                          className="rounded p-1 text-slate-400 hover:text-rose-600"
+                          aria-label={`Remove discount on ${item.product.name}`}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      !item.device && (
+                        <button
+                          type="button"
+                          onClick={() => setDiscOpen((s) => new Set(s).add(item.key))}
+                          className="mt-1 text-xs font-semibold text-brand-700 hover:underline"
+                          aria-label={`Give discount on ${item.product.name}`}
+                        >
+                          {t("Discount")}
+                        </button>
+                      )
+                    )}
                   </li>
                 );
               })}

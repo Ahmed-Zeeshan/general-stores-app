@@ -21,6 +21,8 @@ const SaleItemSchema = new Schema(
     pack: { type: new Schema({ name: String, size: Number, count: Number, price: Number }, { _id: false }), default: undefined },
     /** Price level used (wholesale customers). */
     wholesale: { type: Boolean, default: undefined },
+    /** The customer's own special price was used. */
+    special: { type: Boolean, default: undefined },
     /** Offer applied to this line (its discount is included in `discount`). */
     promo: { type: new Schema({ name: String, amount: Number }, { _id: false }), default: undefined },
     /** Phones sold on this line (products with "track IMEI"); `returned` = came back on a return. */
@@ -80,6 +82,9 @@ const SaleSchema = new Schema(
     returnedAt: { type: Date },
     /** Value of all returns so far, and how much of it reduced this bill's udhaar. */
     returnedTotal: { type: Number, default: 0 },
+    /** Bill correction: the old bill was returned in full and replaced by this new one (and the other way round). */
+    correctionOf: { type: { _id: false, sale: { type: Schema.Types.ObjectId, ref: "Sale" }, invoiceNo: String }, default: undefined },
+    correctedBy: { type: { _id: false, sale: { type: Schema.Types.ObjectId, ref: "Sale" }, invoiceNo: String, at: Date, userName: String }, default: undefined },
     creditReturned: { type: Number, default: 0 },
     /** Increases with every return; protects against two returns at the same moment. */
     returnSeq: { type: Number, default: 0 },

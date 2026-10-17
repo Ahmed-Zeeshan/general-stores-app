@@ -5,7 +5,7 @@ import type { BranchContext } from "./branches";
 import { syncSaleToFbr } from "./fbr";
 import { round2 } from "./money";
 import { recordPoints } from "./loyalty";
-import { findPack, sellPrice } from "./pricing";
+import { findPack, sellPrice, specialPrices } from "./pricing";
 import { applyPromotions, pointsEarned, type PromoLike, type PromoLine } from "./promotions";
 import { optionalId } from "./schemas";
 import { moveStock, postLedger } from "./services";
@@ -45,6 +45,8 @@ export const SaleBody = z.object({
   note: z.string().trim().optional(),
   // Offline bills (made while the server was unreachable) are sent later with these:
   clientId: z.string().trim().min(8).max(64).optional(),
+  /** This bill replaces a bill that was corrected (returned in full) — links the two. */
+  correctionOf: optionalId,
   soldAt: z.string().datetime().optional(),
   branchId: optionalId,
 });
@@ -88,6 +90,7 @@ export async function createSale(ctx: BranchContext, body: SaleInput, opts: { in
     if (!customer) throw new ApiError(400, "Customer not found.");
   }
   const wholesale = customer?.priceLevel === "wholesale";
+  const specials = specialPrices(customer);
   const priceChanges: string[] = [];
   // Phones sold by IMEI: each piece may have its own price and cost.
   const serialIds = body.items.flatMap((i) => i.serials ?? []);
@@ -115,7 +118,8 @@ export async function createSale(ctx: BranchContext, body: SaleInput, opts: { in
     }
     // Cashiers always sell at the saved price; owner/manager may change the price at the counter.
     // A single phone with its own asking price (used phones) is sold at that price.
-    const listPrice = pieces.length === 1 && pieces[0].price ? pieces[0].price : sellPrice(p, pack, wholesale);
+    const special = pieces.length ? undefined : specials.get(String(p._id));
+    const listPrice = pieces.length === 1 && pieces[0].price ? pieces[0].price : sellPrice(p, pack, wholesale, special);
     const price = user.role === "cashier" || i.price === undefined ? listPrice : i.price;
     if (Math.abs(price - listPrice) > 0.004) priceChanges.push(`${p.name}${pack ? ` (${pack.name})` : ""} ${listPrice} → ${price}`);
     const gross = round2(i.qty * price);
@@ -129,7 +133,8 @@ export async function createSale(ctx: BranchContext, body: SaleInput, opts: { in
       gross,
       manualDiscount: discount,
       isPack: !!pack,
-      customPrice: Math.abs(price - listPrice) > 0.004,
+      // Offers do not stack on a customer's special price.
+      customPrice: Math.abs(price - listPrice) > 0.004 || !!special,
     });
     return {
       product: p._id,
@@ -142,7 +147,7 @@ export async function createSale(ctx: BranchContext, body: SaleInput, opts: { in
       discount,
       total: round2(gross - discount),
       ...(pack ? { pack: { name: pack.name, size: pack.size, count: i.qty, price } } : {}),
-      ...(wholesale ? { wholesale: true } : {}),
+      ...(special ? { special: true } : wholesale ? { wholesale: true } : {}),
       ...(pieces.length
         ? {
             serials: pieces.map((d) => ({ device: d._id, imei: d.imei, ...(d.imei2 ? { imei2: d.imei2 } : {}) })),
@@ -231,6 +236,14 @@ export async function createSale(ctx: BranchContext, body: SaleInput, opts: { in
   const promoTotal = round2(applied.lines.reduce((a, l) => a + (l?.discount ?? 0), 0) + billPromo);
   const pointsEarnedNow = customer && settings?.loyaltyEnabled ? pointsEarned(amountPaid, settings.loyaltyEarnPer ?? 100) : 0;
 
+  // A corrected bill: the old one must have been returned in full, and corrected only once.
+  let correctionOf: { sale: unknown; invoiceNo: string } | undefined;
+  if (body.correctionOf) {
+    const old = await Sale.findOne({ tenant: tid, _id: body.correctionOf }).select("invoiceNo status correctedBy").lean();
+    if (!old || old.status !== "returned") throw new ApiError(400, "The bill being corrected was not found or is not returned.");
+    if (old.correctedBy?.invoiceNo) throw new ApiError(400, `Bill ${old.invoiceNo} was already corrected by ${old.correctedBy.invoiceNo}.`);
+    correctionOf = { sale: old._id, invoiceNo: old.invoiceNo };
+  }
   const invoiceNo = await nextNumber(tid, "sale", "INV");
   // Reserve the phones first (all or nothing), so the same phone can never be sold twice.
   const claims: string[] = [];
@@ -260,6 +273,7 @@ export async function createSale(ctx: BranchContext, body: SaleInput, opts: { in
     sale = await Sale.create({
       tenant: tid,
       invoiceNo,
+      ...(correctionOf ? { correctionOf } : {}),
       branch: branch._id,
       branchName: branch.name,
       clientId: body.clientId,
@@ -347,6 +361,13 @@ export async function createSale(ctx: BranchContext, body: SaleInput, opts: { in
     );
   }
   if (settings?.fbrEnabled) await syncSaleToFbr(tid, sale._id);
+  if (correctionOf) {
+    await Sale.updateOne({ _id: correctionOf.sale, tenant: tid }, { $set: { correctedBy: { sale: sale._id, invoiceNo, at: new Date(), userName: user.name } } });
+    await logActivity(
+      { tid, user, branchId: branch._id },
+      { action: "sale.correct", summary: `${correctionOf.invoiceNo} corrected: new bill ${invoiceNo} (${total})`, refType: "sale", refId: sale._id, refNo: invoiceNo, amount: total },
+    );
+  }
   return Sale.findOne({ _id: sale._id, tenant: tid }).lean();
 }
 

@@ -7,6 +7,7 @@ import { ProductInput } from "@/lib/schemas";
 import { batchExpiry } from "@/lib/batches";
 import { moveStock } from "@/lib/services";
 import { Product } from "@/models";
+import { recordPriceChanges } from "@/lib/price-history";
 
 /**
  * Products with `stock` = stock at the current branch (or the shop total with ?branch=all)
@@ -63,6 +64,7 @@ export const POST = handle(async (req) => {
     hasImage: !!body.image,
     stock: 0,
   });
+  await recordPriceChanges({ tid, user }, product._id, null, product, "added");
   if (openingStock > 0) {
     await moveStock({
       tid,

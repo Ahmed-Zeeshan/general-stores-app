@@ -18,12 +18,12 @@ type Overview = {
   usedPhones: { _id: string; buyNo: string; productName: string; imei: string; price: number; status: string; createdAt: string }[];
   modules: Record<string, boolean>;
 };
-type Tab = "khata" | "bills" | "phones" | "repairs" | "installments" | "points" | "used";
+type Tab = "khata" | "bills" | "phones" | "repairs" | "installments" | "points" | "used" | "special";
 
 const METHOD: Record<string, string> = { ...PAYMENT_LABELS, split: "Split", installments: "Installments" };
 
 /** Customer page: khata plus everything else about the customer, in tabs, with a summary on top. */
-export function CustomerTabs({ id, khata, points }: { id: string; khata: React.ReactNode; points: React.ReactNode | null }) {
+export function CustomerTabs({ id, khata, points, special }: { id: string; khata: React.ReactNode; points: React.ReactNode | null; special?: React.ReactNode }) {
   const toast = useToast();
   const tr = useT();
   const [data, setData] = useState<Overview | null>(null);
@@ -43,6 +43,7 @@ export function CustomerTabs({ id, khata, points }: { id: string; khata: React.R
     ...(m.repairs ? [{ value: "repairs" as Tab, label: `Repairs (${data?.repairs.length ?? 0})` }] : []),
     ...(m.installments ? [{ value: "installments" as Tab, label: `Installments (${data?.installments.length ?? 0})` }] : []),
     ...(points ? [{ value: "points" as Tab, label: "Points" }] : []),
+    ...(special ? [{ value: "special" as Tab, label: "Special prices" }] : []),
     ...((data?.usedPhones.length ?? 0) > 0 ? [{ value: "used" as Tab, label: `Sold to us (${data!.usedPhones.length})` }] : []),
   ];
 
@@ -70,6 +71,8 @@ export function CustomerTabs({ id, khata, points }: { id: string; khata: React.R
         khata
       ) : tab === "points" ? (
         points
+      ) : tab === "special" ? (
+        special
       ) : !data ? (
         <Spinner />
       ) : tab === "bills" ? (

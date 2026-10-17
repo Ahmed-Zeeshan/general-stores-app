@@ -10,6 +10,7 @@ import { moveStock, postLedger } from "@/lib/services";
 import { addDevices, checkNewUnits, type DeviceUnit } from "@/lib/devices";
 import { DEVICE_CONDITIONS, PTA_STATUS } from "@/lib/constants";
 import { nextNumber, Party, Product, Purchase } from "@/models";
+import { recordPriceChanges } from "@/lib/price-history";
 
 export const GET = handle(async (req) => {
   const ctx = await requireBranch(["owner", "manager"]);
@@ -158,7 +159,8 @@ export const POST = handle(async (req) => {
     if (body.updatePrices) {
       const set: Record<string, number> = { costPrice: Math.round(item.cost * 100) / 100 };
       if (item.salePrice !== undefined && item.salePrice > 0) set.salePrice = item.salePrice;
-      await Product.updateOne({ _id: item.product, tenant: tid }, { $set: set });
+      const was = await Product.findOneAndUpdate({ _id: item.product, tenant: tid }, { $set: set }).select("salePrice costPrice wholesalePrice").lean();
+      await recordPriceChanges({ tid, user }, item.product, was, { ...was, ...set }, "purchase", purchaseNo);
     }
   }
   if (supplier) {
