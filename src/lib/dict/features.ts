@@ -108,4 +108,34 @@ export const DICT_FEATURES: Record<string, [string, string]> = {
     "یہ صفحہ صرف مالک یا مینیجر کے لیے ہے۔ اگر اس میں سے کچھ چاہیے تو ان سے کہیں۔",
     "Ye page sirf malik ya manager ke liye hai. Agar is mein se kuch chahiye to un se kahein.",
   ],
+
+  // ----- Bill as a picture / PDF on WhatsApp -----
+  Picture: ["تصویر", "Tasveer"],
+  "Text message": ["تحریری پیغام", "Text message"],
+  "Save picture": ["تصویر محفوظ کریں", "Tasveer save karein"],
+  "Save PDF": ["PDF محفوظ کریں", "PDF save karein"],
+  "Share on WhatsApp": ["واٹس ایپ پر بھیجیں", "WhatsApp par bhejein"],
+  "Copy picture & open WhatsApp": ["تصویر کاپی کریں اور واٹس ایپ کھولیں", "Tasveer copy karein aur WhatsApp kholein"],
+  "Save PDF & open WhatsApp": ["PDF محفوظ کریں اور واٹس ایپ کھولیں", "PDF save karein aur WhatsApp kholein"],
+  "Bill picture": ["بل کی تصویر", "Bill ki tasveer"],
+  "Tap “Share on WhatsApp”, choose WhatsApp, then the customer{phone}.": [
+    "“واٹس ایپ پر بھیجیں” دبائیں، واٹس ایپ چنیں، پھر گاہک{phone}۔",
+    "“WhatsApp par bhejein” dabayein, WhatsApp chunein, phir gahak{phone}.",
+  ],
+  "The picture is copied and the customer's chat opens. Press Ctrl+V in the chat, then Send.": [
+    "تصویر کاپی ہو جائے گی اور گاہک کی چیٹ کھل جائے گی۔ چیٹ میں Ctrl+V دبائیں، پھر بھیجیں۔",
+    "Tasveer copy ho jayegi aur gahak ki chat khul jayegi. Chat mein Ctrl+V dabayein, phir Send karein.",
+  ],
+  "The PDF is saved and the customer's chat opens. Drag the PDF into the chat, then Send.": [
+    "PDF محفوظ ہو جائے گی اور گاہک کی چیٹ کھل جائے گی۔ PDF کو چیٹ میں کھینچ کر ڈالیں، پھر بھیجیں۔",
+    "PDF save ho jayegi aur gahak ki chat khul jayegi. PDF ko chat mein kheench kar daalein, phir Send karein.",
+  ],
+  "Bill picture copied. In the WhatsApp chat press Ctrl+V, then Send.": [
+    "بل کی تصویر کاپی ہو گئی۔ واٹس ایپ چیٹ میں Ctrl+V دبائیں، پھر بھیجیں۔",
+    "Bill ki tasveer copy ho gayi. WhatsApp chat mein Ctrl+V dabayein, phir Send karein.",
+  ],
+  "The bill was saved to your Downloads ({file}). Drag it into the WhatsApp chat, then Send.": [
+    "بل آپ کے Downloads میں محفوظ ہو گیا ({file})۔ اسے واٹس ایپ چیٹ میں کھینچ کر ڈالیں، پھر بھیجیں۔",
+    "Bill aap ke Downloads mein save ho gaya ({file}). Isay WhatsApp chat mein kheench kar daalein, phir Send karein.",
+  ],
 };

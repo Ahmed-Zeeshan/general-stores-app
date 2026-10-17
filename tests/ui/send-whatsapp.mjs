@@ -43,6 +43,8 @@ await dlg.locator("button:has-text('Confirm & Save Bill')").click();
 await page.waitForSelector("text=Bill saved");
 await page.click("button:has-text('Send bill on WhatsApp')");
 await page.waitForSelector("text=Send the bill on WhatsApp");
+// The window opens on "Picture" (tested in bill-image.mjs); this test sends the text message.
+await page.click("[role=dialog] button:has-text('Text message')");
 await page.locator('textarea[aria-label="Message"]').waitFor();
 ok((await page.inputValue('input[aria-label="Customer WhatsApp number"]')) === "0321-1234567", "customer's number filled in");
 const msg = await page.inputValue('textarea[aria-label="Message"]');
