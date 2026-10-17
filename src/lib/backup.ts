@@ -32,6 +32,7 @@ import {
   MobilePackage,
   WalletTxn,
   InstallmentPlan,
+  PriceChange,
 } from "@/models";
 
 export const BACKUP_FORMAT = "dukaan-manager-backup";
@@ -67,6 +68,7 @@ const SHOP_DATA: [string, Model<any>][] = [
   ["mobilePackages", MobilePackage],
   ["walletTxns", WalletTxn],
   ["installments", InstallmentPlan],
+  ["priceHistory", PriceChange],
 ];
 
 /** Shop settings restored from a backup. Admin limits, status and secrets are never taken from a file. */
