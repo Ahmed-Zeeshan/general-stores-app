@@ -48,6 +48,7 @@ import { LangSwitch, useLang, useT } from "@/lib/i18n";
 import { TasksBell, TasksProvider } from "@/components/tasks-bell";
 import { SearchButton, SearchHotkey } from "@/components/global-search";
 import { SwitchUserButton } from "@/components/switch-user";
+import { NoAccessContent } from "@/components/not-found-page";
 
 const SHOP: Role[] = ["owner", "manager", "cashier"];
 type ModuleKey = "phones" | "repairs" | "wallets" | "installments";
@@ -149,6 +150,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   );
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
   const isAdmin = data.user.role === "superadmin";
+  // A page this role may not use (typed into the address bar): say so instead of loading forever.
+  const page = NAV.filter((n) => n.href !== "/" && (pathname === n.href || pathname.startsWith(n.href + "/"))).sort((x, y) => y.href.length - x.href.length)[0];
+  const blocked = page && !page.roles.includes(data.user.role) ? page : null;
 
   const sidebar = (
     <div className="flex h-full flex-col">
@@ -264,7 +268,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </header>
 
           {data.user.tenantId && <OfflineSync tenantId={data.user.tenantId} offline={offline} onOnline={load} />}
-          <main className={pathname === "/pos" ? "" : "mx-auto max-w-7xl p-4 sm:p-6 lg:p-8"}>{children}</main>
+          <main className={pathname === "/pos" ? "" : "mx-auto max-w-7xl p-4 sm:p-6 lg:p-8"}>{blocked ? <NoAccessContent ownerOnly={!blocked.roles.includes("manager")} /> : children}</main>
         </div>
         <ChangePasswordModal open={pwOpen} onClose={() => setPwOpen(false)} />
         {!isAdmin && <SearchHotkey />}

@@ -97,4 +97,15 @@ export const DICT_FEATURES: Record<string, [string, string]> = {
   ],
   "Add these again from the list (by IMEI): {items}": ["یہ دوبارہ فہرست سے شامل کریں (IMEI سے): {items}", "Ye dobara list se shamil karein (IMEI se): {items}"],
   "Bill corrected": ["بل درست کیا گیا", "Bill durust kiya gaya"],
+
+  // ----- A page this role cannot use -----
+  "You can't open this page": ["آپ یہ صفحہ نہیں کھول سکتے", "Aap ye page nahi khol sakte"],
+  "This page is only for the shop owner. Ask the owner if you need something from it.": [
+    "یہ صفحہ صرف دکان کے مالک کے لیے ہے۔ اگر اس میں سے کچھ چاہیے تو مالک سے کہیں۔",
+    "Ye page sirf dukaan ke malik ke liye hai. Agar is mein se kuch chahiye to malik se kahein.",
+  ],
+  "This page is only for the owner or a manager. Ask them if you need something from it.": [
+    "یہ صفحہ صرف مالک یا مینیجر کے لیے ہے۔ اگر اس میں سے کچھ چاہیے تو ان سے کہیں۔",
+    "Ye page sirf malik ya manager ke liye hai. Agar is mein se kuch chahiye to un se kahein.",
+  ],
 };
