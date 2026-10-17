@@ -124,9 +124,9 @@ function ShiftReport({ id }: { id: string }) {
             <div className="font-bold">
               Opening count {shift.openingDifference < 0 ? `SHORT ${formatPKR(-shift.openingDifference)}` : `OVER ${formatPKR(shift.openingDifference)}`}
             </div>
+            <Hr />
           </>
         )}
-        <Hr />
         <Section title="Sales" />
         <Line l="Bills" v={String(s.bills)} />
         {s.firstBill && <Line l="Bill numbers" v={s.firstBill === s.lastBill ? s.firstBill : `${s.firstBill} – ${s.lastBill}`} />}

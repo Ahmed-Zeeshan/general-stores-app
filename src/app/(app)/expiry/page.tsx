@@ -1,5 +1,6 @@
 "use client";
 
+import { Dotted, RefLink } from "@/components/ref-link";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AlertTriangle, CalendarClock, Printer, Trash2 } from "lucide-react";
@@ -22,6 +23,8 @@ type Row = {
   daysLeft: number;
   batchNo?: string;
   refNo?: string;
+  sourceType?: string;
+  sourceId?: string;
   value: number;
 };
 type Data = { rows: Row[]; summary: Record<"expired" | "week" | "month", { count: number; value: number }> };
@@ -133,7 +136,23 @@ function ExpiryPage() {
                     {r.branchName && branch === "all" && <div className="text-xs text-slate-400">{r.branchName}</div>}
                   </Td>
                   <Td className="text-sm text-slate-500">
-                    {r.kind === "product" ? <span className="text-slate-400">{t("Single expiry date")}</span> : [r.batchNo && t("Batch {no}", { no: r.batchNo }), r.refNo].filter(Boolean).join(" · ") || "—"}
+                    {r.kind === "product" ? (
+                      <span className="text-slate-400">{t("Single expiry date")}</span>
+                    ) : r.batchNo || r.refNo ? (
+                      <Dotted
+                        parts={[
+                          r.batchNo && t("Batch {no}", { no: r.batchNo }),
+                          // The purchase (or customer return) this lot came in on.
+                          r.refNo && (
+                            <RefLink refType={r.sourceType} refId={r.sourceId}>
+                              {r.refNo}
+                            </RefLink>
+                          ),
+                        ]}
+                      />
+                    ) : (
+                      "—"
+                    )}
                   </Td>
                   <Td className="text-right font-semibold">
                     {formatQty(r.qty)} {t(UNIT_LABELS[r.unit] ?? r.unit)}

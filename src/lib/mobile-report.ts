@@ -2,7 +2,7 @@ import type { Types } from "mongoose";
 import { round2 } from "./money";
 import { OPEN } from "./repairs";
 import { withState, type PlanLean } from "./installments";
-import { InstallmentPlan, Repair, UsedPurchase, Wallet, WalletTxn } from "@/models";
+import { InstallmentPlan, Repair, SaleReturn, UsedPurchase, Wallet, WalletTxn } from "@/models";
 
 type Modules = Partial<Record<"phones" | "repairs" | "wallets" | "installments", boolean>>;
 
@@ -96,7 +96,7 @@ export async function mobileReport(tid: Types.ObjectId, branch: Types.ObjectId |
   }
 
   async function installmentFigures() {
-    const [sold, collected, active] = await Promise.all([
+    const [sold, collected, active, closed] = await Promise.all([
       InstallmentPlan.aggregate([
         { $match: { tenant: tid, ...b, createdAt: inRange } },
         { $group: { _id: null, count: { $sum: 1 }, cashPrice: { $sum: "$cashPrice" }, financed: { $sum: "$financed" }, markup: { $sum: "$markup" } } },
@@ -108,13 +108,31 @@ export async function mobileReport(tid: Types.ObjectId, branch: Types.ObjectId |
         { $group: { _id: null, total: { $sum: "$payments.amount" } } },
       ]),
       InstallmentPlan.find({ tenant: tid, ...b, status: "active" }).select("-payments").lean(),
+      // Plans closed early in the period: what was written off, given back and taken back.
+      InstallmentPlan.find({ tenant: tid, ...b, status: "cancelled", cancelledAt: inRange }).select("writtenOff payments sale planNo").lean(),
     ]);
+    const writtenOff = round2(closed.reduce((a, p) => a + (p.writtenOff ?? 0), 0));
+    const refunded = round2(closed.reduce((a, p) => a + (p.payments ?? []).filter((x) => x.kind === "refund").reduce((x, r) => x + Math.abs(r.amount), 0), 0));
+    // Goods taken back are a return of the bill (its sale is reversed in the sales figures).
+    const takenBack = closed.length
+      ? round2(
+          (await SaleReturn.find({ tenant: tid, sale: { $in: closed.map((p) => p.sale) }, reason: /^Taken back on installment plan/ }).select("total").lean()).reduce((a, r) => a + r.total, 0),
+        )
+      : 0;
     const states = (active as unknown as PlanLean[]).map((p) => withState(p, now));
     const s = sold[0] ?? { count: 0, cashPrice: 0, financed: 0, markup: 0 };
     return {
       sold: s.count,
       soldValue: round2(s.cashPrice),
       markup: round2(s.markup),
+      writtenOff,
+      refunded,
+      takenBack,
+      /**
+       * Installment income for the profit report: markup on plans sold, less balances written off and
+       * money given back on closing; goods taken back add back the bill value their return took off.
+       */
+      profit: round2(s.markup - writtenOff - refunded + takenBack),
       collected: round2(collected[0]?.total ?? 0),
       running: states.length,
       outstanding: round2(states.reduce((a, p) => a + p.balance, 0)),

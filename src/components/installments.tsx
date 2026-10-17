@@ -44,6 +44,7 @@ export type PlanRow = {
   dueToday?: boolean;
   writtenOff?: number;
   cancelReason?: string;
+  takenBack?: { ret: string; returnNo: string };
   lastReminderAt?: string;
   notes?: string;
   userName?: string;

@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Barcode, Boxes, Camera, History, ListPlus, Star, Package, Pencil, Plus, Printer, Search, SlidersHorizontal, Smartphone, Tags, Trash2, TrendingUp, Wand2 } from "lucide-react";
+import { Barcode, Boxes, Camera, History, ListOrdered, ListPlus, Star, Package, Pencil, Plus, Printer, Search, SlidersHorizontal, Smartphone, Tags, Trash2, TrendingUp, Wand2 } from "lucide-react";
 import { BarcodeSvg } from "@/components/barcode";
 import { CameraButton, CameraScanner, useBarcodeScanner } from "@/components/barcode-scanner";
 import { Badge, Button, Card, Count, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
@@ -12,6 +12,7 @@ import { useToast } from "@/components/toast";
 import { useConfirm } from "@/components/confirm";
 import { StarterItemsModal } from "@/components/starter-items";
 import { PriceHistoryModal } from "@/components/price-history";
+import { StockHistoryModal } from "@/components/stock-history";
 import { BulkPriceModal } from "@/components/bulk-prices";
 import { compressImage } from "@/lib/image";
 import { api, formatDate, UNIT_LABELS } from "@/lib/client";
@@ -89,6 +90,8 @@ function ProductsPage() {
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [adjusting, setAdjusting] = useState<Product | null>(null);
   const [historyOf, setHistoryOf] = useState<string | null>(null);
+  // Stock card of one item; ?id=<product> opens it (links from the activity log and elsewhere).
+  const [stockOf, setStockOf] = useState<string | null>(params.get("id"));
   const [bulkOpen, setBulkOpen] = useState(false);
   const [catsOpen, setCatsOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -343,6 +346,9 @@ function ProductsPage() {
                           <Button size="sm" variant="ghost" onClick={() => setHistoryOf(p._id)} aria-label="Price history" title={t("Price history")}>
                             <History className="h-4 w-4" />
                           </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setStockOf(p._id)} aria-label="Stock history" title={t("Stock history")}>
+                            <ListOrdered className="h-4 w-4" />
+                          </Button>
                           <Button size="sm" variant="ghost" onClick={() => setEditing(p)} aria-label="Edit">
                             <Pencil className="h-4 w-4" />
                           </Button>
@@ -361,6 +367,7 @@ function ProductsPage() {
       </Card>
 
       <PriceHistoryModal productId={historyOf} onClose={() => setHistoryOf(null)} />
+      <StockHistoryModal productId={stockOf} onClose={() => setStockOf(null)} />
       <BulkPriceModal
         open={bulkOpen}
         categories={categories}

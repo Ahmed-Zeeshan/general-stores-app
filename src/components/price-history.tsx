@@ -7,8 +7,9 @@ import { useToast } from "./toast";
 import { api, formatDate, UNIT_LABELS } from "@/lib/client";
 import { formatPKR } from "@/lib/money";
 import { useT } from "@/lib/i18n";
+import { RefLink } from "./ref-link";
 
-type Row = { _id: string; field: "salePrice" | "wholesalePrice" | "costPrice"; from: number | null; to: number | null; source: string; refNo?: string; userName?: string; at: string };
+type Row = { _id: string; field: "salePrice" | "wholesalePrice" | "costPrice"; from: number | null; to: number | null; source: string; refNo?: string; refId?: string; userName?: string; at: string };
 type Data = { product: { name: string; unit: string; salePrice: number; wholesalePrice?: number; costPrice?: number }; rows: Row[] };
 
 const FIELD: Record<Row["field"], string> = { salePrice: "Sale price", wholesalePrice: "Wholesale price", costPrice: "Cost price" };
@@ -77,7 +78,14 @@ export function PriceHistoryModal({ productId, onClose }: { productId: string | 
                       </Td>
                       <Td className="text-slate-600">
                         {t(SOURCE[r.source] ?? r.source)}
-                        {r.refNo ? ` · ${r.refNo}` : ""}
+                        {r.refNo && (
+                          <>
+                            {" · "}
+                            <RefLink refType={r.source === "purchase" ? "purchase" : r.source === "production" ? "production" : null} refId={r.refId}>
+                              {r.refNo}
+                            </RefLink>
+                          </>
+                        )}
                       </Td>
                       <Td className="text-slate-600">{r.userName ?? "—"}</Td>
                     </tr>

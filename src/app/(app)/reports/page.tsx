@@ -36,6 +36,8 @@ type Report = {
     paidToSuppliers: number;
     repairProfit: number;
     walletProfit: number;
+    installmentProfit?: number;
+    wastage?: number;
   };
   mobile: MobileReport | null;
   collectedByMethod: { _id: string; total: number; count: number }[];
@@ -85,7 +87,7 @@ export default function ReportsPage() {
               value={<span className={s.netProfit < 0 ? "text-rose-600" : "text-emerald-700"}>{formatPKR(s.netProfit)}</span>}
               icon={s.netProfit < 0 ? <TrendingDown className="h-5 w-5" /> : <TrendingUp className="h-5 w-5" />}
               tone={s.netProfit < 0 ? "rose" : "green"}
-              hint={s.repairProfit || s.walletProfit ? "Gross profit + repairs + Easyload/wallets − expenses" : "Gross profit − expenses"}
+              hint={s.repairProfit || s.walletProfit || s.installmentProfit ? "Gross profit + repairs + Easyload/wallets + installments − expenses" : "Gross profit − expenses"}
             />
           </div>
 
@@ -106,6 +108,8 @@ export default function ReportsPage() {
                 <PL label="= Gross profit" value={s.grossProfit} bold />
                 {data.mobile?.repairs && <PL label="+ Repairs profit" value={s.repairProfit} />}
                 {data.mobile?.wallets && <PL label="+ Easyload & wallet earnings" value={s.walletProfit} />}
+                {data.mobile?.installments && <PL label="+ Installment markup (less write-offs)" value={s.installmentProfit ?? 0} />}
+                {(s.wastage ?? 0) > 0 && <PL label="− Stock written off (wastage / expired, at cost)" value={-(s.wastage ?? 0)} />}
                 <PL label="− Expenses" value={-s.expenses} />
                 <div className="border-t border-dashed border-slate-200 pt-2.5">
                   <PL label="Net profit" value={s.netProfit} bold big />

@@ -5,8 +5,9 @@ import { withCategories } from "@/lib/categories";
 import { assertBarcodesFree } from "@/lib/barcode-server";
 import { ProductInput } from "@/lib/schemas";
 import { startBatches } from "@/lib/batches";
-import { Product, StockLevel, StockMovement } from "@/models";
+import { Product, StockLevel, StockMovement, User } from "@/models";
 import { recordPriceChanges } from "@/lib/price-history";
+import { linkMovements } from "@/lib/stock-history";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -25,7 +26,11 @@ export const GET = handle<Ctx>(async (_req, { params }) => {
   const qtyByBranch = new Map(levels.map((l) => [String(l.branch), l.qty]));
   const byBranch = ctx.branches.map((b) => ({ branch: b._id, name: b.name, qty: qtyByBranch.get(String(b._id)) ?? 0 }));
   const [withCat] = await withCategories(tid, [{ ...product, totalStock: product.stock, stock: here.get(String(product._id)) ?? 0 }]);
-  return { product: withCat, byBranch, movements };
+  // Who made each change (names, not ids).
+  const users = await User.find({ tenant: tid, _id: { $in: [...new Set(movements.map((m) => String(m.user)).filter((x) => x !== "undefined"))] } }).select("name").lean();
+  const names = new Map(users.map((u) => [String(u._id), u.name]));
+  const linked = await linkMovements(tid, movements);
+  return { product: withCat, byBranch, movements: linked.map((m) => ({ ...m, userName: m.user ? names.get(String(m.user)) : undefined })) };
 });
 
 export const PUT = handle<Ctx>(async (req, { params }) => {

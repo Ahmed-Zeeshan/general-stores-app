@@ -1,5 +1,6 @@
 "use client";
 
+import { RefLink } from "@/components/ref-link";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -192,7 +193,7 @@ function PhonesPage() {
                     <Badge color={STATUS_BADGE[d.status].color}>{STATUS_BADGE[d.status].label}</Badge>
                     {d.status === "sold" && d.sale && (
                       <div className="mt-0.5 text-xs text-slate-500">
-                        {d.sale.invoiceNo}
+                        <RefLink refType="sale" refId={d.sale.id}>{d.sale.invoiceNo}</RefLink>
                         {d.sale.customerName && ` · ${d.sale.customerName}`}
                       </div>
                     )}
@@ -307,13 +308,19 @@ function warrantyBadge(t: Tr, until?: string) {
   return <Badge color={active ? "green" : "slate"}>{active ? t("In warranty till {date}", { date: formatDate(until) }) : t("Warranty ended {date}", { date: formatDate(until) })}</Badge>;
 }
 
-function sourceText(t: Tr, d: DeviceRow) {
+function sourceText(t: Tr, d: DeviceRow): React.ReactNode {
   const s = d.source;
   if (!s) return t("Added");
   const from = s.name ? ` ${t("from {no}", { no: s.name })}` : "";
-  if (s.type === "purchase") return `${t("Bought on {ref}", { ref: String(s.refNo) })}${from}`;
-  if (s.type === "used_buy") return `${t("Bought used")}${from}${s.refNo ? ` (${s.refNo})` : ""}`;
-  if (s.type === "repossess") return `${t("Taken back")}${s.refNo ? ` (${s.refNo})` : ""}`;
+  // The purchase / used-phone slip it came from opens from here.
+  const ref = s.refNo ? (
+    <RefLink refType={s.type === "purchase" || s.type === "used_buy" ? s.type : null} refId={s.id}>
+      {s.refNo}
+    </RefLink>
+  ) : null;
+  if (s.type === "purchase") return <>{t("Bought on")} {ref}{from}</>;
+  if (s.type === "used_buy") return <>{t("Bought used")}{from}{ref && <> ({ref})</>}</>;
+  if (s.type === "repossess") return <>{t("Taken back")}{ref && <> ({ref})</>}</>;
   return t("Added to stock");
 }
 

@@ -232,6 +232,7 @@ export async function createReturn(opts: {
         refNo: returnNo,
         note: `Return ${returnNo} of bill ${sale.invoiceNo}`,
         userId: opts.user.id,
+        branch,
       });
     }
     return ret.toObject();

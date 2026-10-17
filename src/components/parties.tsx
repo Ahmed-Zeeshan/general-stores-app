@@ -9,6 +9,8 @@ import { useCan, useSession } from "./session";
 import { useConfirm } from "./confirm";
 import { CustomerTabs } from "./customer-overview";
 import { SpecialPrices } from "./special-prices";
+import { Dotted, RefLink } from "./ref-link";
+import { SupplierTabs } from "./supplier-purchases";
 import { printPaymentReceipt, ReceivePaymentModal, sendPaymentWhatsApp } from "./receive-payment";
 import { useToast } from "./toast";
 import { api, formatDate, PAYMENT_LABELS } from "@/lib/client";
@@ -19,7 +21,7 @@ import { openWhatsApp, reminderMessage, waNumber } from "@/lib/whatsapp";
 
 type PartyType = "customer" | "supplier";
 type Party = { _id: string; type: PartyType; name: string; phone?: string; address?: string; creditLimit: number; balance: number; notes?: string; updatedAt: string; priceLevel?: "retail" | "wholesale"; points?: number };
-type PointsRow = { _id: string; kind: "earn" | "redeem" | "return" | "adjust"; points: number; balanceAfter: number; refNo?: string; createdAt: string };
+type PointsRow = { _id: string; kind: "earn" | "redeem" | "return" | "adjust"; points: number; balanceAfter: number; refType?: string; refId?: string; refNo?: string; createdAt: string };
 type Entry = {
   _id: string;
   kind: string;
@@ -27,6 +29,7 @@ type Entry = {
   balanceAfter: number;
   method?: string;
   refType?: string;
+  refId?: string;
   refNo?: string;
   note?: string;
   createdAt: string;
@@ -414,14 +417,19 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
                       {e.reversed && <Badge color="red">Cancelled</Badge>}
                     </div>
                     <div className="text-xs text-slate-400">
-                      {[
-                        e.refNo,
-                        e.method && PAYMENT_LABELS[e.method],
-                        e.note && e.note !== `Bill ${e.refNo}` ? (e.refNo && e.note.startsWith(`${e.refNo} cancelled`) ? e.note.slice(e.refNo.length + 11).replace(/^ — /, "") || null : e.note) : null,
-                        e.user?.name && tr("by {name}", { name: e.user.name }),
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
+                      <Dotted
+                        parts={[
+                          // The bill / return / receipt / purchase this entry came from opens from here.
+                          e.refNo && (
+                            <RefLink refType={e.refType} refId={e.refId ?? (e.refType === "payment" ? e._id : undefined)}>
+                              {e.refNo}
+                            </RefLink>
+                          ),
+                          e.method && PAYMENT_LABELS[e.method],
+                          e.note && e.note !== `Bill ${e.refNo}` ? (e.refNo && e.note.startsWith(`${e.refNo} cancelled`) ? e.note.slice(e.refNo.length + 11).replace(/^ — /, "") || null : e.note) : null,
+                          e.user?.name && tr("by {name}", { name: e.user.name }),
+                        ]}
+                      />
                     </div>
                   </Td>
                   <Td className="text-right font-semibold text-amber-700">{e.amount > 0 ? formatPKR(e.amount) : ""}</Td>
@@ -476,7 +484,7 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
                 <tr key={p._id}>
                   <Td className="text-slate-500">{formatDate(p.createdAt, true)}</Td>
                   <Td>
-                    {tr({ earn: "Earned on bill", redeem: "Spent on bill", return: "Taken back (return)", adjust: "Adjusted" }[p.kind])} {p.refNo && <span className="text-xs text-slate-400">{p.refNo}</span>}
+                    {tr({ earn: "Earned on bill", redeem: "Spent on bill", return: "Taken back (return)", adjust: "Adjusted" }[p.kind])} {p.refNo && <span className="text-xs text-slate-400"><RefLink refType={p.refType} refId={p.refId}>{p.refNo}</RefLink></span>}
                   </Td>
                   <Td className={`text-right font-semibold ${p.points > 0 ? "text-emerald-700" : "text-rose-600"}`}>{p.points > 0 ? `+${p.points}` : p.points}</Td>
                   <Td className="text-right font-bold">{p.balanceAfter}</Td>
@@ -557,7 +565,7 @@ export function PartyDetail({ type, id }: { type: PartyType; id: string }) {
       {type === "customer" ? (
         <CustomerTabs id={party._id} khata={khataCard} points={(data.points?.length ?? 0) > 0 ? pointsCard : null} special={<SpecialPrices partyId={party._id} name={party.name} />} />
       ) : (
-        <div className="mt-6">{khataCard}</div>
+        <SupplierTabs supplierId={party._id} khata={khataCard} />
       )}
 
       <ReceivePaymentModal open={txn === "payment"} party={party} onClose={() => setTxn(null)} onSaved={load} />

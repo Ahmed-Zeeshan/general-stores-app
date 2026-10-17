@@ -17,6 +17,7 @@ export async function recordPriceChanges(
   after: Prices,
   source: Source,
   refNo?: string,
+  refId?: unknown,
 ) {
   try {
     const rows = FIELDS.filter((f) => after && after[f] !== undefined && (before ? !same(before[f], after[f]) : (after[f] ?? 0) > 0)).map((f) => ({
@@ -27,6 +28,7 @@ export async function recordPriceChanges(
       to: after![f] ?? null,
       source,
       refNo,
+      refId,
       user: ctx.user?.id,
       userName: ctx.user?.name,
     }));

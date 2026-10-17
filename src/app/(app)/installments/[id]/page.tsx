@@ -63,9 +63,9 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
           </div>
           <p className="mt-1 text-sm text-slate-500">
             {plan.customerName} · {t("bill")}{" "}
-            <Link href={`/sales?q=${plan.invoiceNo}`} className="font-semibold text-brand-700">
+            <a href={`/receipt/${plan.sale}`} target="_blank" rel="noreferrer" className="font-semibold text-brand-700 hover:underline">
               {plan.invoiceNo}
-            </Link>{" "}
+            </a>{" "}
             · {formatDate(plan.createdAt, true)}
             {plan.userName && ` ${t("by {name}", { name: plan.userName })}`}
           </p>
@@ -101,6 +101,14 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
       {plan.status === "cancelled" && (
         <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
           <b>{t("Closed.")}</b> {plan.cancelReason}
+          {plan.takenBack && (
+            <>
+              {" · "}
+              <a href={`/receipt/return/${plan.takenBack.ret}`} target="_blank" rel="noreferrer" className="font-semibold underline">
+                {t("Return slip {no}", { no: plan.takenBack.returnNo })}
+              </a>
+            </>
+          )}
           {plan.writtenOff ? ` · ${t("{amount} not collected.", { amount: formatPKR(plan.writtenOff) })}` : ""}
         </div>
       )}

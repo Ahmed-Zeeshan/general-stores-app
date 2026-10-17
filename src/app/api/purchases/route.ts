@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ApiError, dateRange, handle } from "@/lib/api";
+import { ApiError, dateRange, escapeRegex, handle, isObjectId } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
 import { reportBranchFilter, requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
@@ -17,7 +17,19 @@ export const GET = handle(async (req) => {
   const url = new URL(req.url);
   const { from, to } = dateRange(url, 30);
   const branch = reportBranchFilter(ctx, url.searchParams.get("branch"));
-  return Purchase.find({ tenant: ctx.tid, createdAt: { $gte: from, $lte: to }, ...(branch ? { branch } : {}) }).sort({ createdAt: -1 }).limit(500).lean();
+  // One supplier's purchases (supplier page), or one purchase by number (search).
+  const supplier = url.searchParams.get("supplier");
+  const q = url.searchParams.get("q")?.trim();
+  return Purchase.find({
+    tenant: ctx.tid,
+    createdAt: { $gte: from, $lte: to },
+    ...(branch ? { branch } : {}),
+    ...(supplier && isObjectId(supplier) ? { supplier } : {}),
+    ...(q ? { $or: [{ purchaseNo: new RegExp(escapeRegex(q), "i") }, { supplierInvoice: new RegExp(escapeRegex(q), "i") }] } : {}),
+  })
+    .sort({ createdAt: -1 })
+    .limit(500)
+    .lean();
 });
 
 const UnitSchema = z.object({
@@ -160,7 +172,7 @@ export const POST = handle(async (req) => {
       const set: Record<string, number> = { costPrice: Math.round(item.cost * 100) / 100 };
       if (item.salePrice !== undefined && item.salePrice > 0) set.salePrice = item.salePrice;
       const was = await Product.findOneAndUpdate({ _id: item.product, tenant: tid }, { $set: set }).select("salePrice costPrice wholesalePrice").lean();
-      await recordPriceChanges({ tid, user }, item.product, was, { ...was, ...set }, "purchase", purchaseNo);
+      await recordPriceChanges({ tid, user }, item.product, was, { ...was, ...set }, "purchase", purchaseNo, purchase._id);
     }
   }
   if (supplier) {

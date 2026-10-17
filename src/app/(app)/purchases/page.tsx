@@ -34,7 +34,9 @@ type Purchase = {
 type PReturn = {
   _id: string;
   returnNo: string;
+  purchase: string;
   purchaseNo: string;
+  supplier?: string;
   supplierName?: string;
   items: { name: string; qty: number; unit: string }[];
   total: number;
@@ -57,6 +59,18 @@ export default function PurchasesPage() {
   const [returns, setReturns] = useState<PReturn[] | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
 
+  // Opened from a link (khata, search, stock history): ?id=<purchase> shows it; ?from&to set the dates.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get("from") && p.get("to")) setRange({ from: p.get("from")!, to: p.get("to")! });
+    if (p.get("id")) setViewing(p.get("id"));
+    const ret = p.get("return");
+    if (ret)
+      api<PReturn[]>(`/api/purchase-returns?id=${ret}`)
+        .then((r) => r[0] && setViewing(r[0].purchase))
+        .catch(() => {});
+  }, []);
+
   const load = useCallback(() => {
     const qs = `from=${range.from}&to=${range.to}&branch=${branch}`;
     api<Purchase[]>(`/api/purchases?${qs}`).then(setList).catch((e) => toast.error(e.message));
@@ -67,7 +81,9 @@ export default function PurchasesPage() {
   const active = list?.filter((p) => p.status !== "void") ?? [];
   const total = active.reduce((s, p) => s + p.total, 0);
   const returnedValue = returns?.reduce((s, r) => s + r.total, 0) ?? 0;
-  const unpaid = active.filter((p) => p.supplier).reduce((s, p) => s + Math.max(0, p.total - p.amountPaid), 0);
+  // What was left on the supplier's khata at purchase time (returns taken off). Later payments are on the supplier's khata.
+  const due = (p: Purchase) => Math.max(0, p.total - (p.returnedTotal ?? 0) - p.amountPaid);
+  const unpaid = active.filter((p) => p.supplier).reduce((s, p) => s + due(p), 0);
 
   return (
     <div>
@@ -117,7 +133,7 @@ export default function PurchasesPage() {
                   <Th>Date</Th>
                   <Th>Supplier</Th>
                   <Th className="text-right">Total</Th>
-                  <Th className="text-right">Paid</Th>
+                  <Th className="text-right">Paid at purchase</Th>
                   <Th />
                 </tr>
               </thead>
@@ -132,7 +148,13 @@ export default function PurchasesPage() {
                       </div>
                     </Td>
                     <Td className="text-slate-500">{formatDate(p.createdAt, true)}</Td>
-                    <Td>{p.supplierName ?? <span className="text-slate-400">—</span>}</Td>
+                    <Td>
+                      {p.supplier ? (
+                        <Link href={`/suppliers/${p.supplier}`} className="font-medium text-slate-800 hover:text-brand-700 hover:underline">{p.supplierName}</Link>
+                      ) : (
+                        (p.supplierName ?? <span className="text-slate-400">—</span>)
+                      )}
+                    </Td>
                     <Td className="text-right">
                       <div className="font-bold">{formatPKR(p.total)}</div>
                       {(p.returnedTotal ?? 0) > 0 && <div className="text-xs text-amber-700">−{t("{n} returned", { n: formatPKR(p.returnedTotal!) })}</div>}
@@ -140,10 +162,17 @@ export default function PurchasesPage() {
                     <Td className="text-right">
                       {p.status === "void" ? (
                         <Badge color="red">Cancelled</Badge>
-                      ) : p.amountPaid >= p.total ? (
+                      ) : due(p) <= 0.004 ? (
                         <Badge color="green">Paid</Badge>
                       ) : (
-                        <Badge color="amber">{formatPKR(p.amountPaid)}</Badge>
+                        <div>
+                          <div className="font-semibold">{formatPKR(p.amountPaid)}</div>
+                          {p.supplier ? (
+                            <Link href={`/suppliers/${p.supplier}`} className="text-xs font-semibold text-amber-700 hover:underline">{t("{amount} on khata", { amount: formatPKR(due(p)) })}</Link>
+                          ) : (
+                            <div className="text-xs text-amber-700">{t("{amount} not paid", { amount: formatPKR(due(p)) })}</div>
+                          )}
+                        </div>
                       )}
                     </Td>
                     <Td className="text-right">
@@ -177,10 +206,19 @@ export default function PurchasesPage() {
                 <tr key={r._id}>
                   <Td>
                     <div className="font-semibold text-slate-800">{r.returnNo}</div>
-                    <div className="text-xs text-slate-400">{t("from {no}", { no: r.purchaseNo })}{r.userName && ` · ${r.userName}`}</div>
+                    <div className="text-xs text-slate-400">
+                      <button type="button" onClick={() => setViewing(r.purchase)} className="hover:text-brand-700 hover:underline">{t("from {no}", { no: r.purchaseNo })}</button>
+                      {r.userName && ` · ${r.userName}`}
+                    </div>
                   </Td>
                   <Td className="text-slate-500">{formatDate(r.createdAt, true)}</Td>
-                  <Td>{r.supplierName ?? <span className="text-slate-400">—</span>}</Td>
+                  <Td>
+                    {r.supplier ? (
+                      <Link href={`/suppliers/${r.supplier}`} className="font-medium text-slate-800 hover:text-brand-700 hover:underline">{r.supplierName}</Link>
+                    ) : (
+                      (r.supplierName ?? <span className="text-slate-400">—</span>)
+                    )}
+                  </Td>
                   <Td className="max-w-[260px] whitespace-normal text-slate-600">
                     {r.items.map((i) => `${i.name} ×${formatQty(i.qty)}`).join(", ")}
                     {r.reason && <div className="text-xs text-slate-400">{r.reason}</div>}

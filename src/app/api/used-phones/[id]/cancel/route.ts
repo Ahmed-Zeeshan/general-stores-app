@@ -24,7 +24,9 @@ export const POST = handle<Ctx>(async (req, { params }) => {
   if (!claimed.modifiedCount) throw new ApiError(409, "Changed by someone else just now. Please refresh.");
   await moveStock({ tid, branch: doc.branch, productId: doc.product, qty: -1, type: "void", refNo: doc.buyNo, note: `Used purchase cancelled: ${reason}`, userId: user.id, serialOk: true });
   if (doc.method === "khata" && doc.seller.party) {
-    await postLedger({ tid, partyId: doc.seller.party, kind: "reversal", amount: doc.price, refType: "used_buy", refId: doc._id, refNo: doc.buyNo, note: `Used phone purchase ${doc.buyNo} cancelled`, userId: user.id, branch: doc.branch });
+    // Undoes the khata credit of the buy (an adjustment, like the buy itself) — no money moved, so it
+    // must not count as a cancelled payment in the drawer or the reports.
+    await postLedger({ tid, partyId: doc.seller.party, kind: "adjustment", amount: doc.price, refType: "used_buy", refId: doc._id, refNo: doc.buyNo, note: `Used phone purchase ${doc.buyNo} cancelled`, userId: user.id, branch: doc.branch });
   }
   await logActivity({ tid, user, branchId }, { action: "used.cancel", summary: `${doc.buyNo} cancelled (${doc.productName}, IMEI ${doc.imei}, Rs ${doc.price}) — ${reason}`, refType: "used_buy", refId: doc._id, refNo: doc.buyNo, amount: doc.price });
   return UsedPurchase.findOne({ _id: doc._id, tenant: tid }).select("-photos").lean();

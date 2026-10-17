@@ -16,6 +16,6 @@ export const GET = handle<Ctx>(async (_req, { params }) => {
     .lean();
   return {
     product: { _id: product._id, name: product.name, unit: product.unit, salePrice: product.salePrice, wholesalePrice: product.wholesalePrice, ...(cashier ? {} : { costPrice: product.costPrice }) },
-    rows: rows.map((r) => ({ _id: r._id, field: r.field, from: r.from, to: r.to, source: r.source, refNo: r.refNo, userName: r.userName, at: r.createdAt })),
+    rows: rows.map((r) => ({ _id: r._id, field: r.field, from: r.from, to: r.to, source: r.source, refNo: r.refNo, refId: r.refId, userName: r.userName, at: r.createdAt })),
   };
 });

@@ -1,6 +1,6 @@
 import { escapeRegex } from "./api";
 import type { BranchContext } from "./branches";
-import { Device, InstallmentPlan, Party, Product, Repair, Sale, SaleReturn, Tenant, UsedPurchase, WalletTxn } from "@/models";
+import { Device, InstallmentPlan, LedgerEntry, Party, Product, Purchase, Repair, Sale, SaleReturn, Shift, Tenant, UsedPurchase, WalletTxn } from "@/models";
 
 export type SearchHit = { type: string; id: string; title: string; subtitle?: string; href: string };
 export type SearchGroup = { type: string; label: string; hits: SearchHit[] };
@@ -30,7 +30,7 @@ export async function searchAll(ctx: BranchContext, raw: string): Promise<Search
   const words = q.split(/\s+/).map((w) => new RegExp(escapeRegex(w), "i"));
   const exactNo = new RegExp(`^${escapeRegex(q)}`, "i");
 
-  const [parties, products, sales, returns, devices, repairs, plans, used, wtx] = await Promise.all([
+  const [parties, products, sales, returns, devices, repairs, plans, used, wtx, purchases, receipts, shifts] = await Promise.all([
     Party.find({ tenant: tid, active: { $ne: false }, ...(manage ? {} : { type: "customer" }), $or: [{ name: rx }, ...(num ? [{ phone: num }] : [])] })
       .select("type name phone balance")
       .sort({ name: 1 })
@@ -70,6 +70,10 @@ export async function searchAll(ctx: BranchContext, raw: string): Promise<Search
           .lean()
       : [],
     m.wallets ? WalletTxn.find({ tenant: tid, $or: [{ txnNo: exactNo }, ...(num ? [{ customerNumber: num }] : []), ...(q.length >= 4 ? [{ ref: exactNo }] : [])] }).select("txnNo type amount customerNumber walletName createdAt").sort({ createdAt: -1 }).limit(PER).lean() : [],
+    // Purchases (by number or the supplier's invoice no.), khata receipts / vouchers and drawer sessions, by number.
+    manage ? Purchase.find({ tenant: tid, $or: [{ purchaseNo: exactNo }, ...(q.length >= 3 ? [{ supplierInvoice: exactNo }] : [])] }).select("purchaseNo supplierName total createdAt status").sort({ createdAt: -1 }).limit(PER).lean() : [],
+    q.length >= 3 ? LedgerEntry.find({ tenant: tid, refType: "payment", refNo: exactNo }).select("refNo amount createdAt").sort({ createdAt: -1 }).limit(PER).lean() : [],
+    manage && q.length >= 3 ? Shift.find({ tenant: tid, shiftNo: exactNo }).select("shiftNo branchName openedAt status").sort({ openedAt: -1 }).limit(3).lean() : [],
   ]);
 
   const groups: SearchGroup[] = [];
@@ -103,6 +107,21 @@ export async function searchAll(ctx: BranchContext, raw: string): Promise<Search
       ...sales.map((s) => ({ type: "sale", id: String(s._id), title: s.invoiceNo, subtitle: [s.customerName ?? "Walk-in", money(s.total), day(s.createdAt), s.status !== "completed" ? s.status.replace("_", " ") : ""].filter(Boolean).join(" · "), href: `/sales?q=${s.invoiceNo}&from=${day(s.createdAt)}&to=${day(s.createdAt)}` })),
       ...returns.map((r) => ({ type: "return", id: String(r._id), title: r.returnNo, subtitle: `Return of ${r.invoiceNo} · ${money(r.total)} · ${day(r.createdAt)}`, href: `/receipt/return/${r._id}` })),
     ],
+  );
+  push(
+    "purchase",
+    "Purchases",
+    purchases.map((p) => ({ type: "purchase", id: String(p._id), title: p.purchaseNo, subtitle: [p.supplierName, money(p.total), day(p.createdAt), p.status === "void" ? "cancelled" : ""].filter(Boolean).join(" · "), href: `/purchases?id=${p._id}` })),
+  );
+  push(
+    "receipt",
+    "Payment receipts",
+    receipts.map((r) => ({ type: "receipt", id: String(r._id), title: r.refNo ?? "", subtitle: `${money(Math.abs(r.amount))} · ${day(r.createdAt)}`, href: `/receipt/payment/${r._id}` })),
+  );
+  push(
+    "shift",
+    "Cash drawer",
+    shifts.map((x) => ({ type: "shift", id: String(x._id), title: x.shiftNo, subtitle: [x.branchName, day(x.openedAt), x.status === "open" ? "open now" : "closed"].filter(Boolean).join(" · "), href: `/receipt/shift/${x._id}` })),
   );
   push(
     "repair",

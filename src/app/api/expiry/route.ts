@@ -45,6 +45,8 @@ export const GET = handle(async (req) => {
         daysLeft: daysLeft(b.expiryDate!),
         batchNo: b.batchNo,
         refNo: b.refNo,
+        sourceType: b.sourceType,
+        sourceId: b.sourceId ? String(b.sourceId) : undefined,
         value: round2(b.qty * cost),
       };
     }),

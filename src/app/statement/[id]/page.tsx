@@ -1,5 +1,6 @@
 "use client";
 
+import { RefLink } from "@/components/ref-link";
 import { use, useCallback, useEffect, useState } from "react";
 import { MessageCircle, Printer } from "lucide-react";
 import { api, formatDate, todayISO } from "@/lib/client";
@@ -7,7 +8,7 @@ import { formatPKR } from "@/lib/money";
 import { openWhatsApp, statementMessage, waNumber } from "@/lib/whatsapp";
 import { WaModePicker } from "@/components/wa-mode";
 
-type Row = { _id: string; date: string; kind: string; refNo?: string; note?: string; method?: string; amount: number; balance: number };
+type Row = { _id: string; date: string; kind: string; refType?: string; refId?: string; refNo?: string; note?: string; method?: string; amount: number; balance: number };
 type Statement = {
   party: { _id: string; name: string; phone?: string; address?: string; type: "customer" | "supplier" };
   from: string;
@@ -74,7 +75,14 @@ export default function StatementPage({ params }: { params: Promise<{ id: string
   const details = (r: Row) => (
     <>
       {KIND[r.kind] ?? r.kind}
-      {r.refNo && <span className="text-slate-500"> · {r.refNo}</span>}
+      {r.refNo && (
+        <span className="text-slate-500">
+          {" · "}
+          <RefLink refType={r.refType} refId={r.refId ?? (r.refType === "payment" ? r._id : undefined)} className="hover:underline print:no-underline">
+            {r.refNo}
+          </RefLink>
+        </span>
+      )}
       {r.note && !(r.refNo && r.note.includes(r.refNo)) && <span className="text-slate-500"> · {r.note}</span>}
     </>
   );

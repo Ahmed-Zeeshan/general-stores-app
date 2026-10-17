@@ -3,7 +3,7 @@ import { reportBranchFilter, requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
 import { khataPaymentsPipeline, PAYMENTS_EXPR } from "@/lib/report-agg";
 import { mobileReport } from "@/lib/mobile-report";
-import { Expense, LedgerEntry, Purchase, PurchaseReturn, Sale, SaleReturn, Tenant } from "@/models";
+import { Expense, LedgerEntry, Purchase, PurchaseReturn, Sale, SaleReturn, StockMovement, Tenant } from "@/models";
 
 /**
  * Profit & loss for a period. Bills count on their own date; returns are subtracted on the date
@@ -138,6 +138,14 @@ export const GET = handle(async (req) => {
   const mobile = Object.values(modules).some(Boolean) ? await mobileReport(tid, branch ?? null, from, to, modules) : null;
   const repairProfit = mobile?.repairs?.profit ?? 0;
   const walletProfit = mobile?.wallets?.profit ?? 0;
+  const installmentProfit = mobile?.installments?.profit ?? 0;
+  // Stock thrown away (wastage / expired) is a loss, at the item's cost price.
+  const lost = await StockMovement.aggregate([
+    { $match: { ...match, type: "wastage" } },
+    { $lookup: { from: "products", localField: "product", foreignField: "_id", as: "p", pipeline: [{ $project: { costPrice: 1 } }] } },
+    { $group: { _id: null, value: { $sum: { $multiply: [{ $abs: "$qty" }, { $ifNull: [{ $first: "$p.costPrice" }, 0] }] } } } },
+  ]);
+  const wastage = round2(lost[0]?.value ?? 0);
 
   const days = new Map<string, { date: string; total: number; profit: number; bills: number }>();
   for (const d of byDay) days.set(d._id, { date: d._id, total: d.total, profit: d.profit, bills: d.bills });
@@ -174,7 +182,9 @@ export const GET = handle(async (req) => {
       expenses: expenseTotal,
       repairProfit,
       walletProfit,
-      netProfit: round2(grossProfit + repairProfit + walletProfit - expenseTotal),
+      installmentProfit,
+      wastage,
+      netProfit: round2(grossProfit + repairProfit + walletProfit + installmentProfit - wastage - expenseTotal),
       credit: round2(s.credit - r.credit),
       avgBill: s.bills ? round2(s.total / s.bills) : 0,
       purchases: round2((purchases[0]?.total ?? 0) - (purchaseReturns[0]?.total ?? 0)),

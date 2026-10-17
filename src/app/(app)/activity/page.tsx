@@ -1,5 +1,7 @@
 "use client";
 
+import { RefLink } from "@/components/ref-link";
+import { refLink } from "@/lib/links";
 import { useCallback, useEffect, useState } from "react";
 import { Download, History, Search } from "lucide-react";
 import { Badge, Button, Card, EmptyState, Input, PageHeader, Select, Spinner, Table, Td, Th } from "@/components/ui";
@@ -11,7 +13,7 @@ import { ACTION_LABELS, GROUP_LABELS, WARNING_ACTIONS } from "@/lib/activity-gro
 import { toCsv } from "@/lib/csv";
 import { useT } from "@/lib/i18n";
 
-type Row = { _id: string; createdAt: string; userName?: string; role?: string; branchName?: string; action: string; summary: string; refNo?: string; amount?: number; ip?: string };
+type Row = { _id: string; createdAt: string; userName?: string; role?: string; branchName?: string; action: string; summary: string; refType?: string; refId?: string; refNo?: string; amount?: number; ip?: string };
 type Data = { rows: Row[]; users: { _id: string; name: string; role: string }[]; truncated: boolean };
 
 const ROLE: Record<string, string> = { owner: "Owner", manager: "Manager", cashier: "Cashier", superadmin: "Admin" };
@@ -109,7 +111,17 @@ export default function ActivityPage() {
                   <Td>
                     <Badge color={warn(r) ? "red" : r.action.startsWith("login") ? "slate" : "blue"}>{tr(ACTION_LABELS[r.action] ?? r.action)}</Badge>
                   </Td>
-                  <Td className="max-w-[520px] whitespace-normal text-sm text-slate-700">{r.summary}</Td>
+                  <Td className="max-w-[520px] whitespace-normal text-sm text-slate-700">
+                    {r.summary}
+                    {/* Open the bill, return, receipt, purchase… this entry is about. */}
+                    {refLink(r.refType, r.refId) && (
+                      <div className="mt-0.5">
+                        <RefLink refType={r.refType} refId={r.refId} className="text-xs font-semibold text-brand-700 hover:underline">
+                          {tr("Open {no}", { no: r.refNo ?? tr("record") })} →
+                        </RefLink>
+                      </div>
+                    )}
+                  </Td>
                   <Td className="text-right text-sm font-semibold">{r.amount ? formatPKR(r.amount) : ""}</Td>
                 </tr>
               ))}

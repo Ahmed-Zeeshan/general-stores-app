@@ -57,6 +57,8 @@ const InstallmentPlanSchema = new Schema(
     completedAt: { type: Date },
     cancelledAt: { type: Date },
     cancelReason: { type: String, trim: true },
+    /** Goods taken back on closing: the return made for them. */
+    takenBack: { type: { _id: false, ret: { type: Schema.Types.ObjectId, ref: "SaleReturn" }, returnNo: String }, default: undefined },
     /** Left unpaid when the plan was closed (goods taken back / written off). */
     writtenOff: { type: Number, default: 0 },
     lastReminderAt: { type: Date },

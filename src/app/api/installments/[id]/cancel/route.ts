@@ -28,13 +28,15 @@ export const POST = handle<Ctx>(async (req, { params }) => {
   const totalIn = round2(p.paid + p.advance);
   if (body.refund > totalIn + 0.004) throw new ApiError(400, `The customer paid Rs ${totalIn} in all; the refund cannot be more.`);
   let returnNo: string | undefined;
+  let returnId: unknown;
   if (body.takeBack) {
     const ret = await createReturn({ tid, saleId: String(p.sale), user: { id: user.id, name: user.name }, fallbackBranch: branchId, reason: body.reason, installmentPlan: p.planNo });
     returnNo = ret.returnNo;
+    returnId = ret._id;
   }
   const balance = round2(Math.max(0, p.financed - p.paid));
   const saved = await savePlan(tid, p, {
-    $set: { status: "cancelled", cancelledAt: new Date(), cancelReason: `${body.reason}${returnNo ? ` (goods back: ${returnNo})` : ""}`, writtenOff: balance },
+    $set: { status: "cancelled", cancelledAt: new Date(), cancelReason: `${body.reason}${returnNo ? ` (goods back: ${returnNo})` : ""}`, writtenOff: balance, ...(returnNo ? { takenBack: { ret: returnId, returnNo } } : {}) },
     ...(body.refund > 0 ? { $push: { payments: { kind: "refund", amount: -round2(body.refund), method: body.method, note: "Given back on closing", at: new Date(), userName: user.name } } } : {}),
   });
   await logActivity(

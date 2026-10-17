@@ -116,7 +116,7 @@ export async function statement(tid: Types.ObjectId, partyId: string, from: Date
   let running = opening;
   const rows = entries.map((e) => {
     running = round2(running + e.amount);
-    return { _id: e._id, date: e.createdAt, kind: e.kind, refNo: e.refNo, note: e.note, method: e.method, amount: e.amount, balance: running };
+    return { _id: e._id, date: e.createdAt, kind: e.kind, refType: e.refType, refId: e.refId, refNo: e.refNo, note: e.note, method: e.method, amount: e.amount, balance: running };
   });
   const charges = round2(entries.filter((e) => e.amount > 0).reduce((s, e) => s + e.amount, 0));
   const payments = round2(-entries.filter((e) => e.amount < 0).reduce((s, e) => s + e.amount, 0));

@@ -340,6 +340,7 @@ export async function createSale(ctx: BranchContext, body: SaleInput, opts: { in
       refNo: invoiceNo,
       note: `Bill ${invoiceNo}`,
       userId: user.id,
+      branch: branch._id,
     });
   }
   if (crossed.length) {
