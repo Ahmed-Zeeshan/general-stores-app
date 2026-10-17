@@ -6,7 +6,7 @@ import { syncSaleToFbr } from "./fbr";
 import { round2 } from "./money";
 import { recordPoints } from "./loyalty";
 import { findPack, sellPrice, specialPrices } from "./pricing";
-import { openShift } from "./shifts";
+import { drawerFor, drawerLink, noteLateEntry } from "./shifts";
 import { DRAWER_CLOSED } from "./drawer-rule";
 import { applyPromotions, pointsEarned, type PromoLike, type PromoLine } from "./promotions";
 import { optionalId } from "./schemas";
@@ -84,7 +84,9 @@ export async function createSale(ctx: BranchContext, body: SaleInput, opts: { in
   const settings = await Tenant.findById(tid).lean();
   // The owner can allow bills only while this branch's cash drawer is open. Bills made offline are
   // always accepted when they arrive, so nothing sold is lost.
-  if (settings?.requireOpenDrawer && !offline && !(await openShift(tid, branch._id))) throw new ApiError(409, DRAWER_CLOSED);
+  // The drawer session this bill belongs to (an offline bill: the one open when it was made).
+  const drawer = await drawerFor(tid, branch._id, offline ? soldAt : undefined);
+  if (settings?.requireOpenDrawer && !offline && !drawer) throw new ApiError(409, DRAWER_CLOSED);
 
   const products = await Product.find({ tenant: tid, _id: { $in: body.items.map((i) => i.productId) } }).lean();
   const byId = new Map(products.map((p) => [String(p._id), p]));
@@ -284,6 +286,7 @@ export async function createSale(ctx: BranchContext, body: SaleInput, opts: { in
       branchName: branch.name,
       clientId: body.clientId,
       offline,
+      ...drawerLink(drawer),
       ...(soldAt ? { createdAt: soldAt } : {}),
       items,
       subtotal,
@@ -366,6 +369,8 @@ export async function createSale(ctx: BranchContext, body: SaleInput, opts: { in
       },
     );
   }
+  // Made offline while a drawer was open that has been closed since: its Z report shows this bill.
+  await noteLateEntry(tid, drawer, { kind: "sale", ref: sale._id, no: invoiceNo, at: soldAt ?? new Date(), total, cash: payments.filter((p) => p.method === "cash").reduce((a, p) => a + p.amount, 0) });
   if (settings?.fbrEnabled) await syncSaleToFbr(tid, sale._id);
   if (correctionOf) {
     await Sale.updateOne({ _id: correctionOf.sale, tenant: tid }, { $set: { correctedBy: { sale: sale._id, invoiceNo, at: new Date(), userName: user.name } } });

@@ -14,6 +14,7 @@ type Ret = {
   customerName?: string;
   branchName?: string;
   userName?: string;
+  shiftNo?: string;
   items: { name: string; unit: string; qty: number; total: number; serials?: { imei: string }[] }[];
   subtotal: number;
   discount: number;
@@ -91,7 +92,7 @@ function ReturnReceipt({ id }: { id: string }) {
         <div>Against bill: {ret.invoiceNo}</div>
         <div>{formatDate(ret.createdAt, true)}</div>
         {ret.customerName && <div>Customer: {ret.customerName}</div>}
-        {ret.userName && <div>By: {ret.userName}</div>}
+        {ret.userName && <div>By: {ret.userName}{ret.shiftNo ? ` · Drawer ${ret.shiftNo}` : ""}</div>}
         {ret.reason && <div>Reason: {ret.reason}</div>}
         <div className="my-2 border-t border-dashed border-black" />
         {ret.items.map((i, idx) => (

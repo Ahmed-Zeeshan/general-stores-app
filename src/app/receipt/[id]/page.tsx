@@ -46,6 +46,7 @@ type Sale = {
   fbrInvoiceNumber?: string;
   fbrReturnInvoiceNumber?: string;
   branchName?: string;
+  shiftNo?: string;
 };
 type Settings = { shopName: string; phone?: string; address?: string; ntn?: string; strn?: string; receiptFooter?: string };
 
@@ -104,6 +105,8 @@ function Receipt({ id }: { id: string }) {
   if (error) return <p className="p-10 text-center text-rose-600">{error}</p>;
   if (!sale || !settings) return <p className="p-10 text-center text-slate-500">Loading…</p>;
   const copies = search.get("copies") === "2" ? 2 : 1;
+  // The first print, straight after the bill is saved; any later print is a copy.
+  const original = search.get("original") === "1";
   const body = (
     <>
         <div className="text-center">
@@ -130,7 +133,7 @@ function Receipt({ id }: { id: string }) {
         <div className="flex justify-between"><span>Bill: {sale.invoiceNo}</span></div>
         <div>{formatDate(sale.createdAt, true)}</div>
         {sale.customerName && <div>Customer: {sale.customerName}</div>}
-        {sale.cashierName && <div>Cashier: {sale.cashierName}</div>}
+        {sale.cashierName && <div>Cashier: {sale.cashierName}{sale.shiftNo ? ` · Drawer ${sale.shiftNo}` : ""}</div>}
         <Divider />
         <div className="flex font-bold">
           <span className="flex-1">Item</span>
@@ -248,6 +251,8 @@ function Receipt({ id }: { id: string }) {
           className={`mx-auto bg-white p-4 font-mono text-[12px] leading-snug text-black shadow-lg print:w-full print:p-0 print:shadow-none ${narrow ? "w-[220px] text-[11px]" : "w-[300px]"} ${n > 0 ? "mt-6 print:mt-0 print:break-before-page" : ""}`}
         >
           {n > 0 && <div className="mb-1 text-center font-bold">*** SHOP COPY ***</div>}
+          {/* A receipt printed again later is marked as a copy (on paper only). */}
+          {n === 0 && !original && <div className="mb-1 hidden text-center font-bold print:block">*** COPY — REPRINT ***</div>}
           {body}
           {n > 0 && sale.creditAmount > 0 && (
             <div className="mt-8 border-t border-black pt-1 text-center text-[11px]">
@@ -268,7 +273,7 @@ function Line({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex justify-between">
       <span>{label}</span>
-      <span>{formatPKR(value)}</span>
+      <span>{value < 0 ? `−${formatPKR(-value)}` : formatPKR(value)}</span>
     </div>
   );
 }

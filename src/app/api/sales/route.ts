@@ -1,4 +1,4 @@
-import { dateRange, escapeRegex, handle } from "@/lib/api";
+import { dateRange, escapeRegex, handle, isObjectId } from "@/lib/api";
 import { reportBranchFilter, requireBranch } from "@/lib/branches";
 import { createSale, SaleBody } from "@/lib/sales";
 import { Sale } from "@/models";
@@ -20,6 +20,13 @@ export const GET = handle(async (req) => {
     const byMethod = method === "credit" ? { creditAmount: { $gt: 0 } } : { $or: [{ paymentMethod: method }, { "payments.method": method }] };
     query.$and = [...((query.$and as unknown[]) ?? []), byMethod];
   }
+  // One cash drawer session's bills (from the Cash Drawer page).
+  const shift = url.searchParams.get("shift");
+  if (shift && isObjectId(shift)) query.shift = shift;
+  const status = url.searchParams.get("status");
+  if (status === "returned" || status === "partially_returned") query.status = status;
+  else if (status === "udhaar") query.creditAmount = { $gt: 0 };
+  else if (status === "corrected") query["correctedBy.invoiceNo"] = { $exists: true };
   const fbr = url.searchParams.get("fbr");
   if (fbr) query.fbrStatus = fbr;
   // Cashiers do not get the shop's cost prices.

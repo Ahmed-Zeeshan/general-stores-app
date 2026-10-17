@@ -3,6 +3,7 @@ import { ApiError, handle } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
 import { requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
+import { VARIANCE_NEEDS_REASON } from "@/lib/drawer-rule";
 import { shiftSummary } from "@/lib/shifts";
 import { Shift } from "@/models";
 
@@ -16,11 +17,14 @@ const Body = z.object({
     .max(20)
     .optional(),
   note: z.string().trim().max(300).optional(),
+  /** Cash left in the drawer for the next day (the float); the rest is taken out now. Omitted = all of it stays. */
+  floatLeft: z.coerce.number().min(0).max(100_000_000).optional(),
 });
 
 /** Day close: saves the counted cash, the expected cash and the Z report. Cannot be changed afterwards. */
 export const POST = handle<Ctx>(async (req, { params }) => {
   const { user, tid, branchId } = await requireBranch();
+  const cashier = user.role === "cashier";
   const { id } = await params;
   const body = Body.parse(await req.json());
   const shift = await Shift.findOne({ _id: id, tenant: tid, branch: branchId }).lean();
@@ -33,8 +37,21 @@ export const POST = handle<Ctx>(async (req, { params }) => {
   const countedCash = fromNotes ?? (body.countedCash !== undefined ? round2(body.countedCash) : undefined);
   if (countedCash === undefined) throw new ApiError(400, "Count the cash in the drawer and enter the amount.");
 
+  const floatLeft = body.floatLeft !== undefined ? round2(body.floatLeft) : countedCash;
+  if (floatLeft > countedCash + 0.004) throw new ApiError(400, "The cash kept in the drawer cannot be more than the cash counted.");
+
   const closedAt = new Date();
   const summary = await shiftSummary(tid, shift, closedAt);
+  const variance = round2(countedCash - summary.expectedCash);
+  if (Math.abs(variance) >= VARIANCE_NEEDS_REASON && !body.note) {
+    // Blind count: a cashier is not told the amount, only to count again or give a reason.
+    throw new ApiError(
+      400,
+      cashier
+        ? "The cash counted does not match what the drawer should have. Count it again — if your count is right, write the reason in the note and close."
+        : `The count is ${variance < 0 ? `Rs ${-variance} SHORT` : `Rs ${variance} OVER`}. Count it again — if your count is right, write the reason in the note and close.`,
+    );
+  }
   const closed = await Shift.findOneAndUpdate(
     { _id: shift._id, tenant: tid, status: "open" },
     {
@@ -48,6 +65,8 @@ export const POST = handle<Ctx>(async (req, { params }) => {
         expectedCash: summary.expectedCash,
         difference: round2(countedCash - summary.expectedCash),
         closeNote: body.note,
+        floatLeft,
+        removedAtClose: round2(countedCash - floatLeft),
         summary,
       },
     },

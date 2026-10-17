@@ -153,8 +153,61 @@ export const DICT_FEATURES: Record<string, [string, string]> = {
   ],
   "Cash in the drawer now (Rs)": ["دراز میں ابھی رقم (روپے)", "Daraz mein abhi raqam (Rs)"],
   "Open drawer & continue": ["دراز کھولیں اور آگے بڑھیں", "Daraz kholein aur aage barhein"],
-  "The cash drawer is not open. Open the drawer first (count the opening cash), then make the bill.": [
-    "کیش دراز کھلا نہیں ہے۔ پہلے دراز کھولیں (شروع کی رقم گنیں)، پھر بل بنائیں۔",
-    "Cash daraz khula nahi hai. Pehle daraz kholein (shuru ki raqam ginein), phir bill banayein.",
+  "The cash drawer is not open. Open the drawer first (count the cash in it), then try again.": [
+    "کیش دراز کھلا نہیں ہے۔ پہلے دراز کھولیں (اس میں موجود رقم گنیں)، پھر دوبارہ کوشش کریں۔",
+    "Cash daraz khula nahi hai. Pehle daraz kholein (us mein mojood raqam ginein), phir dobara koshish karein.",
   ],
+
+  // ----- Cash drawer ↔ bills -----
+  "Bills in this drawer": ["اس دراز کے بل", "Is daraz ke bill"],
+  "This drawer has been open since {date} — the day was not closed. Count the cash and close it, then open today's drawer.": [
+    "یہ دراز {date} سے کھلا ہے — وہ دن بند نہیں ہوا۔ رقم گن کر اسے بند کریں، پھر آج کا دراز کھولیں۔",
+    "Ye daraz {date} se khula hai — woh din band nahi hua. Raqam gin kar isay band karein, phir aaj ka daraz kholein.",
+  ],
+  "{n} bills today were made while the drawer was closed": ["آج {n} بل دراز بند ہونے پر بنے", "Aaj {n} bill daraz band hone par bane"],
+  "{amount} cash": ["{amount} نقد", "{amount} naqd"],
+  "Their cash is not in any drawer count.": ["ان کی نقد رقم کسی دراز کی گنتی میں شامل نہیں۔", "Un ki naqd raqam kisi daraz ki ginti mein shamil nahi."],
+  "To stop this, switch on “Make bills only when the cash drawer is open” in Settings.": [
+    "اسے روکنے کے لیے ترتیبات میں “بل صرف تب بنیں جب کیش دراز کھلا ہو” آن کریں۔",
+    "Isay rokne ke liye Settings mein “Bill sirf tab banein jab cash daraz khula ho” on karein.",
+  ],
+  "{n} offline bills arrived later": ["{n} آف لائن بل بعد میں پہنچے", "{n} offline bill baad mein pohanche"],
+  "Kept in drawer for next day": ["اگلے دن کے لیے دراز میں رکھی", "Agle din ke liye daraz mein rakhi"],
+  "Taken out (bank / owner)": ["نکالی گئی (بینک / مالک)", "Nikali gayi (bank / malik)"],
+  "{shift} left {amount} in the drawer": ["{shift} نے دراز میں {amount} چھوڑے", "{shift} ne daraz mein {amount} chhore"],
+  "The cash kept in the drawer cannot be more than the cash counted.": ["دراز میں رکھی رقم گنی ہوئی رقم سے زیادہ نہیں ہو سکتی۔", "Daraz mein rakhi raqam gini hui raqam se zyada nahi ho sakti."],
+  "{n} bills are still on hold on this computer — they are not in this day's sales.": [
+    "اس کمپیوٹر پر {n} بل ابھی رکے ہوئے ہیں — یہ آج کی فروخت میں شامل نہیں۔",
+    "Is computer par {n} bill abhi ruke hue hain — ye aaj ki farokht mein shamil nahi.",
+  ],
+  "{n} offline bills on this computer have not been sent yet — connect to the internet first.": [
+    "اس کمپیوٹر کے {n} آف لائن بل ابھی نہیں بھیجے گئے — پہلے انٹرنیٹ سے جڑیں۔",
+    "Is computer ke {n} offline bill abhi nahi bheje gaye — pehle internet se judein.",
+  ],
+  "Change float for tomorrow. The rest is taken out (bank / owner).": ["کل کے لیے کھلے پیسے۔ باقی نکال لیے جائیں (بینک / مالک)۔", "Kal ke liye khule paise. Baqi nikal liye jayein (bank / malik)."],
+  "Kept in drawer": ["دراز میں رکھی", "Daraz mein rakhi"],
+  "Taken out": ["نکالی گئی", "Nikali gayi"],
+  "Keep in drawer for next day (Rs)": ["اگلے دن کے لیے دراز میں رکھیں (روپے)", "Agle din ke liye daraz mein rakhein (Rs)"],
+  "{amount} less than the last close left in the drawer": ["پچھلی بندش کی چھوڑی رقم سے {amount} کم", "Pichhli bandish ki chhori raqam se {amount} kam"],
+  "{amount} more than the last close left in the drawer": ["پچھلی بندش کی چھوڑی رقم سے {amount} زیادہ", "Pichhli bandish ki chhori raqam se {amount} zyada"],
+  "{amount} less than the last close left in the drawer. Count again — if it is right, open anyway and the owner will see it.": [
+    "پچھلی بندش کی چھوڑی رقم سے {amount} کم۔ دوبارہ گنیں — اگر درست ہے تو کھول دیں، مالک کو نظر آ جائے گا۔",
+    "Pichhli bandish ki chhori raqam se {amount} kam. Dobara ginein — agar durust hai to khol dein, malik ko nazar aa jayega.",
+  ],
+  "{amount} more than the last close left in the drawer. Count again — if it is right, open anyway and the owner will see it.": [
+    "پچھلی بندش کی چھوڑی رقم سے {amount} زیادہ۔ دوبارہ گنیں — اگر درست ہے تو کھول دیں، مالک کو نظر آ جائے گا۔",
+    "Pichhli bandish ki chhori raqam se {amount} zyada. Dobara ginein — agar durust hai to khol dein, malik ko nazar aa jayega.",
+  ],
+  "Reason for the difference": ["فرق کی وجہ", "Farq ki wajah"],
+  "The cash counted does not match what the drawer should have. Count it again — if your count is right, write the reason in the note and close.": [
+    "گنی ہوئی رقم دراز میں ہونی چاہیے رقم سے نہیں ملتی۔ دوبارہ گنیں — اگر گنتی درست ہے تو نوٹ میں وجہ لکھ کر بند کریں۔",
+    "Gini hui raqam daraz mein honi chahiye raqam se nahi milti. Dobara ginein — agar ginti durust hai to note mein wajah likh kar band karein.",
+  ],
+  "All payments": ["تمام ادائیگیاں", "Tamam adaigiyan"],
+  "All bills": ["تمام بل", "Tamam bill"],
+  "With udhaar": ["ادھار والے", "Udhaar wale"],
+  Corrected: ["درست کیے گئے", "Durust kiye gaye"],
+  "Drawer {no}": ["دراز {no}", "Daraz {no}"],
+  "Count the cash and close that day, then open today's drawer": ["رقم گن کر وہ دن بند کریں، پھر آج کا دراز کھولیں", "Raqam gin kar woh din band karein, phir aaj ka daraz kholein"],
+  "Drawer open since {date} — close that day": ["دراز {date} سے کھلا ہے — وہ دن بند کریں", "Daraz {date} se khula hai — woh din band karein"],
 };

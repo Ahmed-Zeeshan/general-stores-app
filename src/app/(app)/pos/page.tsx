@@ -166,12 +166,18 @@ export default function PosPage() {
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [heldOpen, setHeldOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState<boolean | null>(null);
+  const [drawerSince, setDrawerSince] = useState<string | null>(null);
   const [drawerAsk, setDrawerAsk] = useState(false);
   useEffect(() => {
-    api<{ shift: unknown }>("/api/shifts/current")
-      .then((r) => setDrawerOpen(!!r.shift))
+    api<{ shift: { openedAt: string } | null }>("/api/shifts/current")
+      .then((r) => {
+        setDrawerOpen(!!r.shift);
+        setDrawerSince(r.shift?.openedAt ?? null);
+      })
       .catch(() => setDrawerOpen(null));
   }, [branch?._id]);
+  // A drawer left open since an earlier day: that day was never closed.
+  const drawerStale = !!drawerSince && new Date(drawerSince).toDateString() !== new Date().toDateString();
   const ask = useConfirm();
   // Latest "hold" action for the keyboard shortcut.
   const holdRef = useRef<() => void>(() => {});
@@ -584,6 +590,10 @@ export default function PosPage() {
               <button type="button" onClick={() => setDrawerAsk(true)} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-rose-100 px-3 py-1.5 text-xs font-semibold text-rose-800 hover:bg-rose-200">
                 <Banknote className="h-4 w-4" /> {t("Open the drawer to make bills")}
               </button>
+            ) : drawerStale && !usingSaved ? (
+              <Link href="/drawer" className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200" title={t("Count the cash and close that day, then open today's drawer")}>
+                <Banknote className="h-4 w-4" /> {t("Drawer open since {date} — close that day", { date: formatDate(drawerSince!) })}
+              </Link>
             ) : drawerOpen === false && !usingSaved && (
               <Link href="/drawer" className="hidden items-center gap-1.5 whitespace-nowrap rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200 md:inline-flex" title={t("Open the cash drawer to track cash for the day close")}>
                 <Banknote className="h-4 w-4" /> {t("Drawer not open")}
@@ -962,6 +972,7 @@ export default function PosPage() {
         onOpened={() => {
           setDrawerAsk(false);
           setDrawerOpen(true);
+          setDrawerSince(new Date().toISOString());
           if (cart.length) setPayOpen(true);
         }}
       />
@@ -1017,7 +1028,7 @@ export default function PosPage() {
           setPayOpen(false);
           // Receipt prints straight away on this computer if "print automatically" is on.
           const printed = getPrintPrefs().auto;
-          if (printed) printInFrame(receiptUrl(sale._id, { print: true, creditAmount: sale.creditAmount }));
+          if (printed) printInFrame(receiptUrl(sale._id, { print: true, original: true, creditAmount: sale.creditAmount }));
           setDone({ ...sale, printed });
           resetBill();
           loadProducts();
@@ -1172,7 +1183,7 @@ export default function PosPage() {
               </div>
             )}
             <div className="mt-6 grid grid-cols-2 gap-3">
-              <Button variant="outline" size="lg" icon={<Printer className="h-5 w-5" />} onClick={() => window.open(receiptUrl(done._id, { print: true, creditAmount: done.creditAmount }), "_blank")}>
+              <Button variant="outline" size="lg" icon={<Printer className="h-5 w-5" />} onClick={() => window.open(receiptUrl(done._id, { print: true, original: !done.printed, creditAmount: done.creditAmount }), "_blank")}>
                 {t("Print")}
               </Button>
               <Button size="lg" onClick={() => setDone(null)}>

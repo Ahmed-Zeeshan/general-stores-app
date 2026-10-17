@@ -78,6 +78,9 @@ const SaleSchema = new Schema(
     customerName: { type: String },
     cashier: { type: Schema.Types.ObjectId, ref: "User" },
     cashierName: { type: String },
+    /** The cash drawer session the bill belongs to (none if the drawer was closed). */
+    shift: { type: Schema.Types.ObjectId, ref: "Shift" },
+    shiftNo: { type: String },
     status: { type: String, enum: ["completed", "partially_returned", "returned"], default: "completed" },
     returnedAt: { type: Date },
     /** Value of all returns so far, and how much of it reduced this bill's udhaar. */
@@ -115,6 +118,7 @@ SaleSchema.index({ tenant: 1, invoiceNo: 1 }, { unique: true });
 SaleSchema.index({ tenant: 1, createdAt: -1 });
 SaleSchema.index({ tenant: 1, status: 1, createdAt: -1 });
 SaleSchema.index({ tenant: 1, fbrStatus: 1 });
+SaleSchema.index({ tenant: 1, shift: 1 });
 SaleSchema.index({ tenant: 1, branch: 1, createdAt: -1 });
 SaleSchema.index({ tenant: 1, clientId: 1 }, { unique: true, partialFilterExpression: { clientId: { $type: "string" } } });
 

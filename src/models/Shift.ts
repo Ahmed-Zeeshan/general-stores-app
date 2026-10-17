@@ -39,6 +39,28 @@ const ShiftSchema = new Schema(
     expectedCash: { type: Number },
     difference: { type: Number },
     closeNote: { type: String, trim: true },
+    /** Cash left in the drawer for the next day (the float); the rest was taken out at close. */
+    floatLeft: { type: Number },
+    removedAtClose: { type: Number },
+    /** The float the last close left; set when it differs from the cash counted at opening. */
+    expectedOpening: { type: Number },
+    openingDifference: { type: Number },
+    /** Bills / refunds made offline during this session that arrived after it was closed. */
+    late: {
+      type: [
+        {
+          _id: false,
+          kind: { type: String, enum: ["sale", "return"] },
+          ref: { type: Schema.Types.ObjectId },
+          no: String,
+          at: Date,
+          total: Number,
+          cash: Number,
+          arrivedAt: { type: Date, default: Date.now },
+        },
+      ],
+      default: undefined,
+    },
     summary: { type: Schema.Types.Mixed },
   },
   { timestamps: true },

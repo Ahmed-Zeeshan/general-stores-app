@@ -32,6 +32,11 @@ export const POST = handle(async (req) => {
   if (await Shift.exists({ tenant: tid, branch: branch._id, status: "open" })) {
     throw new ApiError(409, `The cash drawer of ${branch.name} is already open. Close it first.`);
   }
+  // The float the last close left in the drawer: the opening count should match it.
+  const last = await Shift.findOne({ tenant: tid, branch: branch._id, status: "closed" }).sort({ closedAt: -1 }).select("shiftNo floatLeft").lean();
+  const openingCash = round2(body.openingCash);
+  const expectedOpening = last?.floatLeft ?? undefined;
+  const openingDifference = expectedOpening !== undefined && Math.abs(openingCash - expectedOpening) >= 0.5 ? round2(openingCash - expectedOpening) : undefined;
   const shiftNo = await nextNumber(tid, "shift", "SFT");
   try {
     const shift = await Shift.create({
@@ -39,12 +44,17 @@ export const POST = handle(async (req) => {
       shiftNo,
       branch: branch._id,
       branchName: branch.name,
-      openingCash: round2(body.openingCash),
+      openingCash,
       openNote: body.note,
+      ...(openingDifference !== undefined ? { expectedOpening, openingDifference } : {}),
       openedBy: user.id,
       openedByName: user.name,
     });
-    await logActivity({ tid, user, branchId: branch._id }, { action: "drawer.open", summary: `Opened cash drawer ${shiftNo} with Rs ${round2(body.openingCash)}`, refType: "shift", refId: shift._id, refNo: shiftNo, amount: round2(body.openingCash) });
+    const mismatch =
+      openingDifference !== undefined
+        ? ` — ${last!.shiftNo} left Rs ${expectedOpening} in the drawer, so Rs ${Math.abs(openingDifference)} ${openingDifference < 0 ? "is MISSING" : "is extra"}`
+        : "";
+    await logActivity({ tid, user, branchId: branch._id }, { action: "drawer.open", summary: `Opened cash drawer ${shiftNo} with Rs ${openingCash}${mismatch}`, refType: "shift", refId: shift._id, refNo: shiftNo, amount: openingCash });
     return shift.toObject();
   } catch (err) {
     if ((err as { code?: number }).code === 11000) throw new ApiError(409, `The cash drawer of ${branch.name} is already open.`);

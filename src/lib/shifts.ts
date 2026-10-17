@@ -11,12 +11,45 @@ export function openShift(tid: Types.ObjectId, branch: Types.ObjectId) {
   return Shift.findOne({ tenant: tid, branch, status: "open" }).lean();
 }
 
+/**
+ * The drawer session a bill or refund belongs to: the one open now, or — for an entry made offline —
+ * the one that was open when it was made (possibly closed since).
+ */
+export function drawerFor(tid: Types.ObjectId, branch: Types.ObjectId, at?: Date) {
+  if (!at) return openShift(tid, branch);
+  return Shift.findOne({ tenant: tid, branch, openedAt: { $lte: at }, $or: [{ status: "open" }, { closedAt: { $gte: at } }] })
+    .sort({ openedAt: -1 })
+    .lean();
+}
+
+/** Fields that link a bill / refund to its drawer session. */
+export const drawerLink = (d: { _id: unknown; shiftNo: string } | null | undefined) => (d ? { shift: d._id, shiftNo: d.shiftNo } : {});
+
+/**
+ * An offline bill or refund that arrived after its drawer session was closed: noted on that session, so
+ * its Z report shows the cash that was counted but not expected (instead of a false "over" / "short").
+ */
+export async function noteLateEntry(
+  tid: Types.ObjectId,
+  shift: { _id: unknown; status?: string | null } | null | undefined,
+  entry: { kind: "sale" | "return"; ref: unknown; no: string; at: Date; total: number; cash: number },
+) {
+  if (!shift || shift.status !== "closed") return;
+  await Shift.updateOne({ _id: shift._id, tenant: tid }, { $push: { late: { ...entry, total: round2(entry.total), cash: round2(entry.cash), arrivedAt: new Date() } } });
+}
+
 type Money = { method: string; total: number; count: number };
 
 export type ShiftSummary = {
   from: string;
   to: string;
   bills: number;
+  /** First and last bill numbers of the session, and the average bill. */
+  firstBill?: string;
+  lastBill?: string;
+  avgBill?: number;
+  /** Bills and sales by the person who made them. */
+  byCashier?: { name: string; bills: number; total: number }[];
   sales: number;
   discount: number;
   tax: number;
@@ -56,21 +89,27 @@ const tidy = (list: { _id: string; total: number; count: number }[]): Money[] =>
 /** Everything that happened at one branch between `from` and `to`, and the cash that should be in the drawer. */
 export async function shiftSummary(
   tid: Types.ObjectId,
-  shift: { branch: Types.ObjectId; openedAt: Date; openingCash: number; movements?: { kind: string; amount: number }[] | null },
+  shift: { _id?: Types.ObjectId; branch: Types.ObjectId; openedAt: Date; openingCash: number; movements?: { kind: string; amount: number }[] | null },
   to: Date,
 ): Promise<ShiftSummary> {
   const match = { tenant: tid, branch: shift.branch, createdAt: { $gte: shift.openedAt, $lte: to } };
-  const [sales, salesByMethod, returns, refunds, collected, supplierKhata, purchases, expenses, cashBack, usedBuys, repairPays, walletAgg, instPays] = await Promise.all([
-    Sale.aggregate([{ $match: match }, { $group: { _id: null, bills: { $sum: 1 }, total: { $sum: "$total" }, discount: { $sum: "$discount" }, tax: { $sum: "$tax" } } }]),
+  // Bills and refunds carry the drawer they belong to; older ones (saved before that) go by time.
+  const linked = shift._id
+    ? { tenant: tid, $or: [{ shift: shift._id }, { shift: { $exists: false }, branch: shift.branch, createdAt: { $gte: shift.openedAt, $lte: to } }] }
+    : match;
+  const [bounds, cashiers, sales, salesByMethod, returns, refunds, collected, supplierKhata, purchases, expenses, cashBack, usedBuys, repairPays, walletAgg, instPays] = await Promise.all([
+    Sale.aggregate([{ $match: linked }, { $sort: { createdAt: 1 } }, { $group: { _id: null, first: { $first: "$invoiceNo" }, last: { $last: "$invoiceNo" } } }]),
+    Sale.aggregate([{ $match: linked }, { $group: { _id: { $ifNull: ["$cashierName", "—"] }, bills: { $sum: 1 }, total: { $sum: "$total" } } }, { $sort: { total: -1 } }]),
+    Sale.aggregate([{ $match: linked }, { $group: { _id: null, bills: { $sum: 1 }, total: { $sum: "$total" }, discount: { $sum: "$discount" }, tax: { $sum: "$tax" } } }]),
     Sale.aggregate([
-      { $match: match },
+      { $match: linked },
       { $project: { pay: PAYMENTS_EXPR } },
       { $unwind: "$pay" },
       { $group: { _id: "$pay.method", total: { $sum: "$pay.amount" }, count: { $sum: 1 } } },
       { $sort: { total: -1 } },
     ]),
-    SaleReturn.aggregate([{ $match: match }, { $group: { _id: null, total: { $sum: "$total" }, count: { $sum: 1 } } }]),
-    SaleReturn.aggregate([{ $match: { ...match, refund: { $gt: 0 } } }, { $group: { _id: "$refundMethod", total: { $sum: "$refund" }, count: { $sum: 1 } } }]),
+    SaleReturn.aggregate([{ $match: linked }, { $group: { _id: null, total: { $sum: "$total" }, count: { $sum: 1 } } }]),
+    SaleReturn.aggregate([{ $match: { ...linked, refund: { $gt: 0 } } }, { $group: { _id: "$refundMethod", total: { $sum: "$refund" }, count: { $sum: 1 } } }]),
     LedgerEntry.aggregate(khataPaymentsPipeline(match, "customer")),
     // Payments to suppliers from their khata (purchase payments are counted from the purchase itself).
     LedgerEntry.aggregate(khataPaymentsPipeline({ ...match, refType: { $in: ["payment", "reversal"] } }, "supplier")),
@@ -146,6 +185,10 @@ export async function shiftSummary(
     from: shift.openedAt.toISOString(),
     to: to.toISOString(),
     bills: s.bills,
+    firstBill: bounds[0]?.first,
+    lastBill: bounds[0]?.last,
+    avgBill: s.bills ? round2(s.total / s.bills) : 0,
+    byCashier: cashiers.map((c) => ({ name: c._id, bills: c.bills, total: round2(c.total) })),
     sales: round2(s.total),
     discount: round2(s.discount),
     tax: round2(s.tax),

@@ -50,8 +50,9 @@ export async function api<T = unknown>(
   return data as T;
 }
 
-export function todayISO(offsetDays = 0) {
-  const d = new Date();
+/** A day as YYYY-MM-DD (local time): today by default, or `base` moved by `offsetDays`. */
+export function todayISO(offsetDays = 0, base: Date = new Date()) {
+  const d = new Date(base);
   d.setDate(d.getDate() + offsetDays);
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");

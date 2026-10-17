@@ -37,7 +37,7 @@ const s = await bill(cashier);
 ok(s.invoiceNo, "drawer opened: bills work again");
 e = await bill(owner, { branchId: b2._id }, 409);
 ok(/cash drawer is not open/.test(e.error), "another branch with its drawer closed still cannot make bills");
-await cashier.call(`/api/shifts/${shift._id}/close`, { body: { denominations: [{ value: 1000, count: 2 }, { value: 100, count: 2 }] } });
+await cashier.call(`/api/shifts/${shift._id}/close`, { body: { denominations: [{ value: 1000, count: 2 }, { value: 100, count: 2 }], note: "Counted at the end of the test" } });
 await bill(cashier, {}, 409);
 ok(true, "drawer closed for the day: bills stop again");
 

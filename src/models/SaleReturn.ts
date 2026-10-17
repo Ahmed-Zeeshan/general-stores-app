@@ -46,6 +46,9 @@ const SaleReturnSchema = new Schema(
     reason: { type: String, trim: true },
     user: { type: Schema.Types.ObjectId, ref: "User" },
     userName: { type: String },
+    /** The cash drawer session the refund was paid from (none if the drawer was closed). */
+    shift: { type: Schema.Types.ObjectId, ref: "Shift" },
+    shiftNo: { type: String },
     fbrStatus: { type: String, enum: ["none", "synced", "pending"], default: "none" },
     fbrInvoiceNumber: { type: String },
     fbrError: { type: String },
@@ -59,6 +62,7 @@ SaleReturnSchema.index({ tenant: 1, returnNo: 1 }, { unique: true });
 SaleReturnSchema.index({ tenant: 1, sale: 1 });
 SaleReturnSchema.index({ tenant: 1, createdAt: -1 });
 SaleReturnSchema.index({ tenant: 1, fbrStatus: 1 });
+SaleReturnSchema.index({ tenant: 1, shift: 1 });
 
 export type SaleReturnDoc = InferSchemaType<typeof SaleReturnSchema>;
 export const SaleReturn: Model<SaleReturnDoc> = models.SaleReturn || model<SaleReturnDoc>("SaleReturn", SaleReturnSchema);

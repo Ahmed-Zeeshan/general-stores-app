@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, MessageCircle, PencilLine, Receipt, RotateCcw, Search, Undo2 } from "lucide-react";
-import { Badge, Button, Card, Count, EmptyState, Input, PageHeader, Segmented, Spinner, StatCard, Table, Td, Th } from "@/components/ui";
+import { Banknote, Eye, MessageCircle, PencilLine, Receipt, RotateCcw, Search, Undo2, X } from "lucide-react";
+import { Badge, Button, Card, Count, EmptyState, Input, PageHeader, Segmented, Select, Spinner, StatCard, Table, Td, Th } from "@/components/ui";
 import { DateRange } from "@/components/date-range";
 import { BranchFilter } from "@/components/branch-filter";
 import { ReturnModal, type ReturnableSale } from "@/components/return-modal";
@@ -64,18 +64,33 @@ export default function SalesPage() {
   const router = useRouter();
   const confirm = useConfirm();
   const [correctingId, setCorrectingId] = useState<string | null>(null);
-  // Opened from search: ?q=…&from=…&to=…
+  const [method, setMethod] = useState("");
+  const [status, setStatus] = useState("");
+  const [fbr, setFbr] = useState("");
+  // One cash drawer session (from the Cash Drawer page).
+  const [shift, setShift] = useState<{ id: string; no?: string } | null>(null);
+  // Opened from search, the drawer or the tasks bell: ?q=…&from=…&to=…&shift=…&fbr=…&status=…
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     if (p.get("q")) setQ(p.get("q")!);
     if (p.get("from") && p.get("to")) setRange({ from: p.get("from")!, to: p.get("to")! });
+    if (p.get("fbr")) setFbr(p.get("fbr")!);
+    if (p.get("status")) setStatus(p.get("status")!);
+    const sh = p.get("shift");
+    if (sh) {
+      setShift({ id: sh });
+      setBranch("all");
+      api<{ shiftNo: string }>(`/api/shifts/${sh}`)
+        .then((x) => setShift({ id: sh, no: x.shiftNo }))
+        .catch(() => {});
+    }
   }, []);
 
   const load = useCallback(() => {
-    const qs = `from=${range.from}&to=${range.to}&branch=${branch}&q=${encodeURIComponent(q)}`;
-    api<Sale[]>(`/api/sales?${qs}`).then(setSales).catch((e) => toast.error(e.message));
+    const qs = `from=${range.from}&to=${range.to}&branch=${branch}&q=${encodeURIComponent(q)}${shift ? `&shift=${shift.id}` : ""}`;
+    api<Sale[]>(`/api/sales?${qs}&method=${method}&status=${status}&fbr=${fbr}`).then(setSales).catch((e) => toast.error(e.message));
     api<Ret[]>(`/api/returns?${qs}`).then(setReturns).catch(() => setReturns([]));
-  }, [range, branch, q, toast]);
+  }, [range, branch, q, shift, method, status, fbr, toast]);
   useEffect(() => {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
@@ -136,6 +151,40 @@ export default function SalesPage() {
             />
             <DateRange from={range.from} to={range.to} onChange={setRange} />
             <BranchFilter value={branch} onChange={setBranch} />
+            {tab === "bills" && (
+              <>
+                <Select value={method} onChange={(e) => setMethod(e.target.value)} aria-label="Payment method" className="w-auto">
+                  <option value="">{t("All payments")}</option>
+                  {["cash", "card", "jazzcash", "easypaisa", "bank"].map((m) => (
+                    <option key={m} value={m}>{t(PAYMENT_LABELS[m] ?? m)}</option>
+                  ))}
+                  <option value="credit">{t("Udhaar")}</option>
+                </Select>
+                <Select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Bill status" className="w-auto">
+                  <option value="">{t("All bills")}</option>
+                  <option value="udhaar">{t("With udhaar")}</option>
+                  <option value="partially_returned">{t("Part returned")}</option>
+                  <option value="returned">{t("Returned")}</option>
+                  <option value="corrected">{t("Corrected")}</option>
+                </Select>
+              </>
+            )}
+            {shift && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-800">
+                <Banknote className="h-4 w-4" /> {t("Drawer {no}", { no: shift.no ?? "…" })}
+                <button type="button" onClick={() => setShift(null)} aria-label="Show all bills" className="rounded-full p-0.5 hover:bg-emerald-200">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </span>
+            )}
+            {fbr && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800">
+                {t(fbr === "pending" ? "FBR pending" : "FBR")}
+                <button type="button" onClick={() => setFbr("")} aria-label="Show all bills" className="rounded-full p-0.5 hover:bg-amber-200">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </span>
+            )}
           </div>
           <div className="relative xl:w-72">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -170,12 +219,28 @@ export default function SalesPage() {
                         {showBranch && s.branchName && ` · ${s.branchName}`}
                         {s.offline && ` · ${t("made offline")}`}
                       </div>
-                      {s.correctedBy && <div className="text-xs font-semibold text-amber-700">{t("Corrected → {no}", { no: s.correctedBy.invoiceNo })}</div>}
-                      {s.correctionOf && <div className="text-xs font-semibold text-sky-700">{t("Correction of {no}", { no: s.correctionOf.invoiceNo })}</div>}
+                      {s.correctedBy && (
+                        <Link href={`/receipt/${s.correctedBy.sale}`} target="_blank" className="block text-xs font-semibold text-amber-700 hover:underline">
+                          {t("Corrected → {no}", { no: s.correctedBy.invoiceNo })}
+                        </Link>
+                      )}
+                      {s.correctionOf && (
+                        <Link href={`/receipt/${s.correctionOf.sale}`} target="_blank" className="block text-xs font-semibold text-sky-700 hover:underline">
+                          {t("Correction of {no}", { no: s.correctionOf.invoiceNo })}
+                        </Link>
+                      )}
                     </Td>
                     <Td className="text-slate-500">{formatDate(s.createdAt, true)}</Td>
                     <Td>
-                      {s.customerName ?? <span className="text-slate-400">{t("Walk-in")}</span>}
+                      {s.customerName ? (
+                        s.customer ? (
+                          <Link href={`/customers/${s.customer}`} className="font-medium text-slate-800 hover:text-brand-700 hover:underline">{s.customerName}</Link>
+                        ) : (
+                          s.customerName
+                        )
+                      ) : (
+                        <span className="text-slate-400">{t("Walk-in")}</span>
+                      )}
                       {s.fbrStatus === "synced" && <div className="text-xs text-emerald-700">FBR ✓</div>}
                       {s.fbrStatus === "pending" && <div className="text-xs text-amber-700" title={s.fbrError}>{t("FBR pending")}</div>}
                     </Td>
@@ -246,7 +311,7 @@ export default function SalesPage() {
                   <Td>
                     <div className="font-semibold text-slate-800">{r.returnNo}</div>
                     <div className="text-xs text-slate-400">
-                      {t("bill {no}", { no: r.invoiceNo })}
+                      <Link href={`/receipt/${r.sale}`} target="_blank" className="hover:text-brand-700 hover:underline">{t("bill {no}", { no: r.invoiceNo })}</Link>
                       {r.userName && ` · ${r.userName}`}
                       {showBranch && r.branchName && ` · ${r.branchName}`}
                     </div>

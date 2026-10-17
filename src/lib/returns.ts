@@ -4,7 +4,9 @@ import { round2 } from "./money";
 import { reversePoints } from "./loyalty";
 import { moveStock, postLedger } from "./services";
 import { restoreDevices } from "./devices";
-import { nextNumber, Sale, SaleReturn } from "@/models";
+import { drawerFor, drawerLink, noteLateEntry } from "./shifts";
+import { DRAWER_CLOSED } from "./drawer-rule";
+import { nextNumber, Sale, SaleReturn, Tenant } from "@/models";
 
 export type ReturnLine = { index: number; qty: number; serials?: string[] };
 export type RefundMethod = "cash" | "card" | "jazzcash" | "easypaisa" | "bank" | "khata";
@@ -128,6 +130,13 @@ export async function createReturn(opts: {
     if (refundMethod === "khata" && !sale.customer) throw new ApiError(400, "Only bills with a customer can be credited to a khata.");
     if (priced.refund <= 0) refundMethod = "none";
 
+    // The refund comes out of the drawer open now at this branch (an offline return: the one open then).
+    const drawer = await drawerFor(tid, opts.fallbackBranch, opts.at);
+    if (refundMethod === "cash" && !drawer && !opts.at) {
+      const t = await Tenant.findById(tid).select("requireOpenDrawer").lean();
+      if (t?.requireOpenDrawer) throw new ApiError(409, DRAWER_CLOSED);
+    }
+
     // Claim the bill: only succeeds if nobody returned from it since we read it.
     const inc: Record<string, number> = { returnSeq: 1, returnedTotal: priced.total, creditReturned: priced.creditReduced };
     // Points earned on the returned part are taken back (the last return takes what is left).
@@ -186,8 +195,10 @@ export async function createReturn(opts: {
       user: opts.user.id,
       userName: opts.user.name,
       fbrStatus: sale.fbrInvoiceNumber || sale.fbrStatus === "pending" ? "pending" : "none",
+      ...drawerLink(drawer),
       ...(opts.at ? { createdAt: opts.at } : {}),
     });
+    await noteLateEntry(tid, drawer, { kind: "return", ref: ret._id, no: returnNo, at: opts.at ?? new Date(), total: priced.total, cash: refundMethod === "cash" ? priced.refund : 0 });
 
     for (const it of priced.items) {
       if (it.serials?.length) {

@@ -38,10 +38,11 @@ export function printInFrame(url: string) {
 }
 
 /** Receipt address for a bill with this computer's preferences (second copy for udhaar bills). */
-export function receiptUrl(saleId: string, opts: { print?: boolean; creditAmount?: number } = {}) {
+export function receiptUrl(saleId: string, opts: { print?: boolean; creditAmount?: number; original?: boolean } = {}) {
   const prefs = getPrintPrefs();
   const params = new URLSearchParams();
   if (opts.print) params.set("print", "1");
+  if (opts.original) params.set("original", "1");
   if (prefs.udhaarCopy && (opts.creditAmount ?? 0) > 0) params.set("copies", "2");
   const qs = params.toString();
   return `/receipt/${saleId}${qs ? `?${qs}` : ""}`;

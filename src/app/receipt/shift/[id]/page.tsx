@@ -9,6 +9,10 @@ import { formatPKR } from "@/lib/money";
 type Money = { method: string; total: number; count: number };
 type Summary = {
   bills: number;
+  firstBill?: string;
+  lastBill?: string;
+  avgBill?: number;
+  byCashier?: { name: string; bills: number; total: number }[];
   sales: number;
   discount: number;
   tax: number;
@@ -38,6 +42,12 @@ type Shift = {
   expectedCash?: number;
   difference?: number;
   closeNote?: string;
+  openingCash: number;
+  expectedOpening?: number;
+  openingDifference?: number;
+  floatLeft?: number;
+  removedAtClose?: number;
+  late?: { kind: "sale" | "return"; no: string; at: string; total: number; cash: number }[];
   summary: Summary | null;
 };
 type Settings = { shopName: string; phone?: string; address?: string };
@@ -108,13 +118,31 @@ function ShiftReport({ id }: { id: string }) {
           <div>Printed: {formatDate(new Date().toISOString(), true)}</div>
         )}
         <Hr />
+        {shift.openingDifference !== undefined && (
+          <>
+            <div>Last close left: {formatPKR(shift.expectedOpening ?? 0)}</div>
+            <div className="font-bold">
+              Opening count {shift.openingDifference < 0 ? `SHORT ${formatPKR(-shift.openingDifference)}` : `OVER ${formatPKR(shift.openingDifference)}`}
+            </div>
+          </>
+        )}
+        <Hr />
         <Section title="Sales" />
         <Line l="Bills" v={String(s.bills)} />
+        {s.firstBill && <Line l="Bill numbers" v={s.firstBill === s.lastBill ? s.firstBill : `${s.firstBill} – ${s.lastBill}`} />}
+        {s.bills > 0 && s.avgBill !== undefined && <Line l="Average bill" v={s.avgBill} />}
         <Line l="Sales" v={s.sales} />
         {s.discount > 0 && <Line l="Discounts given" v={s.discount} />}
         {s.returns > 0 && <Line l={`Returns (${s.returnCount})`} v={-s.returns} />}
         <Line l="Net sales" v={s.sales - s.returns} bold />
         {s.tax > 0 && <Line l="Sales tax in sales" v={s.tax} />}
+        {(s.byCashier?.length ?? 0) > 1 && (
+          <>
+            <Hr />
+            <Section title="By cashier" />
+            {s.byCashier!.map((c) => <Line key={c.name} l={`${c.name} (${c.bills})`} v={c.total} />)}
+          </>
+        )}
         <Hr />
         <Section title="Money taken for bills" />
         {s.salesByMethod.length ? s.salesByMethod.map((m) => <Line key={m.method} l={`${label(m.method)} (${m.count})`} v={m.total} />) : <div>—</div>}
@@ -173,6 +201,32 @@ function ShiftReport({ id }: { id: string }) {
               </>
             )}
             {shift.closeNote && <div className="mt-1">Note: {shift.closeNote}</div>}
+            {shift.floatLeft !== undefined && (
+              <>
+                <Hr />
+                <Section title="After the count" />
+                <Line l="Kept in drawer (float)" v={shift.floatLeft} />
+                {(shift.removedAtClose ?? 0) > 0 && <Line l="Taken out (bank / owner)" v={shift.removedAtClose!} />}
+              </>
+            )}
+            {(shift.late?.length ?? 0) > 0 && (() => {
+              // Bills made offline during this day that reached the server after the close.
+              const lateCash = shift.late!.reduce((a, x) => a + (x.kind === "sale" ? x.cash : -x.cash), 0);
+              const adjusted = (shift.difference ?? 0) - lateCash;
+              return (
+                <>
+                  <Hr />
+                  <Section title="Arrived after the close (made offline)" />
+                  {shift.late!.map((x) => (
+                    <Line key={x.no} l={`${x.no} · ${formatDate(x.at, true)}`} v={x.kind === "sale" ? x.cash : -x.cash} />
+                  ))}
+                  <Line l="Should have been in drawer" v={(shift.expectedCash ?? 0) + lateCash} bold />
+                  <div className="mt-1 text-center text-sm font-bold">
+                    {Math.abs(adjusted) < 0.5 ? "WITH THESE: CASH MATCHES ✓" : adjusted < 0 ? `WITH THESE: SHORT ${formatPKR(-adjusted)}` : `WITH THESE: OVER ${formatPKR(adjusted)}`}
+                  </div>
+                </>
+              );
+            })()}
           </>
         )}
         <Hr />
