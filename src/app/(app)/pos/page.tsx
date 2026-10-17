@@ -686,7 +686,9 @@ export default function PosPage() {
                       </span>
                     )}
                     <span className={cn("mt-2 font-bold text-brand-700", big ? "text-2xl" : "text-lg")}>
-                      {formatPKR(p.salePrice)}
+                      {/* What this customer pays (special / wholesale price), the normal price struck through beside it. */}
+                      {formatPKR(p.trackSerial ? p.salePrice : priceOf(p, null))}
+                      {!p.trackSerial && priceOf(p, null) !== p.salePrice && <span className="ml-1 text-xs font-medium text-slate-400 line-through">{formatPKR(p.salePrice)}</span>}
                       <span className="text-xs font-medium text-slate-400">/{unitLabel(p.unit, t)}</span>
                     </span>
                     <span className={cn("text-xs font-medium", p.stock <= 0 ? "text-rose-600" : "text-slate-500")}>
@@ -945,6 +947,7 @@ export default function PosPage() {
 
       <LooseQtyModal
         product={looseFor}
+        price={looseFor ? priceOf(looseFor, null) : 0}
         onClose={() => setLooseFor(null)}
         onAdd={(qty) => {
           if (looseFor) addToCart(looseFor, qty);
@@ -1197,7 +1200,8 @@ function CatChip({ active, onClick, children }: { active: boolean; onClick: () =
   );
 }
 
-function LooseQtyModal({ product, onClose, onAdd }: { product: Product | null; onClose: () => void; onAdd: (qty: number) => void }) {
+/** `price`: what this customer pays per unit (special / wholesale / normal). */
+function LooseQtyModal({ product, price, onClose, onAdd }: { product: Product | null; price: number; onClose: () => void; onAdd: (qty: number) => void }) {
   const t = useT();
   const [mode, setMode] = useState<"qty" | "amount">("qty");
   const [value, setValue] = useState("");
@@ -1208,14 +1212,14 @@ function LooseQtyModal({ product, onClose, onAdd }: { product: Product | null; o
   if (!product) return null;
   const unit = UNIT_LABELS[product.unit] ? t(UNIT_LABELS[product.unit]) : "";
   const n = Number(value) || 0;
-  const qty = mode === "qty" ? n : product.salePrice > 0 ? Math.round((n / product.salePrice) * 1000) / 1000 : 0;
+  const qty = mode === "qty" ? n : price > 0 ? Math.round((n / price) * 1000) / 1000 : 0;
   const presets = product.unit === "kg" || product.unit === "litre" ? [0.25, 0.5, 1, 2, 5] : [100, 250, 500, 1000];
   const amountPresets = [50, 100, 200, 500, 1000];
 
   return (
     <Modal open onClose={onClose} title={product.name} size="sm">
       <p className="mb-4 text-sm text-slate-500">
-        {t("Price:")} <b className="text-slate-800">{formatPKR(product.salePrice)}</b> {t("per {unit}", { unit })}
+        {t("Price:")} <b className="text-slate-800">{formatPKR(price)}</b> {t("per {unit}", { unit })}
       </p>
       <Segmented
         value={mode}
@@ -1246,7 +1250,7 @@ function LooseQtyModal({ product, onClose, onAdd }: { product: Product | null; o
           ))}
         </div>
         <div className="mt-5 rounded-xl bg-brand-50 p-3 text-center text-sm text-brand-900">
-          {formatQty(qty)} {unit} = <b>{formatPKR(round2(qty * product.salePrice))}</b>
+          {formatQty(qty)} {unit} = <b>{formatPKR(round2(qty * price))}</b>
         </div>
         <Button type="submit" size="lg" className="mt-4 w-full" disabled={qty <= 0}>
           Add to bill
