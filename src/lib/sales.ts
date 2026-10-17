@@ -239,6 +239,7 @@ export async function createSale(ctx: BranchContext, body: SaleInput, opts: { in
   // A corrected bill: the old one must have been returned in full, and corrected only once.
   let correctionOf: { sale: unknown; invoiceNo: string } | undefined;
   if (body.correctionOf) {
+    if (user.role === "cashier") throw new ApiError(403, "Only the owner or a manager can correct a bill.");
     const old = await Sale.findOne({ tenant: tid, _id: body.correctionOf }).select("invoiceNo status correctedBy").lean();
     if (!old || old.status !== "returned") throw new ApiError(400, "The bill being corrected was not found or is not returned.");
     if (old.correctedBy?.invoiceNo) throw new ApiError(400, `Bill ${old.invoiceNo} was already corrected by ${old.correctedBy.invoiceNo}.`);

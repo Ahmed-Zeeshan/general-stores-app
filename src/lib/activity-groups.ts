@@ -1,6 +1,6 @@
 /** Activity log actions grouped for filtering, with plain labels (shared by the API and the page). */
 export const ACTIVITY_GROUPS: Record<string, string[]> = {
-  sales: ["sale.price", "sale.discount", "sale.offline-limit", "sale.return", "repair.create", "repair.deliver", "repair.cancel", "repair.refund", "repair.discount", "repair.labour"],
+  sales: ["sale.price", "sale.discount", "sale.offline-limit", "sale.return", "sale.correct", "repair.create", "repair.deliver", "repair.cancel", "repair.refund", "repair.discount", "repair.labour"],
   money: ["payment.receive", "payment.supplier", "payment.cancel", "khata.charge", "khata.opening", "party.update", "party.prices", "expense.add", "expense.delete", "wallet.create", "wallet.update", "wallet.reconcile", "wallet.float_in", "wallet.float_out", "wallet.commission", "wallet.reverse", "installment.create", "installment.reverse", "installment.cancel"],
   stock: ["stock.adjust", "stock.wastage", "stock.writeoff", "stock.transfer", "product.price", "product.remove", "product.import", "purchase.create", "purchase.return", "purchase.cancel", "device.add", "device.update", "device.remove", "used.buy", "used.cancel"],
   drawer: ["drawer.open", "drawer.in", "drawer.out", "drawer.close"],
@@ -24,6 +24,7 @@ export const ACTION_LABELS: Record<string, string> = {
   "party.prices": "Customer special prices",
   "repair.labour": "Repair charges lowered",
   "sale.return": "Bill return",
+  "sale.correct": "Bill corrected",
   "repair.create": "Repair booked",
   "repair.deliver": "Repair delivered",
   "repair.cancel": "Repair returned unrepaired",

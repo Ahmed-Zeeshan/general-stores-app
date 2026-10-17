@@ -2,15 +2,18 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Eye, MessageCircle, Receipt, RotateCcw, Search, Undo2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Eye, MessageCircle, PencilLine, Receipt, RotateCcw, Search, Undo2 } from "lucide-react";
 import { Badge, Button, Card, Count, EmptyState, Input, PageHeader, Segmented, Spinner, StatCard, Table, Td, Th } from "@/components/ui";
 import { DateRange } from "@/components/date-range";
 import { BranchFilter } from "@/components/branch-filter";
 import { ReturnModal, type ReturnableSale } from "@/components/return-modal";
+import { useConfirm } from "@/components/confirm";
 import { useCan, useSession } from "@/components/session";
 import { SendBillModal } from "@/components/send-whatsapp";
 import { useToast } from "@/components/toast";
 import { api, formatDate, PAYMENT_LABELS, todayISO } from "@/lib/client";
+import { CORRECT_KEY, type CorrectionDraft } from "@/lib/correction";
 import { formatPKR } from "@/lib/money";
 import { useT } from "@/lib/i18n";
 
@@ -22,6 +25,9 @@ type Sale = ReturnableSale & {
   branchName?: string;
   offline?: boolean;
   payments?: { method: string; amount: number }[];
+  installment?: boolean;
+  correctionOf?: { sale: string; invoiceNo: string };
+  correctedBy?: { sale: string; invoiceNo: string };
 };
 type Ret = {
   _id: string;
@@ -55,6 +61,9 @@ export default function SalesPage() {
   const showBranch = branch === "all";
   const { settings } = useSession();
   const [waBill, setWaBill] = useState<string | null>(null);
+  const router = useRouter();
+  const confirm = useConfirm();
+  const [correctingId, setCorrectingId] = useState<string | null>(null);
   // Opened from search: ?q=…&from=…&to=…
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
@@ -71,6 +80,36 @@ export default function SalesPage() {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
   }, [load]);
+
+  // Correct a saved bill: return it in full, then open its lines in New Bill to fix and save again.
+  async function correct(s: Sale) {
+    const ok = await confirm({
+      title: t("Correct bill {no}?", { no: s.invoiceNo }),
+      message: t("Use this when a saved bill has a mistake (wrong item, quantity, price or customer)."),
+      points: [
+        t("Bill {no} is returned in full: stock goes back and its udhaar comes off the khata.", { no: s.invoiceNo }),
+        t("New Bill opens with the same items so you can fix them and save the corrected bill."),
+        t("Both bills stay on record, linked to each other."),
+      ],
+      tone: "warning",
+      confirmLabel: "Correct this bill",
+    });
+    if (!ok) return;
+    setCorrectingId(s._id);
+    try {
+      const draft = await api<CorrectionDraft & { refund: number; refundMethod: string }>(`/api/sales/${s._id}/correct`, { body: {} });
+      try {
+        localStorage.setItem(CORRECT_KEY, JSON.stringify(draft));
+      } catch {
+        /* ignore */
+      }
+      toast.success(t("Bill {no} returned. Fix the items and save the corrected bill.", { no: s.invoiceNo }));
+      router.push("/pos");
+    } catch (e) {
+      toast.error((e as Error).message);
+      setCorrectingId(null);
+    }
+  }
 
   const gross = sales?.reduce((a, s) => a + s.total, 0) ?? 0;
   const returned = returns?.reduce((a, r) => a + r.total, 0) ?? 0;
@@ -131,6 +170,8 @@ export default function SalesPage() {
                         {showBranch && s.branchName && ` · ${s.branchName}`}
                         {s.offline && ` · ${t("made offline")}`}
                       </div>
+                      {s.correctedBy && <div className="text-xs font-semibold text-amber-700">{t("Corrected → {no}", { no: s.correctedBy.invoiceNo })}</div>}
+                      {s.correctionOf && <div className="text-xs font-semibold text-sky-700">{t("Correction of {no}", { no: s.correctionOf.invoiceNo })}</div>}
                     </Td>
                     <Td className="text-slate-500">{formatDate(s.createdAt, true)}</Td>
                     <Td>
@@ -168,6 +209,11 @@ export default function SalesPage() {
                         {can.manage && s.status !== "returned" && (
                           <Button size="sm" variant="ghost" className="hover:text-rose-600" icon={<RotateCcw className="h-4 w-4" />} onClick={() => setReturning(s)}>
                             Return
+                          </Button>
+                        )}
+                        {can.manage && s.status !== "returned" && !s.installment && (
+                          <Button size="sm" variant="ghost" aria-label={`Correct ${s.invoiceNo}`} title={t("Correct a mistake in this bill")} loading={correctingId === s._id} icon={<PencilLine className="h-4 w-4" />} onClick={() => correct(s)}>
+                            Correct
                           </Button>
                         )}
                       </div>
