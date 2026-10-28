@@ -43,6 +43,7 @@ export default function NewPurchasePage() {
   const [supplier, setSupplier] = useState<PartyLite | null>(null);
   const [pick, setPick] = useState(false);
   const [paid, setPaid] = useState("");
+  const [payMethod, setPayMethod] = useState("cash");
   const [invoice, setInvoice] = useState("");
   const [saving, setSaving] = useState(false);
   const [imeiFor, setImeiFor] = useState<string | null>(null);
@@ -113,6 +114,7 @@ export default function NewPurchasePage() {
           supplierId: supplier?._id,
           supplierInvoice: invoice,
           amountPaid: paid === "" ? undefined : Number(paid),
+          payMethod,
           items: lines.map((l) => ({
             productId: l.product._id,
             qty: Number(l.qty),
@@ -290,9 +292,18 @@ export default function NewPurchasePage() {
               <Input value={invoice} onChange={(e) => setInvoice(e.target.value)} />
             </Field>
             {supplier && (
-              <Field label="Amount paid now" hint="Leave empty if paid in full. The rest goes to the supplier's khata.">
-                <Input type="number" inputMode="decimal" min="0" value={paid} onChange={(e) => setPaid(e.target.value)} placeholder={String(total)} />
-              </Field>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Amount paid now" hint="Leave empty if paid in full. The rest goes to the supplier's khata.">
+                  <Input type="number" inputMode="decimal" min="0" value={paid} onChange={(e) => setPaid(e.target.value)} placeholder={String(total)} />
+                </Field>
+                <Field label="Paid by" hint="Only cash is taken from the cash drawer.">
+                  <Select value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>
+                    <option value="cash">{t("Cash")}</option>
+                    <option value="bank">{t("Bank / online")}</option>
+                    <option value="other">{t("Other")}</option>
+                  </Select>
+                </Field>
+              </div>
             )}
           </div>
           <div className="mt-5 flex items-end justify-between border-t border-dashed border-slate-200 pt-4">

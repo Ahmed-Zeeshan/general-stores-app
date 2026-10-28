@@ -113,7 +113,8 @@ export async function shiftSummary(
     LedgerEntry.aggregate(khataPaymentsPipeline(match, "customer")),
     // Payments to suppliers from their khata (purchase payments are counted from the purchase itself).
     LedgerEntry.aggregate(khataPaymentsPipeline({ ...match, refType: { $in: ["payment", "reversal"] } }, "supplier")),
-    Purchase.aggregate([{ $match: { ...match, status: { $ne: "void" } } }, { $group: { _id: null, paid: { $sum: "$amountPaid" } } }]),
+    // Only cash purchases come out of the drawer; bank / other payments do not. (Old purchases have no payMethod = cash.)
+    Purchase.aggregate([{ $match: { ...match, status: { $ne: "void" }, payMethod: { $in: ["cash", null] } } }, { $group: { _id: null, paid: { $sum: "$amountPaid" } } }]),
     Expense.aggregate([{ $match: match }, { $group: { _id: { $ifNull: ["$method", "cash"] }, total: { $sum: "$amount" } } }]),
     PurchaseReturn.aggregate([{ $match: { ...match, settlement: "cash" } }, { $group: { _id: null, total: { $sum: "$total" } } }]),
     UsedPurchase.aggregate([{ $match: { ...match, status: "completed" } }, { $group: { _id: "$method", total: { $sum: "$price" }, count: { $sum: 1 } } }]),

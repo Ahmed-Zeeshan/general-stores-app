@@ -32,6 +32,8 @@ const PurchaseSchema = new Schema(
     items: { type: [PurchaseItemSchema], required: true },
     total: { type: Number, required: true },
     amountPaid: { type: Number, default: 0 },
+    /** How the paid amount was paid. Only "cash" comes out of the cash drawer. */
+    payMethod: { type: String, enum: ["cash", "bank", "other"], default: "cash" },
     note: { type: String },
     user: { type: Schema.Types.ObjectId, ref: "User" },
     /** received → partially_returned → returned; void = cancelled as if it never happened. */

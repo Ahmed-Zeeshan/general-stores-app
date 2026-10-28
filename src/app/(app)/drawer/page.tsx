@@ -141,11 +141,46 @@ export default function DrawerPage() {
             <Button className="sm:ml-auto" icon={<Lock className="h-4 w-4" />} onClick={() => setClosing(true)}>Close day</Button>
           </div>
           {current.summary && (
-            <div className="grid gap-4 border-t border-slate-100 p-4 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard label="Sales" value={formatPKR(current.summary.sales)} icon={<Banknote className="h-5 w-5" />} hint={<><Count n={current.summary.bills} one="{n} bill" many="{n} bills" />{current.summary.returns ? ` · ${tr("{amount} returned", { amount: formatPKR(current.summary.returns) })}` : ""}</>} />
-              {current.summary.cashFlow.slice(1, 4).map((x) => (
-                <StatCard key={x.label} label={x.label} value={formatPKR(x.amount)} icon={<ArrowDownCircle className="h-5 w-5" />} tone="green" />
-              ))}
+            <div className="grid gap-5 border-t border-slate-100 p-4 lg:grid-cols-5">
+              <div className="grid grid-cols-2 gap-3 lg:col-span-2 lg:grid-cols-1">
+                <StatCard
+                  label="Sales"
+                  value={formatPKR(current.summary.sales)}
+                  icon={<Banknote className="h-4 w-4" />}
+                  tone="green"
+                  hint={<><Count n={current.summary.bills} one="{n} bill" many="{n} bills" />{current.summary.returns ? ` · ${tr("{amount} returned", { amount: formatPKR(current.summary.returns) })}` : ""}</>}
+                />
+                <StatCard
+                  label="Cash sales"
+                  value={formatPKR(current.summary.cashFlow.find((x) => x.label === "Cash sales")?.amount ?? 0)}
+                  icon={<ArrowDownCircle className="h-4 w-4" />}
+                  tone="blue"
+                  hint={current.summary.sales > 0 ? tr("of {amount} total sales", { amount: formatPKR(current.summary.sales) }) : undefined}
+                />
+              </div>
+              <div className="lg:col-span-3">
+                <h3 className="mb-2 text-sm font-semibold text-slate-700">{tr("Cash flow so far")}</h3>
+                <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 text-sm">
+                  {current.summary.cashFlow
+                    .filter((x) => Math.abs(x.amount) >= 0.5)
+                    .map((x) => {
+                      const opening = x.label === "Opening cash";
+                      return (
+                        <li key={x.label} className="flex items-center justify-between gap-3 px-3.5 py-2">
+                          <span className="text-slate-600">{tr(x.label)}</span>
+                          <b className={cn("shrink-0 tabular-nums", opening ? "text-slate-800" : x.amount < 0 ? "text-rose-600" : "text-emerald-600")}>
+                            {opening ? "" : x.amount < 0 ? "− " : "+ "}
+                            {formatPKR(Math.abs(x.amount))}
+                          </b>
+                        </li>
+                      );
+                    })}
+                  <li className="flex items-center justify-between gap-3 bg-slate-50 px-3.5 py-2.5 font-bold text-slate-900">
+                    <span>{tr("Should be in drawer")}</span>
+                    <span className="shrink-0 tabular-nums">{formatPKR(current.summary.expectedCash)}</span>
+                  </li>
+                </ul>
+              </div>
             </div>
           )}
           {shift.movements.length > 0 && (
