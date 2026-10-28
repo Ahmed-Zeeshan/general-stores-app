@@ -1,0 +1,27 @@
+# Render Blueprint for Dukaan Manager (Next.js 15 + MongoDB Atlas).
+# In Render: New → Blueprint → pick this repo, or New → Web Service and let it read this file.
+# Secrets (MONGODB_URI, AUTH_SECRET, SETUP_TOKEN) are marked sync:false — set them in the
+# Render dashboard, never in the repo. See DEPLOY.md for the step-by-step.
+services:
+  - type: web
+    name: dukaan-manager
+    runtime: node
+    plan: free
+    region: singapore # closest free region to Pakistan
+    branch: main
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    healthCheckPath: /login
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20.19.0
+      - key: TZ
+        value: Asia/Karachi
+      # Set these three in the Render dashboard (Environment tab):
+      - key: MONGODB_URI
+        sync: false
+      - key: AUTH_SECRET
+        sync: false
+      - key: SETUP_TOKEN
+        sync: false
