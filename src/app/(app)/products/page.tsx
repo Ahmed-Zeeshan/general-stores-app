@@ -835,7 +835,7 @@ function ProductsPage() {
                 <div className="flex flex-wrap items-center gap-4 text-slate-500">
                   <label className="flex items-center gap-1.5">
                     {t("Per page")}
-                    <Select value={String(pageSize)} onChange={(e) => setPageSize(Number(e.target.value))} className="h-9 w-20">
+                    <Select value={String(pageSize)} onChange={(e) => setPageSize(Number(e.target.value))} className="h-9 w-24">
                       <option value="25">25</option>
                       <option value="50">50</option>
                       <option value="100">100</option>
