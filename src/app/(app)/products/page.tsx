@@ -491,27 +491,20 @@ function ProductsPage() {
             ? <><Count n={products.length} one="{n} item" many="{n} items" />{multiBranch ? ` · ${t("Stock at {branch}", { branch: allBranches ? t("all branches") : (branch?.name ?? "") })}` : ""}</>
             : undefined
         }
-        actions={
-          can.manage && (
-            <>
-              <Button variant="outline" icon={<TrendingUp className="h-4 w-4" />} onClick={() => setBulkOpen(true)}>
-                Update prices
-              </Button>
-              <Menu align="right" trigger={<Button variant="outline" loading={assigning} icon={<MoreHorizontal className="h-4 w-4" />}>More</Button>}>
-                <MenuItem icon={<Tags className="h-4 w-4" />} onClick={() => setCatsOpen(true)}>Categories</MenuItem>
-                <MenuItem icon={<Wand2 className="h-4 w-4" />} onClick={assignMissing}>Create barcodes</MenuItem>
-                <MenuItem icon={<Barcode className="h-4 w-4" />} href="/labels">Print labels</MenuItem>
-                <MenuItem icon={<ListPlus className="h-4 w-4" />} onClick={() => setStarterOpen(true)}>Ready-made items</MenuItem>
-                <MenuItem icon={<Download className="h-4 w-4" />} onClick={exportCsv}>Export to Excel</MenuItem>
-                <MenuItem icon={<Printer className="h-4 w-4" />} onClick={printSheet}>Print count sheet</MenuItem>
-              </Menu>
-              <Button icon={<Plus className="h-4 w-4" />} onClick={() => setEditing("new")}>
-                Add product
-              </Button>
-            </>
-          )
-        }
+        actions={can.manage && <Button icon={<Plus className="h-4 w-4" />} onClick={() => setEditing("new")}>Add product</Button>}
       />
+
+      {can.manage && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          <Button variant="outline" icon={<TrendingUp className="h-4 w-4" />} onClick={() => setBulkOpen(true)}>Update prices</Button>
+          <Button variant="outline" icon={<Tags className="h-4 w-4" />} onClick={() => setCatsOpen(true)}>Categories</Button>
+          <Link href="/labels"><Button variant="outline" icon={<Barcode className="h-4 w-4" />}>Print labels</Button></Link>
+          <Button variant="outline" icon={<Wand2 className="h-4 w-4" />} loading={assigning} onClick={assignMissing}>Create barcodes</Button>
+          <Button variant="outline" icon={<ListPlus className="h-4 w-4" />} onClick={() => setStarterOpen(true)}>Ready-made items</Button>
+          <Button variant="outline" icon={<Download className="h-4 w-4" />} onClick={exportCsv} disabled={!products?.length}>Export to Excel</Button>
+          <Button variant="outline" icon={<Printer className="h-4 w-4" />} onClick={printSheet} disabled={!products?.length}>Count sheet</Button>
+        </div>
+      )}
 
       {products && products.length > 0 && (
         <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
