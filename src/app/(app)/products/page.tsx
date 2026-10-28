@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ArrowDown, ArrowUp, ArrowUpDown, Barcode, Boxes, Camera, ChevronLeft, ChevronRight, Download, History, ListOrdered, ListPlus, Minus, MoreHorizontal, Star, Package, PackageX, Pencil, Plus, Printer, Search, SlidersHorizontal, Smartphone, Tags, Trash2, TrendingDown, TrendingUp, Wand2, X } from "lucide-react";
 import { BarcodeSvg } from "@/components/barcode";
 import { CameraButton, CameraScanner, useBarcodeScanner } from "@/components/barcode-scanner";
-import { Badge, Button, Card, cn, Count, EmptyState, Field, Input, Menu, MenuItem, Modal, PageHeader, Segmented, Select, Spinner, Textarea } from "@/components/ui";
+import { Badge, Button, Card, cn, Count, EmptyState, Field, Input, Menu, MenuItem, Modal, PageHeader, Segmented, Select, Spinner, StatTile, Textarea } from "@/components/ui";
 import { toCsv } from "@/lib/csv";
 import { useCan, useSession } from "@/components/session";
 import { useToast } from "@/components/toast";
@@ -137,31 +137,6 @@ function InlinePrice({ value, unitLabel, onSave }: { value: number; unitLabel: s
       <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-60" />
     </button>
   );
-}
-
-const TONE_TEXT = { green: "text-emerald-600", amber: "text-amber-600", rose: "text-rose-600", violet: "text-violet-600", slate: "text-slate-500", blue: "text-sky-600" };
-
-/** A compact KPI tile. When `onClick` is given it also filters the list and highlights when active. */
-function StatTile({ label, value, icon, tone = "slate", hint, active, onClick }: { label: string; value: React.ReactNode; icon: React.ReactNode; tone?: keyof typeof TONE_TEXT; hint?: React.ReactNode; active?: boolean; onClick?: () => void }) {
-  const t = useT();
-  const inner = (
-    <>
-      <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-xs font-medium text-slate-500">{t(label)}</span>
-        <span className={cn("shrink-0", TONE_TEXT[tone])}>{icon}</span>
-      </div>
-      <div className="mt-1 truncate text-xl font-bold tabular-nums tracking-tight text-slate-900">{value}</div>
-      <div className="mt-0.5 h-4 truncate text-[11px] text-slate-400">{typeof hint === "string" ? t(hint) : hint}</div>
-    </>
-  );
-  const base = "block rounded-xl border p-3 text-left transition";
-  if (onClick)
-    return (
-      <button type="button" onClick={onClick} className={cn(base, active ? "border-brand-500 bg-brand-50/70 ring-1 ring-brand-500" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50")}>
-        {inner}
-      </button>
-    );
-  return <div className={cn(base, "border-slate-200 bg-white")}>{inner}</div>;
 }
 
 /** The small line under "Sold (30d)": when it last sold, or a calm "no sales yet" / violet "Dead" flag. */

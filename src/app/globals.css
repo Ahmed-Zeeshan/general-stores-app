@@ -116,17 +116,19 @@ table.wrapped > tbody > tr > td[data-long] {
   table.stacked > tbody > tr,
   table.stacked > tfoot > tr {
     border-bottom: 1px solid var(--color-slate-100);
-    padding: 0.625rem 1rem;
+    padding: 0.875rem 1rem;
   }
   /* Each cell: heading on the left, value (one or more lines) on the right. */
   table.stacked > tbody > tr > td,
   table.stacked > tfoot > tr > td {
     display: block;
     border: 0;
-    padding: 0.125rem 0;
+    padding: 0.1875rem 0;
     text-align: right;
     white-space: normal;
     overflow-wrap: break-word;
+    font-weight: 500;
+    color: var(--color-slate-700);
   }
   table.stacked > tbody > tr > td::before,
   table.stacked > tfoot > tr > td::before {
@@ -138,7 +140,7 @@ table.wrapped > tbody > tr > td[data-long] {
     font-size: 0.75rem;
     line-height: 1.5rem;
     font-weight: 500;
-    color: var(--color-slate-500);
+    color: var(--color-slate-400);
   }
   table.stacked > tbody > tr > td::after,
   table.stacked > tfoot > tr > td::after {
@@ -149,8 +151,11 @@ table.wrapped > tbody > tr > td[data-long] {
   /* First cell is the row's title (no heading); so is a cell whose column has no heading. */
   table.stacked > tbody > tr > td:first-child,
   table.stacked > tfoot > tr > td:first-child {
-    padding-bottom: 0.25rem;
+    padding-bottom: 0.4375rem;
     text-align: left;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--color-slate-800);
   }
   table.stacked > tbody > tr > td:first-child::before,
   table.stacked > tfoot > tr > td:first-child::before,

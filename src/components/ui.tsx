@@ -281,40 +281,54 @@ export function Spinner({ className }: { className?: string }) {
   );
 }
 
-export function StatCard({
+const TONE_TEXT = { green: "text-emerald-600", amber: "text-amber-600", rose: "text-rose-600", violet: "text-violet-600", slate: "text-slate-500", blue: "text-sky-600" } as const;
+
+/**
+ * A compact KPI tile: label + small tinted icon on top, a big tabular value, and an optional hint.
+ * With `onClick` it becomes a toggle/filter and highlights when `active`. The whole app's stat
+ * strips use this (via {@link StatCard}), so values never truncate and every page stays consistent.
+ */
+export function StatTile({
   label,
   value,
   icon,
-  tone = "green",
+  tone = "slate",
   hint,
+  active,
+  onClick,
 }: {
   label: string;
   value: React.ReactNode;
   icon: React.ReactNode;
-  tone?: "green" | "blue" | "amber" | "rose" | "violet" | "slate";
+  tone?: keyof typeof TONE_TEXT;
   hint?: React.ReactNode;
+  active?: boolean;
+  onClick?: () => void;
 }) {
-  const tones = {
-    green: "bg-emerald-100 text-emerald-700",
-    blue: "bg-sky-100 text-sky-700",
-    amber: "bg-amber-100 text-amber-700",
-    rose: "bg-rose-100 text-rose-700",
-    violet: "bg-violet-100 text-violet-700",
-    slate: "bg-slate-100 text-slate-700",
-  };
   const tx = useTx();
-  return (
-    <Card className="p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-slate-500">{tx(label)}</p>
-          <p className="mt-2 truncate text-2xl font-bold tracking-tight text-slate-900">{value}</p>
-          {hint && <div className="mt-1 text-xs text-slate-500">{tx(hint)}</div>}
-        </div>
-        <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", tones[tone])}>{icon}</div>
+  const inner = (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-xs font-medium text-slate-500">{tx(label)}</span>
+        <span className={cn("shrink-0", TONE_TEXT[tone])}>{icon}</span>
       </div>
-    </Card>
+      <div className="mt-1 truncate text-xl font-bold tabular-nums tracking-tight text-slate-900">{value}</div>
+      <div className="mt-0.5 h-4 truncate text-[11px] text-slate-400">{typeof hint === "string" ? tx(hint) : hint}</div>
+    </>
   );
+  const base = "block rounded-xl border p-3 text-left transition";
+  if (onClick)
+    return (
+      <button type="button" onClick={onClick} className={cn(base, active ? "border-brand-500 bg-brand-50/70 ring-1 ring-brand-500" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50")}>
+        {inner}
+      </button>
+    );
+  return <div className={cn(base, "border-slate-200 bg-white")}>{inner}</div>;
+}
+
+/** Back-compat KPI card used across the app; renders the compact {@link StatTile}. */
+export function StatCard({ tone = "green", ...rest }: { label: string; value: React.ReactNode; icon: React.ReactNode; tone?: keyof typeof TONE_TEXT; hint?: React.ReactNode }) {
+  return <StatTile tone={tone} {...rest} />;
 }
 
 /**
