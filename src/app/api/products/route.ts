@@ -8,6 +8,7 @@ import { batchExpiry } from "@/lib/batches";
 import { moveStock } from "@/lib/services";
 import { Product } from "@/models";
 import { recordPriceChanges } from "@/lib/price-history";
+import { productMovement } from "@/lib/product-stats";
 
 /**
  * Products with `stock` = stock at the current branch (or the shop total with ?branch=all)
@@ -37,8 +38,14 @@ export const GET = handle(async (req) => {
   }
   // Cashiers do not get cost prices.
   const products = await Product.find(query).sort({ name: 1 }).limit(limit).select(ctx.user.role === "cashier" ? "-costPrice" : "").lean();
-  const levels = allBranches ? null : await branchStock(tid, ctx.branchId, products.map((p) => p._id));
-  let rows = products.map((p) => ({ ...p, totalStock: p.stock, stock: levels ? levels.get(String(p._id)) ?? 0 : p.stock }));
+  const [levels, movement] = await Promise.all([
+    allBranches ? null : branchStock(tid, ctx.branchId, products.map((p) => p._id)),
+    productMovement(tid, allBranches ? null : ctx.branchId),
+  ]);
+  let rows = products.map((p) => {
+    const m = movement.get(String(p._id));
+    return { ...p, totalStock: p.stock, stock: levels ? levels.get(String(p._id)) ?? 0 : p.stock, sold30: m?.sold30 ?? 0, lastSoldAt: m?.lastSoldAt ?? null };
+  });
   if (filter === "low") rows = rows.filter((p) => p.stock <= p.lowStockAlert);
   return withCategories(tid, rows);
 });

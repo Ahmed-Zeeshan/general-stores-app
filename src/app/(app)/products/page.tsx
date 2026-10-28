@@ -1,12 +1,13 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Barcode, Boxes, Camera, History, ListOrdered, ListPlus, Star, Package, Pencil, Plus, Printer, Search, SlidersHorizontal, Smartphone, Tags, Trash2, TrendingUp, Wand2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Barcode, Boxes, Camera, ChevronLeft, ChevronRight, Download, History, ListOrdered, ListPlus, Minus, MoreHorizontal, Star, Package, PackageX, Pencil, Plus, Printer, Search, SlidersHorizontal, Smartphone, Tags, Trash2, TrendingDown, TrendingUp, Wand2, X } from "lucide-react";
 import { BarcodeSvg } from "@/components/barcode";
 import { CameraButton, CameraScanner, useBarcodeScanner } from "@/components/barcode-scanner";
-import { Badge, Button, Card, Count, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
+import { Badge, Button, Card, cn, Count, EmptyState, Field, Input, Menu, MenuItem, Modal, PageHeader, Segmented, Select, Spinner, StatCard, Table, Td, Textarea, Th } from "@/components/ui";
+import { toCsv } from "@/lib/csv";
 import { useCan, useSession } from "@/components/session";
 import { useToast } from "@/components/toast";
 import { useConfirm } from "@/components/confirm";
@@ -15,7 +16,7 @@ import { PriceHistoryModal } from "@/components/price-history";
 import { StockHistoryModal } from "@/components/stock-history";
 import { BulkPriceModal } from "@/components/bulk-prices";
 import { compressImage } from "@/lib/image";
-import { api, formatDate, UNIT_LABELS } from "@/lib/client";
+import { api, formatDate, todayISO, UNIT_LABELS } from "@/lib/client";
 import { formatPKR, formatQty } from "@/lib/money";
 import { extraName } from "@/lib/product-search";
 import { useT } from "@/lib/i18n";
@@ -38,6 +39,7 @@ type Product = {
   wholesalePrice?: number;
   packs?: { name: string; size: number; price?: number; wholesalePrice?: number; barcode?: string }[];
   stock: number;
+  totalStock?: number;
   lowStockAlert: number;
   expiryDate?: string;
   trackExpiry?: boolean;
@@ -46,7 +48,104 @@ type Product = {
   warrantyMonths?: number;
   pctCode?: string;
   category?: Category | null;
+  /** Units sold in the last 30 days at this branch; when it last sold (from the server). */
+  sold30?: number;
+  lastSoldAt?: string | null;
 };
+
+type SortKey = "name" | "category" | "costPrice" | "salePrice" | "margin" | "stock" | "sold30" | "lastSoldAt";
+type Filter = "all" | "low" | "out" | "dead" | "expiring";
+const PAGE_SIZE = 50;
+/** Not sold for this many days (and still in stock) = dead stock. */
+const DEAD_DAYS = 60;
+
+/** Profit margin on the sale price (%). Null when there is no cost or sale price to compare. */
+function marginPct(p: { costPrice: number; salePrice: number }): number | null {
+  if (!p.salePrice || p.costPrice == null) return null;
+  return ((p.salePrice - p.costPrice) / p.salePrice) * 100;
+}
+
+/** Days since the product last sold; null = never sold in the window (treated as dead stock). */
+function daysSinceSold(p: Product): number | null {
+  if (!p.lastSoldAt) return null;
+  return Math.floor((Date.now() - new Date(p.lastSoldAt).getTime()) / 864e5);
+}
+
+function isDead(p: Product): boolean {
+  if (p.trackSerial) return false;
+  if (p.stock <= 0) return false;
+  const d = daysSinceSold(p);
+  return d === null || d >= DEAD_DAYS;
+}
+
+const QUICK_UNITS = ["pcs", "dozen", "pack", "box", "carton"];
+
+/** A column heading you can click to sort by; shows the direction and highlights when active. */
+function SortTh({ label, k, sort, onSort, align = "left" }: { label: string; k: SortKey; sort: { key: SortKey; dir: 1 | -1 }; onSort: (k: SortKey) => void; align?: "left" | "right" }) {
+  const t = useT();
+  const active = sort.key === k;
+  return (
+    <th className={cn("sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500", align === "right" && "text-right")}>
+      <button type="button" onClick={() => onSort(k)} className={cn("inline-flex items-center gap-1 hover:text-slate-800", active && "text-slate-800", align === "right" && "w-full flex-row-reverse")}>
+        {t(label)}
+        {active ? sort.dir === 1 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" /> : <ArrowUpDown className="h-3 w-3 opacity-40" />}
+      </button>
+    </th>
+  );
+}
+
+/** A price you edit by clicking it: type a new amount, Enter or click away to save, Esc to cancel. */
+function InlinePrice({ value, unitLabel, onSave }: { value: number; unitLabel: string; onSave: (v: number) => void }) {
+  const t = useT();
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState("");
+  function commit() {
+    setEditing(false);
+    const n = Number(text);
+    if (Number.isFinite(n) && n >= 0 && n !== value) onSave(n);
+  }
+  if (editing)
+    return (
+      <input
+        autoFocus
+        type="number"
+        inputMode="decimal"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onFocus={(e) => e.target.select()}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+          if (e.key === "Escape") setEditing(false);
+        }}
+        className="w-24 rounded-lg border border-brand-400 px-2 py-1 text-right text-sm focus:outline-hidden"
+      />
+    );
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setText(String(value));
+        setEditing(true);
+      }}
+      title={t("Click to change the price")}
+      className="group inline-flex items-center gap-1 font-semibold text-slate-900 hover:text-brand-700"
+    >
+      {formatPKR(value)}
+      <span className="text-xs font-normal text-slate-400"> /{unitLabel}</span>
+      <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-60" />
+    </button>
+  );
+}
+
+/** A clickable summary card that also filters the list to the items it counts. */
+function FilterStat({ active, onClick, label, value, icon, tone, hint }: { active: boolean; onClick: () => void; label: string; value: React.ReactNode; icon: React.ReactNode; tone?: "green" | "blue" | "amber" | "rose" | "violet" | "slate"; hint?: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} className={cn("block rounded-2xl text-left transition hover:-translate-y-0.5", active && "ring-2 ring-brand-500 ring-offset-2")}>
+      <StatCard label={label} value={value} icon={icon} tone={tone} hint={hint} />
+    </button>
+  );
+}
 
 const EMPTY = {
   name: "",
@@ -86,7 +185,7 @@ function ProductsPage() {
   const [starterOpen, setStarterOpen] = useState(false);
   const [q, setQ] = useState(params.get("q") ?? "");
   const [cat, setCat] = useState("");
-  const [filter, setFilter] = useState<"all" | "low" | "expiring">((params.get("filter") as "low" | "expiring") ?? "all");
+  const [filter, setFilter] = useState<Filter>((params.get("filter") as Filter) ?? "all");
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [adjusting, setAdjusting] = useState<Product | null>(null);
   const [historyOf, setHistoryOf] = useState<string | null>(null);
@@ -100,15 +199,20 @@ function ProductsPage() {
   const { branch, branches, branchLocked } = useSession();
   const multiBranch = (branches?.length ?? 0) > 1;
   const [allBranches, setAllBranches] = useState(false);
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "name", dir: 1 });
+  const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkCat, setBulkCat] = useState("");
 
+  // Filtering, sorting and paging all happen on the device from one full fetch, so the stat strip
+  // counts and the "dead stock" / "out of stock" filters stay accurate for the current search.
   const load = useCallback(() => {
     const sp = new URLSearchParams();
     if (q) sp.set("q", q);
     if (cat) sp.set("category", cat);
-    if (filter !== "all") sp.set("filter", filter);
     if (allBranches) sp.set("branch", "all");
     api<Product[]>(`/api/products?${sp}`).then(setProducts).catch((e) => toast.error(e.message));
-  }, [q, cat, filter, allBranches, toast]);
+  }, [q, cat, allBranches, toast]);
 
   async function toggleFavourite(p: Product) {
     try {
@@ -157,6 +261,175 @@ function ProductsPage() {
   }
 
   const stockValue = products?.reduce((s, p) => s + Math.max(0, p.stock) * p.costPrice, 0) ?? 0;
+  const retailValue = products?.reduce((s, p) => s + Math.max(0, p.stock) * p.salePrice, 0) ?? 0;
+
+  const counts = useMemo(() => {
+    const list = products ?? [];
+    return {
+      total: list.length,
+      low: list.filter((p) => p.stock > 0 && p.stock <= p.lowStockAlert).length,
+      out: list.filter((p) => p.stock <= 0).length,
+      dead: list.filter(isDead).length,
+    };
+  }, [products]);
+
+  const visible = useMemo(() => {
+    if (!products) return [];
+    let rows = products;
+    if (filter === "low") rows = rows.filter((p) => p.stock > 0 && p.stock <= p.lowStockAlert);
+    else if (filter === "out") rows = rows.filter((p) => p.stock <= 0);
+    else if (filter === "dead") rows = rows.filter(isDead);
+    else if (filter === "expiring") rows = rows.filter((p) => p.expiryDate && new Date(p.expiryDate).getTime() - Date.now() < 7 * 864e5);
+    const { key, dir } = sort;
+    const val = (p: Product): number | string => {
+      switch (key) {
+        case "name": return p.name.toLowerCase();
+        case "category": return (p.category?.name ?? "").toLowerCase();
+        case "costPrice": return p.costPrice;
+        case "salePrice": return p.salePrice;
+        case "margin": return marginPct(p) ?? -Infinity;
+        case "stock": return p.stock;
+        case "sold30": return p.sold30 ?? 0;
+        case "lastSoldAt": return p.lastSoldAt ? new Date(p.lastSoldAt).getTime() : 0;
+      }
+    };
+    return [...rows].sort((a, b) => {
+      const av = val(a), bv = val(b);
+      if (typeof av === "string" || typeof bv === "string") return String(av).localeCompare(String(bv)) * dir;
+      return (av - bv) * dir;
+    });
+  }, [products, filter, sort]);
+
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const pageRows = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  // Back to the first page / clear picks whenever the view changes under us.
+  useEffect(() => setPage(1), [filter, sort, q, cat, allBranches]);
+  useEffect(() => setSelected(new Set()), [q, cat, allBranches]);
+
+  function toggleSort(key: SortKey) {
+    setSort((s) => (s.key === key ? { key, dir: (s.dir === 1 ? -1 : 1) as 1 | -1 } : { key, dir: key === "name" || key === "category" ? 1 : -1 }));
+  }
+  function toggleSelect(id: string) {
+    setSelected((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
+  const allOnPageSelected = pageRows.length > 0 && pageRows.every((p) => selected.has(p._id));
+  function toggleSelectPage() {
+    setSelected((s) => {
+      const n = new Set(s);
+      if (allOnPageSelected) pageRows.forEach((p) => n.delete(p._id));
+      else pageRows.forEach((p) => n.add(p._id));
+      return n;
+    });
+  }
+
+  async function saveField(p: Product, body: { salePrice?: number; costPrice?: number }) {
+    try {
+      const updated = await api<Product>(`/api/products/${p._id}`, { method: "PATCH", body });
+      setProducts((list) => list && list.map((x) => (x._id === p._id ? { ...x, ...updated } : x)));
+      toast.success(t("Saved"));
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function quickStock(p: Product, delta: number) {
+    try {
+      await api(`/api/products/${p._id}/stock`, { body: { mode: delta > 0 ? "add" : "remove", qty: Math.abs(delta), note: t("Quick adjust") } });
+      setProducts((list) => list && list.map((x) => (x._id === p._id ? { ...x, stock: x.stock + delta } : x)));
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function bulkDelete() {
+    const ids = [...selected];
+    const ok = await confirm({
+      title: t("Remove {n} products?", { n: ids.length }),
+      message: t("They will no longer appear in New Bill, Products or Purchases."),
+      tone: "danger",
+      icon: "delete",
+      points: [t("Old bills, reports and stock history still show these items.")],
+      confirmLabel: "Remove",
+    });
+    if (!ok) return;
+    try {
+      await Promise.all(ids.map((id) => api(`/api/products/${id}`, { method: "DELETE" })));
+      toast.success(t("{n} product(s) removed", { n: ids.length }));
+      setSelected(new Set());
+      load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function applyBulkCategory() {
+    if (!bulkCat) return;
+    const ids = [...selected];
+    try {
+      await Promise.all(ids.map((id) => api(`/api/products/${id}`, { method: "PATCH", body: { category: bulkCat === "none" ? null : bulkCat } })));
+      toast.success(t("Category changed for {n} item(s)", { n: ids.length }));
+      setBulkCat("");
+      setSelected(new Set());
+      load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  function exportCsv() {
+    const headers = ["Name", "Barcode", "Category", "Unit", ...(can.manage ? ["Cost"] : []), "Sale price", ...(can.manage ? ["Margin %"] : []), "Stock", "Sold (30d)", "Last sold", "Expiry"];
+    const rows = visible.map((p) => [
+      p.name,
+      p.barcode ?? "",
+      p.category?.name ?? "",
+      UNIT_LABELS[p.unit],
+      ...(can.manage ? [p.costPrice] : []),
+      p.salePrice,
+      ...(can.manage ? [marginPct(p) == null ? "" : Math.round(marginPct(p)!)] : []),
+      formatQty(p.stock),
+      p.sold30 ?? 0,
+      p.lastSoldAt ? formatDate(p.lastSoldAt) : "",
+      p.expiryDate ? formatDate(p.expiryDate) : "",
+    ]);
+    const url = URL.createObjectURL(new Blob([toCsv(headers, rows)], { type: "text/csv;charset=utf-8" }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: `products-${todayISO()}.csv` });
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  /** A printable "walk the shelves and tick the count" sheet: product, system qty, blank counted box. */
+  function printSheet() {
+    const shopName = branch?.name ?? "";
+    const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!);
+    const body = visible
+      .map((p) => `<tr><td>${esc(p.name)}${p.barcode ? `<div class="b">${esc(p.barcode)}</div>` : ""}</td><td>${esc(p.category?.name ?? "")}</td><td class="r">${formatQty(p.stock)} ${esc(UNIT_LABELS[p.unit])}</td><td class="box"></td></tr>`)
+      .join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Stock count ${todayISO()}</title><style>
+      body{font-family:system-ui,Arial,sans-serif;margin:24px;color:#0f172a}
+      h1{font-size:18px;margin:0 0 2px} .sub{color:#64748b;font-size:12px;margin-bottom:14px}
+      table{width:100%;border-collapse:collapse;font-size:12px} th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:left}
+      th{background:#f1f5f9} .r{text-align:right;white-space:nowrap} .box{width:90px} .b{color:#94a3b8;font-size:10px}
+      @media print{body{margin:10mm}}
+    </style></head><body>
+      <h1>Stock count sheet${shopName ? ` — ${esc(shopName)}` : ""}</h1>
+      <div class="sub">${todayISO()} · ${visible.length} items${filter !== "all" ? ` · filter: ${filter}` : ""}</div>
+      <table><thead><tr><th>Product</th><th>Category</th><th class="r">System qty</th><th>Counted</th></tr></thead><tbody>${body}</tbody></table>
+      <script>window.onload=function(){window.print()}</script>
+    </body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) {
+      toast.error(t("Allow pop-ups to print the stock sheet."));
+      return;
+    }
+    w.document.write(html);
+    w.document.close();
+  }
 
   async function remove(p: Product) {
     const ok = await confirm({
@@ -188,27 +461,23 @@ function ProductsPage() {
         urdu="اشیاء اور اسٹاک"
         subtitle={
           products
-            ? <><Count n={products.length} one="{n} item" many="{n} items" />{multiBranch ? ` · ${t("Stock at {branch}", { branch: allBranches ? t("all branches") : (branch?.name ?? "") })}` : ""}{can.manage ? ` · ${t("Stock value {amount}", { amount: formatPKR(stockValue) })}` : ""}</>
+            ? <><Count n={products.length} one="{n} item" many="{n} items" />{multiBranch ? ` · ${t("Stock at {branch}", { branch: allBranches ? t("all branches") : (branch?.name ?? "") })}` : ""}</>
             : undefined
         }
         actions={
           can.manage && (
             <>
-              <Button variant="outline" icon={<Tags className="h-4 w-4" />} onClick={() => setCatsOpen(true)}>
-                Categories
-              </Button>
               <Button variant="outline" icon={<TrendingUp className="h-4 w-4" />} onClick={() => setBulkOpen(true)}>
                 Update prices
               </Button>
-              <Button variant="outline" icon={<Wand2 className="h-4 w-4" />} loading={assigning} onClick={assignMissing}>
-                Create barcodes
-              </Button>
-              <Link href="/labels">
-                <Button variant="outline" icon={<Printer className="h-4 w-4" />}>Print labels</Button>
-              </Link>
-              <Button variant="outline" icon={<ListPlus className="h-4 w-4" />} onClick={() => setStarterOpen(true)}>
-                Ready-made items
-              </Button>
+              <Menu align="right" trigger={<Button variant="outline" loading={assigning} icon={<MoreHorizontal className="h-4 w-4" />}>More</Button>}>
+                <MenuItem icon={<Tags className="h-4 w-4" />} onClick={() => setCatsOpen(true)}>Categories</MenuItem>
+                <MenuItem icon={<Wand2 className="h-4 w-4" />} onClick={assignMissing}>Create barcodes</MenuItem>
+                <MenuItem icon={<Barcode className="h-4 w-4" />} href="/labels">Print labels</MenuItem>
+                <MenuItem icon={<ListPlus className="h-4 w-4" />} onClick={() => setStarterOpen(true)}>Ready-made items</MenuItem>
+                <MenuItem icon={<Download className="h-4 w-4" />} onClick={exportCsv}>Export to Excel</MenuItem>
+                <MenuItem icon={<Printer className="h-4 w-4" />} onClick={printSheet}>Print count sheet</MenuItem>
+              </Menu>
               <Button icon={<Plus className="h-4 w-4" />} onClick={() => setEditing("new")}>
                 Add product
               </Button>
@@ -217,8 +486,18 @@ function ProductsPage() {
         }
       />
 
+      {products && products.length > 0 && (
+        <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+          <FilterStat label="Products" value={counts.total} icon={<Package className="h-5 w-5" />} tone="slate" active={filter === "all"} onClick={() => setFilter("all")} />
+          {can.manage && <StatCard label="Stock value (retail)" value={formatPKR(retailValue)} icon={<TrendingUp className="h-5 w-5" />} tone="green" hint={t("Cost {amount}", { amount: formatPKR(stockValue) })} />}
+          <FilterStat label="Low stock" value={counts.low} icon={<TrendingDown className="h-5 w-5" />} tone="amber" active={filter === "low"} onClick={() => setFilter("low")} />
+          <FilterStat label="Out of stock" value={counts.out} icon={<PackageX className="h-5 w-5" />} tone="rose" active={filter === "out"} onClick={() => setFilter("out")} />
+          <FilterStat label="Dead stock" value={counts.dead} icon={<Boxes className="h-5 w-5" />} tone="violet" active={filter === "dead"} onClick={() => setFilter("dead")} hint={t("No sale in {n}+ days", { n: DEAD_DAYS })} />
+        </div>
+      )}
+
       <Card>
-        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 lg:flex-row lg:items-center">
+        <div className="sticky top-0 z-20 flex flex-col gap-3 border-b border-slate-100 bg-white p-4 lg:flex-row lg:items-center">
           <div className="flex flex-1 gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -250,6 +529,8 @@ function ProductsPage() {
             options={[
               { value: "all", label: "All" },
               { value: "low", label: "Low stock" },
+              { value: "out", label: "Out of stock" },
+              { value: "dead", label: "Dead stock" },
               { value: "expiring", label: "Expiring" },
             ]}
           />
@@ -260,109 +541,175 @@ function ProductsPage() {
         ) : products.length === 0 ? (
           <EmptyState
             icon={<Package className="h-8 w-8" />}
-            title={filter === "all" && !q ? "No products yet" : "Nothing found"}
-            text={filter === "all" && !q ? "Add the items you sell. You can add stock and prices for each one." : "Try a different search or filter."}
-            action={can.manage && filter === "all" && !q && <Button icon={<Plus className="h-4 w-4" />} onClick={() => setEditing("new")}>Add first product</Button>}
+            title="No products yet"
+            text="Add the items you sell. You can add stock and prices for each one."
+            action={can.manage && <Button icon={<Plus className="h-4 w-4" />} onClick={() => setEditing("new")}>Add first product</Button>}
           />
         ) : (
-          <Table>
-            <thead>
-              <tr>
-                <Th>Product</Th>
-                <Th>Category</Th>
-                {can.manage && <Th className="text-right">Cost</Th>}
-                <Th className="text-right">Sale price</Th>
-                <Th className="text-right">Stock</Th>
-                <Th>Expiry</Th>
-                {can.manage && <Th />}
-              </tr>
-            </thead>
-            <tbody>
-              {products.map((p) => {
-                const low = p.stock <= p.lowStockAlert;
-                const expSoon = p.expiryDate && new Date(p.expiryDate).getTime() - Date.now() < 7 * 864e5;
-                return (
-                  <tr key={p._id} className="hover:bg-slate-50/60">
-                    <Td>
-                      <div className="flex items-center gap-2">
-                        {p.hasImage && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={`/api/products/${p._id}/image?v=${encodeURIComponent(p.updatedAt ?? "")}`} alt="" loading="lazy" className="h-9 w-9 shrink-0 rounded-lg bg-slate-50 object-contain" />
-                        )}
-                        <div className="font-semibold text-slate-800">{p.name}</div>
-                        {can.manage ? (
-                          <button
-                            type="button"
-                            onClick={() => toggleFavourite(p)}
-                            aria-label={`${p.favourite ? "Unstar" : "Star"} ${p.name}`}
-                            title={p.favourite ? t("Remove from Favourites") : t("Show first on the sale screen")}
-                            className="rounded p-0.5 text-slate-300 hover:text-amber-500"
-                          >
-                            <Star className={p.favourite ? "h-4 w-4 fill-amber-400 text-amber-400" : "h-4 w-4"} />
-                          </button>
-                        ) : (
-                          p.favourite && <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                        )}
-                      </div>
-                      {(extraName(p.name, p.brand) || p.fits) && (
-                        <div className="text-xs text-slate-500">{[extraName(p.name, p.brand), p.fits && t("Fits {models}", { models: p.fits })].filter(Boolean).join(" · ")}</div>
-                      )}
-                      <div className="text-xs text-slate-400">
-                        {extraName(p.name, p.nameUrdu) && <span className="urdu mr-2">{extraName(p.name, p.nameUrdu)}</span>}
-                        {p.barcode}
-                      </div>
-                    </Td>
-                    <Td className="text-slate-500">{p.category?.name ?? "—"}</Td>
-                    {can.manage && <Td className="text-right text-slate-500">{formatPKR(p.costPrice)}</Td>}
-                    <Td className="text-right font-semibold text-slate-900">
-                      {formatPKR(p.salePrice)}
-                      <span className="text-xs font-normal text-slate-400"> /{UNIT_LABELS[p.unit]}</span>
-                    </Td>
-                    <Td className="text-right">
-                      <Badge color={p.stock <= 0 ? "red" : low ? "amber" : "green"}>
-                        {formatQty(p.stock)} {UNIT_LABELS[p.unit]}
-                      </Badge>
-                    </Td>
-                    <Td>{p.expiryDate ? <Badge color={expSoon ? "red" : "slate"}>{formatDate(p.expiryDate)}</Badge> : <span className="text-slate-300">—</span>}</Td>
+          <>
+            {can.manage && selected.size > 0 && (
+              <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-brand-50/60 p-3">
+                <span className="text-sm font-semibold text-slate-700">{t("{n} selected", { n: selected.size })}</span>
+                <Button size="sm" variant="ghost" icon={<X className="h-4 w-4" />} onClick={() => setSelected(new Set())}>Clear</Button>
+                <div className="mx-1 h-5 w-px bg-slate-200" />
+                <Link href={`/labels?ids=${[...selected].join(",")}`}>
+                  <Button size="sm" variant="outline" icon={<Barcode className="h-4 w-4" />}>Print labels</Button>
+                </Link>
+                <Select value={bulkCat} onChange={(e) => setBulkCat(e.target.value)} className="h-9 w-44">
+                  <option value="">{t("Change category…")}</option>
+                  <option value="none">{t("No category")}</option>
+                  {categories.map((c) => (
+                    <option key={c._id} value={c._id}>{c.name}</option>
+                  ))}
+                </Select>
+                {bulkCat && <Button size="sm" onClick={applyBulkCategory}>Apply</Button>}
+                <Button size="sm" variant="danger" icon={<Trash2 className="h-4 w-4" />} onClick={bulkDelete}>Remove</Button>
+              </div>
+            )}
+            {visible.length === 0 ? (
+              <EmptyState icon={<Package className="h-8 w-8" />} title="Nothing found" text="Try a different search or filter." />
+            ) : (
+              <Table maxHeight="68vh">
+                <thead>
+                  <tr>
                     {can.manage && (
-                      <Td className="text-right">
-                        <div className="flex justify-end gap-1">
-                          {p.trackSerial ? (
-                            <Link href={`/phones?product=${p._id}`} title={t("Phones of this model by IMEI")}>
-                              <Button size="sm" variant="ghost" icon={<Smartphone className="h-4 w-4" />}>
-                                IMEIs
-                              </Button>
-                            </Link>
-                          ) : (
-                            <Button size="sm" variant="ghost" icon={<SlidersHorizontal className="h-4 w-4" />} onClick={() => setAdjusting(p)}>
-                              Stock
-                            </Button>
-                          )}
-                          <Link href={`/labels?ids=${p._id}`} title={t("Print barcode labels")}>
-                            <Button size="sm" variant="ghost" aria-label="Print labels">
-                              <Barcode className="h-4 w-4" />
-                            </Button>
-                          </Link>
-                          <Button size="sm" variant="ghost" onClick={() => setHistoryOf(p._id)} aria-label="Price history" title={t("Price history")}>
-                            <History className="h-4 w-4" />
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setStockOf(p._id)} aria-label="Stock history" title={t("Stock history")}>
-                            <ListOrdered className="h-4 w-4" />
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setEditing(p)} aria-label="Edit">
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => remove(p)} aria-label="Remove" className="hover:text-rose-600">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </Td>
+                      <th className="sticky top-0 z-10 w-10 border-b border-slate-200 bg-slate-50 px-4 py-3">
+                        <input type="checkbox" checked={allOnPageSelected} onChange={toggleSelectPage} aria-label="Select all on this page" className="h-4 w-4 rounded border-slate-300 accent-brand-600" />
+                      </th>
                     )}
+                    <SortTh label="Product" k="name" sort={sort} onSort={toggleSort} />
+                    <SortTh label="Category" k="category" sort={sort} onSort={toggleSort} />
+                    {can.manage && <SortTh label="Cost" k="costPrice" sort={sort} onSort={toggleSort} align="right" />}
+                    <SortTh label="Sale price" k="salePrice" sort={sort} onSort={toggleSort} align="right" />
+                    {can.manage && <SortTh label="Margin" k="margin" sort={sort} onSort={toggleSort} align="right" />}
+                    <SortTh label="Stock" k="stock" sort={sort} onSort={toggleSort} align="right" />
+                    <SortTh label="Sold (30d)" k="sold30" sort={sort} onSort={toggleSort} align="right" />
+                    <th className="sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("Expiry")}</th>
+                    {can.manage && <th className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 px-4 py-3" />}
                   </tr>
-                );
-              })}
-            </tbody>
-          </Table>
+                </thead>
+                <tbody>
+                  {pageRows.map((p) => {
+                    const low = p.stock > 0 && p.stock <= p.lowStockAlert;
+                    const expSoon = p.expiryDate && new Date(p.expiryDate).getTime() - Date.now() < 7 * 864e5;
+                    const m = can.manage ? marginPct(p) : null;
+                    const dsold = daysSinceSold(p);
+                    const dead = isDead(p);
+                    const canQuick = can.manage && !p.trackSerial && QUICK_UNITS.includes(p.unit);
+                    return (
+                      <tr key={p._id} className={cn("hover:bg-slate-50/60", selected.has(p._id) && "bg-brand-50/50")}>
+                        {can.manage && (
+                          <Td>
+                            <input type="checkbox" checked={selected.has(p._id)} onChange={() => toggleSelect(p._id)} aria-label={`Select ${p.name}`} className="h-4 w-4 rounded border-slate-300 accent-brand-600" />
+                          </Td>
+                        )}
+                        <Td>
+                          <div className="flex items-center gap-2">
+                            {p.hasImage && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={`/api/products/${p._id}/image?v=${encodeURIComponent(p.updatedAt ?? "")}`} alt="" loading="lazy" className="h-9 w-9 shrink-0 rounded-lg bg-slate-50 object-contain" />
+                            )}
+                            <div className="font-semibold text-slate-800">{p.name}</div>
+                            {can.manage ? (
+                              <button
+                                type="button"
+                                onClick={() => toggleFavourite(p)}
+                                aria-label={`${p.favourite ? "Unstar" : "Star"} ${p.name}`}
+                                title={p.favourite ? t("Remove from Favourites") : t("Show first on the sale screen")}
+                                className="rounded p-0.5 text-slate-300 hover:text-amber-500"
+                              >
+                                <Star className={p.favourite ? "h-4 w-4 fill-amber-400 text-amber-400" : "h-4 w-4"} />
+                              </button>
+                            ) : (
+                              p.favourite && <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                            )}
+                          </div>
+                          {(extraName(p.name, p.brand) || p.fits) && (
+                            <div className="text-xs text-slate-500">{[extraName(p.name, p.brand), p.fits && t("Fits {models}", { models: p.fits })].filter(Boolean).join(" · ")}</div>
+                          )}
+                          <div className="text-xs text-slate-400">
+                            {extraName(p.name, p.nameUrdu) && <span className="urdu mr-2">{extraName(p.name, p.nameUrdu)}</span>}
+                            {p.barcode}
+                          </div>
+                        </Td>
+                        <Td className="text-slate-500">{p.category?.name ?? "—"}</Td>
+                        {can.manage && <Td className="text-right text-slate-500">{formatPKR(p.costPrice)}</Td>}
+                        <Td className="text-right">
+                          {can.manage && !p.trackSerial ? (
+                            <InlinePrice value={p.salePrice} unitLabel={UNIT_LABELS[p.unit]} onSave={(v) => saveField(p, { salePrice: v })} />
+                          ) : (
+                            <span className="font-semibold text-slate-900">
+                              {formatPKR(p.salePrice)}
+                              <span className="text-xs font-normal text-slate-400"> /{UNIT_LABELS[p.unit]}</span>
+                            </span>
+                          )}
+                        </Td>
+                        {can.manage && (
+                          <Td className="text-right">
+                            {m == null ? <span className="text-slate-300">—</span> : <span className={cn("font-semibold", m <= 0 ? "text-rose-600" : m < 10 ? "text-amber-600" : "text-emerald-600")} title={t("Profit on the sale price")}>{Math.round(m)}%</span>}
+                          </Td>
+                        )}
+                        <Td className="text-right">
+                          <div className="inline-flex items-center justify-end gap-1">
+                            {canQuick && (
+                              <button type="button" onClick={() => quickStock(p, -1)} disabled={p.stock <= 0} aria-label="Remove one" className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30">
+                                <Minus className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                            <Badge color={p.stock <= 0 ? "red" : low ? "amber" : "green"}>
+                              {formatQty(p.stock)} {UNIT_LABELS[p.unit]}
+                            </Badge>
+                            {canQuick && (
+                              <button type="button" onClick={() => quickStock(p, 1)} aria-label="Add one" className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                                <Plus className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </Td>
+                        <Td className="text-right">
+                          <div className="font-medium text-slate-700">{formatQty(p.sold30 ?? 0)}</div>
+                          <div className="text-xs text-slate-400">
+                            {p.trackSerial ? "—" : dead ? <span className="font-medium text-violet-600">{t("Dead stock")}</span> : dsold === null ? t("not sold") : dsold === 0 ? t("sold today") : t("{n}d ago", { n: dsold })}
+                          </div>
+                        </Td>
+                        <Td>{p.expiryDate ? <Badge color={expSoon ? "red" : "slate"}>{formatDate(p.expiryDate)}</Badge> : <span className="text-slate-300">—</span>}</Td>
+                        {can.manage && (
+                          <Td className="text-right">
+                            <div className="flex justify-end gap-1">
+                              {p.trackSerial ? (
+                                <Link href={`/phones?product=${p._id}`} title={t("Phones of this model by IMEI")}>
+                                  <Button size="sm" variant="ghost" icon={<Smartphone className="h-4 w-4" />}>IMEIs</Button>
+                                </Link>
+                              ) : (
+                                <Button size="sm" variant="ghost" icon={<SlidersHorizontal className="h-4 w-4" />} onClick={() => setAdjusting(p)}>Stock</Button>
+                              )}
+                              <Button size="sm" variant="ghost" onClick={() => setEditing(p)} aria-label="Edit"><Pencil className="h-4 w-4" /></Button>
+                              <Menu align="right" trigger={<Button size="sm" variant="ghost" aria-label="More actions"><MoreHorizontal className="h-4 w-4" /></Button>}>
+                                <MenuItem icon={<Barcode className="h-4 w-4" />} href={`/labels?ids=${p._id}`}>Print labels</MenuItem>
+                                <MenuItem icon={<History className="h-4 w-4" />} onClick={() => setHistoryOf(p._id)}>Price history</MenuItem>
+                                <MenuItem icon={<ListOrdered className="h-4 w-4" />} onClick={() => setStockOf(p._id)}>Stock history</MenuItem>
+                                <MenuItem icon={<Trash2 className="h-4 w-4" />} danger onClick={() => remove(p)}>Remove</MenuItem>
+                              </Menu>
+                            </div>
+                          </Td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            )}
+            {visible.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between gap-3 border-t border-slate-100 p-3 text-sm text-slate-600">
+                <span>{t("Showing {a}–{b} of {n}", { a: (page - 1) * PAGE_SIZE + 1, b: Math.min(page * PAGE_SIZE, visible.length), n: visible.length })}</span>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" icon={<ChevronLeft className="h-4 w-4" />} disabled={page <= 1} onClick={() => setPage((pg) => Math.max(1, pg - 1))}>Prev</Button>
+                  <span className="tabular-nums">{t("Page {a} / {b}", { a: page, b: pageCount })}</span>
+                  <Button size="sm" variant="outline" disabled={page >= pageCount} onClick={() => setPage((pg) => Math.min(pageCount, pg + 1))}>{t("Next")}<ChevronRight className="ml-1 h-4 w-4" /></Button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </Card>
 

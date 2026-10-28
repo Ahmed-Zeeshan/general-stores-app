@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useEffect, useLayoutEffect, useRef } from "react";
+import { forwardRef, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -323,7 +323,7 @@ export function StatCard({
  * column heading next to the value, so no column ever hides behind a sideways scroll.
  * `stack={false}` keeps the normal table with a sideways scroll instead.
  */
-export function Table({ children, stack = true }: { children: React.ReactNode; stack?: boolean }) {
+export function Table({ children, stack = true, maxHeight }: { children: React.ReactNode; stack?: boolean; maxHeight?: string }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const ref = useRef<HTMLTableElement>(null);
   useLayoutEffect(() => {
@@ -362,7 +362,7 @@ export function Table({ children, stack = true }: { children: React.ReactNode; s
     };
   }, [stack]);
   return (
-    <div ref={wrapRef} className="scrollbar-thin overflow-x-auto">
+    <div ref={wrapRef} className={cn("scrollbar-thin overflow-x-auto", maxHeight && "overflow-y-auto")} style={maxHeight ? { maxHeight } : undefined}>
       <table ref={ref} className="w-full text-left text-sm">{children}</table>
     </div>
   );
@@ -411,5 +411,59 @@ export function Segmented<T extends string>({
         </button>
       ))}
     </div>
+  );
+}
+
+/**
+ * A small dropdown menu opened by `trigger`. Closes on outside click, Escape, or after an item is
+ * picked. Used to tuck away less-common row actions behind a "⋯" button so lists stay uncluttered.
+ */
+export function Menu({ trigger, children, align = "right" }: { trigger: React.ReactNode; children: React.ReactNode; align?: "left" | "right" }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  return (
+    <div ref={ref} className="relative inline-block">
+      <span onClick={() => setOpen((v) => !v)}>{trigger}</span>
+      {open && (
+        <div
+          onClick={() => setOpen(false)}
+          className={cn("absolute z-20 mt-1 min-w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg", align === "right" ? "right-0" : "left-0")}
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** One row inside a {@link Menu}. */
+export function MenuItem({ icon, onClick, href, danger, children }: { icon?: React.ReactNode; onClick?: () => void; href?: string; danger?: boolean; children: React.ReactNode }) {
+  const tx = useTx();
+  const cls = cn("flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-sm font-medium hover:bg-slate-50", danger ? "text-rose-600 hover:bg-rose-50" : "text-slate-700");
+  if (href)
+    return (
+      <Link href={href} className={cls}>
+        {icon}
+        {tx(children)}
+      </Link>
+    );
+  return (
+    <button type="button" onClick={onClick} className={cls}>
+      {icon}
+      {tx(children)}
+    </button>
   );
 }

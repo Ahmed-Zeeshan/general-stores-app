@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { ApiError, handle, requireTenant } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
 import { branchStock, requireBranch } from "@/lib/branches";
@@ -107,4 +108,48 @@ export const DELETE = handle<Ctx>(async (_req, { params }) => {
   const p = await Product.findOneAndUpdate({ _id: id, tenant: tid }, { active: false }).select("name stock").lean();
   if (p) await logActivity({ tid, user }, { action: "product.remove", summary: `Removed product ${p.name} (stock ${p.stock})`, refType: "product", refId: p._id });
   return { ok: true };
+});
+
+/** A small inline edit from the Products list: just the sale/cost price or low-stock level. */
+const QuickEdit = z
+  .object({
+    salePrice: z.coerce.number().min(0).max(100_000_000).optional(),
+    costPrice: z.coerce.number().min(0).max(100_000_000).optional(),
+    lowStockAlert: z.coerce.number().min(0).max(1_000_000).optional(),
+    category: z.string().regex(/^[a-f0-9]{24}$/i).nullable().optional(),
+  })
+  .refine((b) => b.salePrice !== undefined || b.costPrice !== undefined || b.lowStockAlert !== undefined || b.category !== undefined, "Nothing to change.");
+
+export const PATCH = handle<Ctx>(async (req, { params }) => {
+  const { tid, user } = await requireTenant(["owner", "manager"]);
+  const { id } = await params;
+  const b = QuickEdit.parse(await req.json());
+  const before = await Product.findOne({ _id: id, tenant: tid }).select("name salePrice costPrice wholesalePrice lowStockAlert category").lean();
+  if (!before) throw new ApiError(404, "Product not found.");
+  const set: Record<string, unknown> = {};
+  const unset: Record<string, 1> = {};
+  if (b.salePrice !== undefined) set.salePrice = b.salePrice;
+  if (b.costPrice !== undefined) set.costPrice = b.costPrice;
+  if (b.lowStockAlert !== undefined) set.lowStockAlert = b.lowStockAlert;
+  if (b.category !== undefined) {
+    if (b.category) set.category = b.category;
+    else unset.category = 1;
+  }
+  const product = await Product.findOneAndUpdate({ _id: id, tenant: tid }, { $set: set, $unset: unset }, { new: true, runValidators: true }).lean();
+  if (!product) throw new ApiError(404, "Product not found.");
+  await recordPriceChanges({ tid, user }, product._id, before, product, "edit");
+  const priceChanges = (
+    [
+      ["sale price", before.salePrice, product.salePrice],
+      ["cost price", before.costPrice, product.costPrice],
+    ] as const
+  ).filter(([, a, c]) => (a ?? null) !== (c ?? null));
+  if (priceChanges.length) {
+    await logActivity(
+      { tid, user },
+      { action: "product.price", summary: `${product.name}: ${priceChanges.map(([k, a, c]) => `${k} ${a ?? "—"} → ${c ?? "—"}`).join(", ")}`, refType: "product", refId: product._id },
+    );
+  }
+  const [withCat] = await withCategories(tid, [{ ...product, totalStock: product.stock, stock: product.stock }]);
+  return withCat;
 });
