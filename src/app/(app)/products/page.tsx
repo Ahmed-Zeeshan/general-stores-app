@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ArrowDown, ArrowUp, ArrowUpDown, Barcode, Boxes, Camera, ChevronLeft, ChevronRight, Download, History, ListOrdered, ListPlus, Minus, MoreHorizontal, Star, Package, PackageX, Pencil, Plus, Printer, Search, SlidersHorizontal, Smartphone, Tags, Trash2, TrendingDown, TrendingUp, Wand2, X } from "lucide-react";
 import { BarcodeSvg } from "@/components/barcode";
 import { CameraButton, CameraScanner, useBarcodeScanner } from "@/components/barcode-scanner";
-import { Badge, Button, Card, cn, Count, EmptyState, Field, Input, Menu, MenuItem, Modal, PageHeader, Segmented, Select, Spinner, StatCard, Table, Td, Textarea, Th } from "@/components/ui";
+import { Badge, Button, Card, cn, Count, EmptyState, Field, Input, Menu, MenuItem, Modal, PageHeader, Segmented, Select, Spinner, StatCard, Table, Td, Textarea } from "@/components/ui";
 import { toCsv } from "@/lib/csv";
 import { useCan, useSession } from "@/components/session";
 import { useToast } from "@/components/toast";
@@ -534,6 +534,19 @@ function ProductsPage() {
               { value: "expiring", label: "Expiring" },
             ]}
           />
+          <div className="flex items-center gap-1">
+            <Select value={sort.key} onChange={(e) => setSort((s) => ({ key: e.target.value as SortKey, dir: s.dir }))} className="lg:w-40">
+              <option value="name">{t("Sort: Name")}</option>
+              <option value="category">{t("Sort: Category")}</option>
+              {can.manage && <option value="costPrice">{t("Sort: Cost")}</option>}
+              <option value="salePrice">{t("Sort: Sale price")}</option>
+              {can.manage && <option value="margin">{t("Sort: Margin")}</option>}
+              <option value="stock">{t("Sort: Stock")}</option>
+              <option value="sold30">{t("Sort: Sold (30d)")}</option>
+              <option value="lastSoldAt">{t("Sort: Last sold")}</option>
+            </Select>
+            <Button variant="outline" aria-label="Sort direction" onClick={() => setSort((s) => ({ key: s.key, dir: (s.dir === 1 ? -1 : 1) as 1 | -1 }))} icon={sort.dir === 1 ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />} />
+          </div>
         </div>
 
         {!products ? (
@@ -578,13 +591,10 @@ function ProductsPage() {
                       </th>
                     )}
                     <SortTh label="Product" k="name" sort={sort} onSort={toggleSort} />
-                    <SortTh label="Category" k="category" sort={sort} onSort={toggleSort} />
                     {can.manage && <SortTh label="Cost" k="costPrice" sort={sort} onSort={toggleSort} align="right" />}
                     <SortTh label="Sale price" k="salePrice" sort={sort} onSort={toggleSort} align="right" />
-                    {can.manage && <SortTh label="Margin" k="margin" sort={sort} onSort={toggleSort} align="right" />}
                     <SortTh label="Stock" k="stock" sort={sort} onSort={toggleSort} align="right" />
                     <SortTh label="Sold (30d)" k="sold30" sort={sort} onSort={toggleSort} align="right" />
-                    <th className="sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("Expiry")}</th>
                     {can.manage && <th className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 px-4 py-3" />}
                   </tr>
                 </thead>
@@ -596,6 +606,7 @@ function ProductsPage() {
                     const dsold = daysSinceSold(p);
                     const dead = isDead(p);
                     const canQuick = can.manage && !p.trackSerial && QUICK_UNITS.includes(p.unit);
+                    const sub = [p.category?.name, extraName(p.name, p.brand), p.fits && t("Fits {models}", { models: p.fits })].filter(Boolean).join(" · ");
                     return (
                       <tr key={p._id} className={cn("hover:bg-slate-50/60", selected.has(p._id) && "bg-brand-50/50")}>
                         {can.manage && (
@@ -624,15 +635,14 @@ function ProductsPage() {
                               p.favourite && <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
                             )}
                           </div>
-                          {(extraName(p.name, p.brand) || p.fits) && (
-                            <div className="text-xs text-slate-500">{[extraName(p.name, p.brand), p.fits && t("Fits {models}", { models: p.fits })].filter(Boolean).join(" · ")}</div>
+                          {sub && <div className="text-xs text-slate-500">{sub}</div>}
+                          {(extraName(p.name, p.nameUrdu) || p.barcode) && (
+                            <div className="text-xs text-slate-400">
+                              {extraName(p.name, p.nameUrdu) && <span className="urdu mr-2">{extraName(p.name, p.nameUrdu)}</span>}
+                              {p.barcode}
+                            </div>
                           )}
-                          <div className="text-xs text-slate-400">
-                            {extraName(p.name, p.nameUrdu) && <span className="urdu mr-2">{extraName(p.name, p.nameUrdu)}</span>}
-                            {p.barcode}
-                          </div>
                         </Td>
-                        <Td className="text-slate-500">{p.category?.name ?? "—"}</Td>
                         {can.manage && <Td className="text-right text-slate-500">{formatPKR(p.costPrice)}</Td>}
                         <Td className="text-right">
                           {can.manage && !p.trackSerial ? (
@@ -643,12 +653,8 @@ function ProductsPage() {
                               <span className="text-xs font-normal text-slate-400"> /{UNIT_LABELS[p.unit]}</span>
                             </span>
                           )}
+                          {can.manage && m != null && <div className={cn("text-xs font-medium", m <= 0 ? "text-rose-600" : m < 10 ? "text-amber-600" : "text-emerald-600")}>{Math.round(m)}% {t("margin")}</div>}
                         </Td>
-                        {can.manage && (
-                          <Td className="text-right">
-                            {m == null ? <span className="text-slate-300">—</span> : <span className={cn("font-semibold", m <= 0 ? "text-rose-600" : m < 10 ? "text-amber-600" : "text-emerald-600")} title={t("Profit on the sale price")}>{Math.round(m)}%</span>}
-                          </Td>
-                        )}
                         <Td className="text-right">
                           <div className="inline-flex items-center justify-end gap-1">
                             {canQuick && (
@@ -665,6 +671,11 @@ function ProductsPage() {
                               </button>
                             )}
                           </div>
+                          {p.expiryDate && (
+                            <div className="mt-1 text-xs">
+                              <Badge color={expSoon ? "red" : "slate"}>{t("Exp")} {formatDate(p.expiryDate)}</Badge>
+                            </div>
+                          )}
                         </Td>
                         <Td className="text-right">
                           <div className="font-medium text-slate-700">{formatQty(p.sold30 ?? 0)}</div>
@@ -672,7 +683,6 @@ function ProductsPage() {
                             {p.trackSerial ? "—" : dead ? <span className="font-medium text-violet-600">{t("Dead stock")}</span> : dsold === null ? t("not sold") : dsold === 0 ? t("sold today") : t("{n}d ago", { n: dsold })}
                           </div>
                         </Td>
-                        <Td>{p.expiryDate ? <Badge color={expSoon ? "red" : "slate"}>{formatDate(p.expiryDate)}</Badge> : <span className="text-slate-300">—</span>}</Td>
                         {can.manage && (
                           <Td className="text-right">
                             <div className="flex justify-end gap-1">
