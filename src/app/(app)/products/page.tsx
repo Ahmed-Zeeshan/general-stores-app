@@ -55,7 +55,8 @@ type Product = {
 
 type SortKey = "name" | "category" | "costPrice" | "salePrice" | "margin" | "stock" | "sold30" | "lastSoldAt";
 type Filter = "all" | "low" | "out" | "dead" | "expiring";
-const PAGE_SIZE = 50;
+const DEFAULT_PAGE_SIZE = 50;
+const ALL_PAGE_SIZE = 100000;
 /** Not sold for this many days (and still in stock) = dead stock. */
 const DEAD_DAYS = 60;
 
@@ -85,7 +86,7 @@ function SortTh({ label, k, sort, onSort, align = "left" }: { label: string; k: 
   const t = useT();
   const active = sort.key === k;
   return (
-    <th className={cn("sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500", align === "right" && "text-right")}>
+    <th className={cn("whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500", align === "right" && "text-right")}>
       <button type="button" onClick={() => onSort(k)} className={cn("inline-flex items-center gap-1 hover:text-slate-800", active && "text-slate-800", align === "right" && "w-full flex-row-reverse")}>
         {t(label)}
         {active ? sort.dir === 1 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" /> : <ArrowUpDown className="h-3 w-3 opacity-40" />}
@@ -201,6 +202,7 @@ function ProductsPage() {
   const [allBranches, setAllBranches] = useState(false);
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "name", dir: 1 });
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkCat, setBulkCat] = useState("");
 
@@ -300,11 +302,11 @@ function ProductsPage() {
     });
   }, [products, filter, sort]);
 
-  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
-  const pageRows = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pageCount = Math.max(1, Math.ceil(visible.length / pageSize));
+  const pageRows = visible.slice((page - 1) * pageSize, page * pageSize);
 
   // Back to the first page / clear picks whenever the view changes under us.
-  useEffect(() => setPage(1), [filter, sort, q, cat, allBranches]);
+  useEffect(() => setPage(1), [filter, sort, q, cat, allBranches, pageSize]);
   useEffect(() => setSelected(new Set()), [q, cat, allBranches]);
 
   function toggleSort(key: SortKey) {
@@ -582,11 +584,11 @@ function ProductsPage() {
             {visible.length === 0 ? (
               <EmptyState icon={<Package className="h-8 w-8" />} title="Nothing found" text="Try a different search or filter." />
             ) : (
-              <Table maxHeight="68vh">
+              <Table>
                 <thead>
                   <tr>
                     {can.manage && (
-                      <th className="sticky top-0 z-10 w-10 border-b border-slate-200 bg-slate-50 px-4 py-3">
+                      <th className="w-10 border-b border-slate-200 bg-slate-50 px-4 py-3">
                         <input type="checkbox" checked={allOnPageSelected} onChange={toggleSelectPage} aria-label="Select all on this page" className="h-4 w-4 rounded border-slate-300 accent-brand-600" />
                       </th>
                     )}
@@ -595,7 +597,7 @@ function ProductsPage() {
                     <SortTh label="Sale price" k="salePrice" sort={sort} onSort={toggleSort} align="right" />
                     <SortTh label="Stock" k="stock" sort={sort} onSort={toggleSort} align="right" />
                     <SortTh label="Sold (30d)" k="sold30" sort={sort} onSort={toggleSort} align="right" />
-                    {can.manage && <th className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 px-4 py-3" />}
+                    {can.manage && <th className="border-b border-slate-200 bg-slate-50 px-4 py-3" />}
                   </tr>
                 </thead>
                 <tbody>
@@ -679,8 +681,18 @@ function ProductsPage() {
                         </Td>
                         <Td className="text-right">
                           <div className="font-medium text-slate-700">{formatQty(p.sold30 ?? 0)}</div>
-                          <div className="text-xs text-slate-400">
-                            {p.trackSerial ? "—" : dead ? <span className="font-medium text-violet-600">{t("Dead stock")}</span> : dsold === null ? t("not sold") : dsold === 0 ? t("sold today") : t("{n}d ago", { n: dsold })}
+                          <div className="text-xs">
+                            {p.trackSerial ? (
+                              <span className="text-slate-300">—</span>
+                            ) : dsold === null ? (
+                              <span className="text-slate-400">{t("no sales yet")}</span>
+                            ) : dead ? (
+                              <span className="font-medium text-violet-600">{t("Dead · {n}d", { n: dsold })}</span>
+                            ) : dsold === 0 ? (
+                              <span className="text-emerald-600">{t("sold today")}</span>
+                            ) : (
+                              <span className="text-slate-400">{t("{n}d ago", { n: dsold })}</span>
+                            )}
                           </div>
                         </Td>
                         {can.manage && (
@@ -709,13 +721,29 @@ function ProductsPage() {
                 </tbody>
               </Table>
             )}
-            {visible.length > PAGE_SIZE && (
-              <div className="flex items-center justify-between gap-3 border-t border-slate-100 p-3 text-sm text-slate-600">
-                <span>{t("Showing {a}–{b} of {n}", { a: (page - 1) * PAGE_SIZE + 1, b: Math.min(page * PAGE_SIZE, visible.length), n: visible.length })}</span>
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" icon={<ChevronLeft className="h-4 w-4" />} disabled={page <= 1} onClick={() => setPage((pg) => Math.max(1, pg - 1))}>Prev</Button>
-                  <span className="tabular-nums">{t("Page {a} / {b}", { a: page, b: pageCount })}</span>
-                  <Button size="sm" variant="outline" disabled={page >= pageCount} onClick={() => setPage((pg) => Math.min(pageCount, pg + 1))}>{t("Next")}<ChevronRight className="ml-1 h-4 w-4" /></Button>
+            {visible.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 p-3 text-sm">
+                <span className="font-medium text-slate-700">
+                  {t("Showing {a}–{b} of {n} products", { a: (page - 1) * pageSize + 1, b: Math.min(page * pageSize, visible.length), n: visible.length })}
+                  {visible.length !== (products?.length ?? 0) && <span className="font-normal text-slate-400"> {t("(filtered from {n})", { n: products?.length ?? 0 })}</span>}
+                </span>
+                <div className="flex flex-wrap items-center gap-4 text-slate-500">
+                  <label className="flex items-center gap-1.5">
+                    {t("Per page")}
+                    <Select value={String(pageSize)} onChange={(e) => setPageSize(Number(e.target.value))} className="h-9 w-20">
+                      <option value="25">25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                      <option value={String(ALL_PAGE_SIZE)}>{t("All")}</option>
+                    </Select>
+                  </label>
+                  {pageCount > 1 && (
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline" icon={<ChevronLeft className="h-4 w-4" />} disabled={page <= 1} onClick={() => setPage((pg) => Math.max(1, pg - 1))}>Prev</Button>
+                      <span className="tabular-nums text-slate-600">{t("Page {a} / {b}", { a: page, b: pageCount })}</span>
+                      <Button size="sm" variant="outline" disabled={page >= pageCount} onClick={() => setPage((pg) => Math.min(pageCount, pg + 1))}>{t("Next")}<ChevronRight className="ml-1 h-4 w-4" /></Button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
