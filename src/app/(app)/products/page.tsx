@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ArrowDown, ArrowUp, ArrowUpDown, Barcode, Boxes, Camera, ChevronLeft, ChevronRight, Download, History, ListOrdered, ListPlus, Minus, MoreHorizontal, Star, Package, PackageX, Pencil, Plus, Printer, Search, SlidersHorizontal, Smartphone, Tags, Trash2, TrendingDown, TrendingUp, Wand2, X } from "lucide-react";
 import { BarcodeSvg } from "@/components/barcode";
 import { CameraButton, CameraScanner, useBarcodeScanner } from "@/components/barcode-scanner";
-import { Badge, Button, Card, cn, Count, EmptyState, Field, Input, Menu, MenuItem, Modal, PageHeader, Segmented, Select, Spinner, StatCard, Table, Td, Textarea } from "@/components/ui";
+import { Badge, Button, Card, cn, Count, EmptyState, Field, Input, Menu, MenuItem, Modal, PageHeader, Segmented, Select, Spinner, Textarea } from "@/components/ui";
 import { toCsv } from "@/lib/csv";
 import { useCan, useSession } from "@/components/session";
 import { useToast } from "@/components/toast";
@@ -82,11 +82,11 @@ function isDead(p: Product): boolean {
 const QUICK_UNITS = ["pcs", "dozen", "pack", "box", "carton"];
 
 /** A column heading you can click to sort by; shows the direction and highlights when active. */
-function SortTh({ label, k, sort, onSort, align = "left" }: { label: string; k: SortKey; sort: { key: SortKey; dir: 1 | -1 }; onSort: (k: SortKey) => void; align?: "left" | "right" }) {
+function SortTh({ label, k, sort, onSort, align = "left", grow = false }: { label: string; k: SortKey; sort: { key: SortKey; dir: 1 | -1 }; onSort: (k: SortKey) => void; align?: "left" | "right"; grow?: boolean }) {
   const t = useT();
   const active = sort.key === k;
   return (
-    <th className={cn("whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500", align === "right" && "text-right")}>
+    <th className={cn("whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500", align === "right" && "text-right", grow && "w-full")}>
       <button type="button" onClick={() => onSort(k)} className={cn("inline-flex items-center gap-1 hover:text-slate-800", active && "text-slate-800", align === "right" && "w-full flex-row-reverse")}>
         {t(label)}
         {active ? sort.dir === 1 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" /> : <ArrowUpDown className="h-3 w-3 opacity-40" />}
@@ -139,13 +139,38 @@ function InlinePrice({ value, unitLabel, onSave }: { value: number; unitLabel: s
   );
 }
 
-/** A clickable summary card that also filters the list to the items it counts. */
-function FilterStat({ active, onClick, label, value, icon, tone, hint }: { active: boolean; onClick: () => void; label: string; value: React.ReactNode; icon: React.ReactNode; tone?: "green" | "blue" | "amber" | "rose" | "violet" | "slate"; hint?: React.ReactNode }) {
-  return (
-    <button type="button" onClick={onClick} className={cn("block rounded-2xl text-left transition hover:-translate-y-0.5", active && "ring-2 ring-brand-500 ring-offset-2")}>
-      <StatCard label={label} value={value} icon={icon} tone={tone} hint={hint} />
-    </button>
+const TONE_TEXT = { green: "text-emerald-600", amber: "text-amber-600", rose: "text-rose-600", violet: "text-violet-600", slate: "text-slate-500", blue: "text-sky-600" };
+
+/** A compact KPI tile. When `onClick` is given it also filters the list and highlights when active. */
+function StatTile({ label, value, icon, tone = "slate", hint, active, onClick }: { label: string; value: React.ReactNode; icon: React.ReactNode; tone?: keyof typeof TONE_TEXT; hint?: React.ReactNode; active?: boolean; onClick?: () => void }) {
+  const t = useT();
+  const inner = (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-xs font-medium text-slate-500">{t(label)}</span>
+        <span className={cn("shrink-0", TONE_TEXT[tone])}>{icon}</span>
+      </div>
+      <div className="mt-1 truncate text-xl font-bold tabular-nums tracking-tight text-slate-900">{value}</div>
+      <div className="mt-0.5 h-4 truncate text-[11px] text-slate-400">{typeof hint === "string" ? t(hint) : hint}</div>
+    </>
   );
+  const base = "block rounded-xl border p-3 text-left transition";
+  if (onClick)
+    return (
+      <button type="button" onClick={onClick} className={cn(base, active ? "border-brand-500 bg-brand-50/70 ring-1 ring-brand-500" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50")}>
+        {inner}
+      </button>
+    );
+  return <div className={cn(base, "border-slate-200 bg-white")}>{inner}</div>;
+}
+
+/** The small line under "Sold (30d)": when it last sold, or a calm "no sales yet" / violet "Dead" flag. */
+function movementLabel(p: Product, dsold: number | null, dead: boolean, t: ReturnType<typeof useT>): React.ReactNode {
+  if (p.trackSerial) return <span className="text-slate-300">—</span>;
+  if (dsold === null) return <span className="text-slate-400">{t("no sales yet")}</span>;
+  if (dead) return <span className="font-medium text-violet-600">{t("Dead · {n}d", { n: dsold })}</span>;
+  if (dsold === 0) return <span className="text-emerald-600">{t("sold today")}</span>;
+  return <span className="text-slate-400">{t("{n}d ago", { n: dsold })}</span>;
 }
 
 const EMPTY = {
@@ -489,65 +514,67 @@ function ProductsPage() {
       />
 
       {products && products.length > 0 && (
-        <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-          <FilterStat label="Products" value={counts.total} icon={<Package className="h-5 w-5" />} tone="slate" active={filter === "all"} onClick={() => setFilter("all")} />
-          {can.manage && <StatCard label="Stock value (retail)" value={formatPKR(retailValue)} icon={<TrendingUp className="h-5 w-5" />} tone="green" hint={t("Cost {amount}", { amount: formatPKR(stockValue) })} />}
-          <FilterStat label="Low stock" value={counts.low} icon={<TrendingDown className="h-5 w-5" />} tone="amber" active={filter === "low"} onClick={() => setFilter("low")} />
-          <FilterStat label="Out of stock" value={counts.out} icon={<PackageX className="h-5 w-5" />} tone="rose" active={filter === "out"} onClick={() => setFilter("out")} />
-          <FilterStat label="Dead stock" value={counts.dead} icon={<Boxes className="h-5 w-5" />} tone="violet" active={filter === "dead"} onClick={() => setFilter("dead")} hint={t("No sale in {n}+ days", { n: DEAD_DAYS })} />
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          <StatTile label="Products" value={counts.total} icon={<Package className="h-4 w-4" />} tone="slate" active={filter === "all"} onClick={() => setFilter("all")} />
+          {can.manage && <StatTile label="Stock value" value={formatPKR(retailValue)} icon={<TrendingUp className="h-4 w-4" />} tone="green" hint={t("Cost {amount}", { amount: formatPKR(stockValue) })} />}
+          <StatTile label="Low stock" value={counts.low} icon={<TrendingDown className="h-4 w-4" />} tone="amber" active={filter === "low"} onClick={() => setFilter("low")} />
+          <StatTile label="Out of stock" value={counts.out} icon={<PackageX className="h-4 w-4" />} tone="rose" active={filter === "out"} onClick={() => setFilter("out")} />
+          <StatTile label="Dead stock" value={counts.dead} icon={<Boxes className="h-4 w-4" />} tone="violet" active={filter === "dead"} onClick={() => setFilter("dead")} hint={t("No sale {n}d+", { n: DEAD_DAYS })} />
         </div>
       )}
 
       <Card>
-        <div className="sticky top-0 z-20 flex flex-col gap-3 border-b border-slate-100 bg-white p-4 lg:flex-row lg:items-center">
-          <div className="flex flex-1 gap-2">
-            <div className="relative flex-1">
+        <div className="space-y-3 border-b border-slate-100 p-4">
+          <div className="flex gap-2">
+            <div className="relative min-w-0 flex-1">
               <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search name, brand, phone model or scan barcode")} className="pl-10" />
             </div>
             <CameraButton onClick={() => setCameraOpen(true)} />
           </div>
-          <Select value={cat} onChange={(e) => setCat(e.target.value)} className="lg:w-56">
-            <option value="">{t("All categories")}</option>
-            {categories.map((c) => (
-              <option key={c._id} value={c._id}>
-                {c.name}
-              </option>
-            ))}
-          </Select>
-          {multiBranch && can.manage && !branchLocked && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={cat} onChange={(e) => setCat(e.target.value)} className="w-full sm:w-48">
+              <option value="">{t("All categories")}</option>
+              {categories.map((c) => (
+                <option key={c._id} value={c._id}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
+            {multiBranch && can.manage && !branchLocked && (
+              <Segmented
+                value={allBranches ? "all" : "here"}
+                onChange={(v) => setAllBranches(v === "all")}
+                options={[
+                  { value: "here", label: "This branch" },
+                  { value: "all", label: "All branches" },
+                ]}
+              />
+            )}
             <Segmented
-              value={allBranches ? "all" : "here"}
-              onChange={(v) => setAllBranches(v === "all")}
+              value={filter}
+              onChange={setFilter}
               options={[
-                { value: "here", label: "This branch" },
-                { value: "all", label: "All branches" },
+                { value: "all", label: "All" },
+                { value: "low", label: "Low stock" },
+                { value: "out", label: "Out of stock" },
+                { value: "dead", label: "Dead stock" },
+                { value: "expiring", label: "Expiring" },
               ]}
             />
-          )}
-          <Segmented
-            value={filter}
-            onChange={setFilter}
-            options={[
-              { value: "all", label: "All" },
-              { value: "low", label: "Low stock" },
-              { value: "out", label: "Out of stock" },
-              { value: "dead", label: "Dead stock" },
-              { value: "expiring", label: "Expiring" },
-            ]}
-          />
-          <div className="flex items-center gap-1">
-            <Select value={sort.key} onChange={(e) => setSort((s) => ({ key: e.target.value as SortKey, dir: s.dir }))} className="lg:w-40">
-              <option value="name">{t("Sort: Name")}</option>
-              <option value="category">{t("Sort: Category")}</option>
-              {can.manage && <option value="costPrice">{t("Sort: Cost")}</option>}
-              <option value="salePrice">{t("Sort: Sale price")}</option>
-              {can.manage && <option value="margin">{t("Sort: Margin")}</option>}
-              <option value="stock">{t("Sort: Stock")}</option>
-              <option value="sold30">{t("Sort: Sold (30d)")}</option>
-              <option value="lastSoldAt">{t("Sort: Last sold")}</option>
-            </Select>
-            <Button variant="outline" aria-label="Sort direction" onClick={() => setSort((s) => ({ key: s.key, dir: (s.dir === 1 ? -1 : 1) as 1 | -1 }))} icon={sort.dir === 1 ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />} />
+            <div className="flex items-center gap-1 sm:ml-auto">
+              <Select value={sort.key} onChange={(e) => setSort((s) => ({ key: e.target.value as SortKey, dir: s.dir }))} className="w-40">
+                <option value="name">{t("Sort: Name")}</option>
+                <option value="category">{t("Sort: Category")}</option>
+                {can.manage && <option value="costPrice">{t("Sort: Cost")}</option>}
+                <option value="salePrice">{t("Sort: Sale price")}</option>
+                {can.manage && <option value="margin">{t("Sort: Margin")}</option>}
+                <option value="stock">{t("Sort: Stock")}</option>
+                <option value="sold30">{t("Sort: Sold (30d)")}</option>
+                <option value="lastSoldAt">{t("Sort: Last sold")}</option>
+              </Select>
+              <Button variant="outline" aria-label="Sort direction" onClick={() => setSort((s) => ({ key: s.key, dir: (s.dir === 1 ? -1 : 1) as 1 | -1 }))} icon={sort.dir === 1 ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />} />
+            </div>
           </div>
         </div>
 
@@ -584,142 +611,220 @@ function ProductsPage() {
             {visible.length === 0 ? (
               <EmptyState icon={<Package className="h-8 w-8" />} title="Nothing found" text="Try a different search or filter." />
             ) : (
-              <Table>
-                <thead>
-                  <tr>
-                    {can.manage && (
-                      <th className="w-10 border-b border-slate-200 bg-slate-50 px-4 py-3">
-                        <input type="checkbox" checked={allOnPageSelected} onChange={toggleSelectPage} aria-label="Select all on this page" className="h-4 w-4 rounded border-slate-300 accent-brand-600" />
-                      </th>
-                    )}
-                    <SortTh label="Product" k="name" sort={sort} onSort={toggleSort} />
-                    {can.manage && <SortTh label="Cost" k="costPrice" sort={sort} onSort={toggleSort} align="right" />}
-                    <SortTh label="Sale price" k="salePrice" sort={sort} onSort={toggleSort} align="right" />
-                    <SortTh label="Stock" k="stock" sort={sort} onSort={toggleSort} align="right" />
-                    <SortTh label="Sold (30d)" k="sold30" sort={sort} onSort={toggleSort} align="right" />
-                    {can.manage && <th className="border-b border-slate-200 bg-slate-50 px-4 py-3" />}
-                  </tr>
-                </thead>
-                <tbody>
+              <>
+                {/* Desktop: data table */}
+                <div className="hidden overflow-x-auto xl:block">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr>
+                        {can.manage && (
+                          <th className="w-10 border-b border-slate-200 bg-slate-50 px-4 py-3">
+                            <input type="checkbox" checked={allOnPageSelected} onChange={toggleSelectPage} aria-label="Select all on this page" className="h-4 w-4 rounded border-slate-300 accent-brand-600" />
+                          </th>
+                        )}
+                        <SortTh label="Product" k="name" sort={sort} onSort={toggleSort} grow />
+                        {can.manage && <SortTh label="Cost" k="costPrice" sort={sort} onSort={toggleSort} align="right" />}
+                        <SortTh label="Sale price" k="salePrice" sort={sort} onSort={toggleSort} align="right" />
+                        <SortTh label="Stock" k="stock" sort={sort} onSort={toggleSort} align="right" />
+                        <SortTh label="Sold (30d)" k="sold30" sort={sort} onSort={toggleSort} align="right" />
+                        {can.manage && <th className="border-b border-slate-200 bg-slate-50 px-4 py-3" />}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pageRows.map((p) => {
+                        const low = p.stock > 0 && p.stock <= p.lowStockAlert;
+                        const expSoon = p.expiryDate && new Date(p.expiryDate).getTime() - Date.now() < 7 * 864e5;
+                        const m = can.manage ? marginPct(p) : null;
+                        const mc = m == null ? "" : m <= 0 ? "text-rose-600" : m < 15 ? "text-amber-600" : "text-emerald-600";
+                        const dsold = daysSinceSold(p);
+                        const dead = isDead(p);
+                        const canQuick = can.manage && !p.trackSerial && QUICK_UNITS.includes(p.unit);
+                        const sub = [p.category?.name, extraName(p.name, p.brand), p.fits && t("Fits {models}", { models: p.fits })].filter(Boolean).join(" · ");
+                        return (
+                          <tr key={p._id} className={cn("border-b border-slate-100 last:border-0 hover:bg-slate-50/60", selected.has(p._id) && "bg-brand-50/40")}>
+                            {can.manage && (
+                              <td className="px-4 py-3 align-top">
+                                <input type="checkbox" checked={selected.has(p._id)} onChange={() => toggleSelect(p._id)} aria-label={`Select ${p.name}`} className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-brand-600" />
+                              </td>
+                            )}
+                            <td className="px-4 py-3 align-top">
+                              <div className="flex items-start gap-2.5">
+                                {p.hasImage ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={`/api/products/${p._id}/image?v=${encodeURIComponent(p.updatedAt ?? "")}`} alt="" loading="lazy" className="h-10 w-10 shrink-0 rounded-lg border border-slate-100 bg-slate-50 object-contain" />
+                                ) : (
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-100 bg-slate-50 text-slate-300">
+                                    <Package className="h-4 w-4" />
+                                  </div>
+                                )}
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-semibold text-slate-800">{p.name}</span>
+                                    {can.manage ? (
+                                      <button type="button" onClick={() => toggleFavourite(p)} aria-label={`${p.favourite ? "Unstar" : "Star"} ${p.name}`} title={p.favourite ? t("Remove from Favourites") : t("Show first on the sale screen")} className="rounded p-0.5 text-slate-300 hover:text-amber-500">
+                                        <Star className={p.favourite ? "h-4 w-4 fill-amber-400 text-amber-400" : "h-4 w-4"} />
+                                      </button>
+                                    ) : (
+                                      p.favourite && <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                                    )}
+                                  </div>
+                                  {sub && <div className="text-xs text-slate-500">{sub}</div>}
+                                  {(extraName(p.name, p.nameUrdu) || p.barcode) && (
+                                    <div className="text-xs text-slate-400">
+                                      {extraName(p.name, p.nameUrdu) && <span className="urdu mr-2">{extraName(p.name, p.nameUrdu)}</span>}
+                                      {p.barcode}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            {can.manage && <td className="whitespace-nowrap px-4 py-3 text-right align-top tabular-nums text-slate-500">{formatPKR(p.costPrice)}</td>}
+                            <td className="whitespace-nowrap px-4 py-3 text-right align-top">
+                              {can.manage && !p.trackSerial ? (
+                                <InlinePrice value={p.salePrice} unitLabel={UNIT_LABELS[p.unit]} onSave={(v) => saveField(p, { salePrice: v })} />
+                              ) : (
+                                <span className="font-semibold tabular-nums text-slate-900">
+                                  {formatPKR(p.salePrice)}
+                                  <span className="text-xs font-normal text-slate-400"> /{UNIT_LABELS[p.unit]}</span>
+                                </span>
+                              )}
+                              {can.manage && m != null && <div className={cn("text-xs font-medium tabular-nums", mc)}>{Math.round(m)}% {t("margin")}</div>}
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-3 text-right align-top">
+                              <div className="inline-flex items-center justify-end gap-1">
+                                {canQuick && (
+                                  <button type="button" onClick={() => quickStock(p, -1)} disabled={p.stock <= 0} aria-label="Remove one" className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30">
+                                    <Minus className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                                <Badge color={p.stock <= 0 ? "red" : low ? "amber" : "green"}>
+                                  {formatQty(p.stock)} {UNIT_LABELS[p.unit]}
+                                </Badge>
+                                {canQuick && (
+                                  <button type="button" onClick={() => quickStock(p, 1)} aria-label="Add one" className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                                    <Plus className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                              {p.expiryDate && (
+                                <div className="mt-1 text-xs">
+                                  <Badge color={expSoon ? "red" : "slate"}>{t("Exp")} {formatDate(p.expiryDate)}</Badge>
+                                </div>
+                              )}
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-3 text-right align-top">
+                              <div className="font-medium tabular-nums text-slate-700">{formatQty(p.sold30 ?? 0)}</div>
+                              <div className="text-xs">{movementLabel(p, dsold, dead, t)}</div>
+                            </td>
+                            {can.manage && (
+                              <td className="whitespace-nowrap px-4 py-3 text-right align-top">
+                                <div className="flex justify-end gap-1">
+                                  {p.trackSerial ? (
+                                    <Link href={`/phones?product=${p._id}`} title={t("Phones of this model by IMEI")}>
+                                      <Button size="sm" variant="ghost" icon={<Smartphone className="h-4 w-4" />}>IMEIs</Button>
+                                    </Link>
+                                  ) : (
+                                    <Button size="sm" variant="ghost" icon={<SlidersHorizontal className="h-4 w-4" />} onClick={() => setAdjusting(p)}>Stock</Button>
+                                  )}
+                                  <Button size="sm" variant="ghost" onClick={() => setEditing(p)} aria-label="Edit"><Pencil className="h-4 w-4" /></Button>
+                                  <Menu align="right" trigger={<Button size="sm" variant="ghost" aria-label="More actions"><MoreHorizontal className="h-4 w-4" /></Button>}>
+                                    <MenuItem icon={<Barcode className="h-4 w-4" />} href={`/labels?ids=${p._id}`}>Print labels</MenuItem>
+                                    <MenuItem icon={<History className="h-4 w-4" />} onClick={() => setHistoryOf(p._id)}>Price history</MenuItem>
+                                    <MenuItem icon={<ListOrdered className="h-4 w-4" />} onClick={() => setStockOf(p._id)}>Stock history</MenuItem>
+                                    <MenuItem icon={<Trash2 className="h-4 w-4" />} danger onClick={() => remove(p)}>Remove</MenuItem>
+                                  </Menu>
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile / tablet: cards */}
+                <ul className="divide-y divide-slate-100 xl:hidden">
                   {pageRows.map((p) => {
                     const low = p.stock > 0 && p.stock <= p.lowStockAlert;
-                    const expSoon = p.expiryDate && new Date(p.expiryDate).getTime() - Date.now() < 7 * 864e5;
                     const m = can.manage ? marginPct(p) : null;
+                    const mc = m == null ? "" : m <= 0 ? "text-rose-600" : m < 15 ? "text-amber-600" : "text-emerald-600";
                     const dsold = daysSinceSold(p);
                     const dead = isDead(p);
                     const canQuick = can.manage && !p.trackSerial && QUICK_UNITS.includes(p.unit);
-                    const sub = [p.category?.name, extraName(p.name, p.brand), p.fits && t("Fits {models}", { models: p.fits })].filter(Boolean).join(" · ");
+                    const sub = [p.category?.name, extraName(p.name, p.brand)].filter(Boolean).join(" · ");
                     return (
-                      <tr key={p._id} className={cn("hover:bg-slate-50/60", selected.has(p._id) && "bg-brand-50/50")}>
-                        {can.manage && (
-                          <Td>
-                            <input type="checkbox" checked={selected.has(p._id)} onChange={() => toggleSelect(p._id)} aria-label={`Select ${p.name}`} className="h-4 w-4 rounded border-slate-300 accent-brand-600" />
-                          </Td>
-                        )}
-                        <Td>
-                          <div className="flex items-center gap-2">
-                            {p.hasImage && (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={`/api/products/${p._id}/image?v=${encodeURIComponent(p.updatedAt ?? "")}`} alt="" loading="lazy" className="h-9 w-9 shrink-0 rounded-lg bg-slate-50 object-contain" />
-                            )}
-                            <div className="font-semibold text-slate-800">{p.name}</div>
-                            {can.manage ? (
-                              <button
-                                type="button"
-                                onClick={() => toggleFavourite(p)}
-                                aria-label={`${p.favourite ? "Unstar" : "Star"} ${p.name}`}
-                                title={p.favourite ? t("Remove from Favourites") : t("Show first on the sale screen")}
-                                className="rounded p-0.5 text-slate-300 hover:text-amber-500"
-                              >
-                                <Star className={p.favourite ? "h-4 w-4 fill-amber-400 text-amber-400" : "h-4 w-4"} />
-                              </button>
-                            ) : (
-                              p.favourite && <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                            )}
-                          </div>
-                          {sub && <div className="text-xs text-slate-500">{sub}</div>}
-                          {(extraName(p.name, p.nameUrdu) || p.barcode) && (
-                            <div className="text-xs text-slate-400">
-                              {extraName(p.name, p.nameUrdu) && <span className="urdu mr-2">{extraName(p.name, p.nameUrdu)}</span>}
-                              {p.barcode}
-                            </div>
-                          )}
-                        </Td>
-                        {can.manage && <Td className="text-right text-slate-500">{formatPKR(p.costPrice)}</Td>}
-                        <Td className="text-right">
-                          {can.manage && !p.trackSerial ? (
-                            <InlinePrice value={p.salePrice} unitLabel={UNIT_LABELS[p.unit]} onSave={(v) => saveField(p, { salePrice: v })} />
+                      <li key={p._id} className={cn("p-4", selected.has(p._id) && "bg-brand-50/40")}>
+                        <div className="flex items-start gap-3">
+                          {can.manage && <input type="checkbox" checked={selected.has(p._id)} onChange={() => toggleSelect(p._id)} aria-label={`Select ${p.name}`} className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 accent-brand-600" />}
+                          {p.hasImage ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={`/api/products/${p._id}/image?v=${encodeURIComponent(p.updatedAt ?? "")}`} alt="" loading="lazy" className="h-11 w-11 shrink-0 rounded-lg border border-slate-100 bg-slate-50 object-contain" />
                           ) : (
-                            <span className="font-semibold text-slate-900">
-                              {formatPKR(p.salePrice)}
-                              <span className="text-xs font-normal text-slate-400"> /{UNIT_LABELS[p.unit]}</span>
-                            </span>
-                          )}
-                          {can.manage && m != null && <div className={cn("text-xs font-medium", m <= 0 ? "text-rose-600" : m < 10 ? "text-amber-600" : "text-emerald-600")}>{Math.round(m)}% {t("margin")}</div>}
-                        </Td>
-                        <Td className="text-right">
-                          <div className="inline-flex items-center justify-end gap-1">
-                            {canQuick && (
-                              <button type="button" onClick={() => quickStock(p, -1)} disabled={p.stock <= 0} aria-label="Remove one" className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30">
-                                <Minus className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                            <Badge color={p.stock <= 0 ? "red" : low ? "amber" : "green"}>
-                              {formatQty(p.stock)} {UNIT_LABELS[p.unit]}
-                            </Badge>
-                            {canQuick && (
-                              <button type="button" onClick={() => quickStock(p, 1)} aria-label="Add one" className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
-                                <Plus className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                          </div>
-                          {p.expiryDate && (
-                            <div className="mt-1 text-xs">
-                              <Badge color={expSoon ? "red" : "slate"}>{t("Exp")} {formatDate(p.expiryDate)}</Badge>
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-100 bg-slate-50 text-slate-300">
+                              <Package className="h-5 w-5" />
                             </div>
                           )}
-                        </Td>
-                        <Td className="text-right">
-                          <div className="font-medium text-slate-700">{formatQty(p.sold30 ?? 0)}</div>
-                          <div className="text-xs">
-                            {p.trackSerial ? (
-                              <span className="text-slate-300">—</span>
-                            ) : dsold === null ? (
-                              <span className="text-slate-400">{t("no sales yet")}</span>
-                            ) : dead ? (
-                              <span className="font-medium text-violet-600">{t("Dead · {n}d", { n: dsold })}</span>
-                            ) : dsold === 0 ? (
-                              <span className="text-emerald-600">{t("sold today")}</span>
-                            ) : (
-                              <span className="text-slate-400">{t("{n}d ago", { n: dsold })}</span>
-                            )}
-                          </div>
-                        </Td>
-                        {can.manage && (
-                          <Td className="text-right">
-                            <div className="flex justify-end gap-1">
-                              {p.trackSerial ? (
-                                <Link href={`/phones?product=${p._id}`} title={t("Phones of this model by IMEI")}>
-                                  <Button size="sm" variant="ghost" icon={<Smartphone className="h-4 w-4" />}>IMEIs</Button>
-                                </Link>
-                              ) : (
-                                <Button size="sm" variant="ghost" icon={<SlidersHorizontal className="h-4 w-4" />} onClick={() => setAdjusting(p)}>Stock</Button>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="truncate font-semibold text-slate-800">{p.name}</span>
+                                  {can.manage ? (
+                                    <button type="button" onClick={() => toggleFavourite(p)} aria-label={`${p.favourite ? "Unstar" : "Star"} ${p.name}`} className="shrink-0 rounded p-0.5 text-slate-300 hover:text-amber-500">
+                                      <Star className={p.favourite ? "h-4 w-4 fill-amber-400 text-amber-400" : "h-4 w-4"} />
+                                    </button>
+                                  ) : (
+                                    p.favourite && <Star className="h-4 w-4 shrink-0 fill-amber-400 text-amber-400" />
+                                  )}
+                                </div>
+                                {sub && <div className="truncate text-xs text-slate-500">{sub}</div>}
+                              </div>
+                              {can.manage && (
+                                <Menu align="right" trigger={<Button size="sm" variant="ghost" aria-label="More actions"><MoreHorizontal className="h-4 w-4" /></Button>}>
+                                  <MenuItem icon={<Barcode className="h-4 w-4" />} href={`/labels?ids=${p._id}`}>Print labels</MenuItem>
+                                  <MenuItem icon={<History className="h-4 w-4" />} onClick={() => setHistoryOf(p._id)}>Price history</MenuItem>
+                                  <MenuItem icon={<ListOrdered className="h-4 w-4" />} onClick={() => setStockOf(p._id)}>Stock history</MenuItem>
+                                  <MenuItem icon={<Trash2 className="h-4 w-4" />} danger onClick={() => remove(p)}>Remove</MenuItem>
+                                </Menu>
                               )}
-                              <Button size="sm" variant="ghost" onClick={() => setEditing(p)} aria-label="Edit"><Pencil className="h-4 w-4" /></Button>
-                              <Menu align="right" trigger={<Button size="sm" variant="ghost" aria-label="More actions"><MoreHorizontal className="h-4 w-4" /></Button>}>
-                                <MenuItem icon={<Barcode className="h-4 w-4" />} href={`/labels?ids=${p._id}`}>Print labels</MenuItem>
-                                <MenuItem icon={<History className="h-4 w-4" />} onClick={() => setHistoryOf(p._id)}>Price history</MenuItem>
-                                <MenuItem icon={<ListOrdered className="h-4 w-4" />} onClick={() => setStockOf(p._id)}>Stock history</MenuItem>
-                                <MenuItem icon={<Trash2 className="h-4 w-4" />} danger onClick={() => remove(p)}>Remove</MenuItem>
-                              </Menu>
                             </div>
-                          </Td>
-                        )}
-                      </tr>
+                            <div className="mt-2 flex items-end justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="font-bold tabular-nums text-slate-900">
+                                  {formatPKR(p.salePrice)}
+                                  <span className="text-xs font-normal text-slate-400"> /{UNIT_LABELS[p.unit]}</span>
+                                </div>
+                                {can.manage && m != null && <div className={cn("text-xs font-medium tabular-nums", mc)}>{Math.round(m)}% {t("margin")} · {t("cost")} {formatPKR(p.costPrice)}</div>}
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <div className="inline-flex items-center gap-1">
+                                  {canQuick && <button type="button" onClick={() => quickStock(p, -1)} disabled={p.stock <= 0} aria-label="Remove one" className="rounded-md p-1 text-slate-400 hover:bg-slate-100 disabled:opacity-30"><Minus className="h-3.5 w-3.5" /></button>}
+                                  <Badge color={p.stock <= 0 ? "red" : low ? "amber" : "green"}>{formatQty(p.stock)} {UNIT_LABELS[p.unit]}</Badge>
+                                  {canQuick && <button type="button" onClick={() => quickStock(p, 1)} aria-label="Add one" className="rounded-md p-1 text-slate-400 hover:bg-slate-100"><Plus className="h-3.5 w-3.5" /></button>}
+                                </div>
+                                <div className="mt-0.5 text-xs">{movementLabel(p, dsold, dead, t)}</div>
+                              </div>
+                            </div>
+                            {can.manage && (
+                              <div className="mt-3 flex gap-2">
+                                {p.trackSerial ? (
+                                  <Link href={`/phones?product=${p._id}`} className="flex-1">
+                                    <Button size="sm" variant="outline" className="w-full" icon={<Smartphone className="h-4 w-4" />}>IMEIs</Button>
+                                  </Link>
+                                ) : (
+                                  <Button size="sm" variant="outline" className="flex-1" icon={<SlidersHorizontal className="h-4 w-4" />} onClick={() => setAdjusting(p)}>Stock</Button>
+                                )}
+                                <Button size="sm" variant="outline" className="flex-1" icon={<Pencil className="h-4 w-4" />} onClick={() => setEditing(p)}>Edit</Button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </li>
                     );
                   })}
-                </tbody>
-              </Table>
+                </ul>
+              </>
             )}
             {visible.length > 0 && (
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 p-3 text-sm">
