@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, Banknote, CheckCircle2, FileText, Lock, LockOpen, Printer, Receipt } from "lucide-react";
+import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, Banknote, CheckCircle2, FileText, Lock, LockOpen, Printer, Receipt, Wallet } from "lucide-react";
 import { DayCloseWhatsApp } from "@/components/day-summary";
-import { Badge, Button, Card, cn, Count, EmptyState, Field, Input, Modal, PageHeader, Segmented, Spinner, StatCard, Table, Td, Textarea, Th } from "@/components/ui";
+import { Badge, Button, Card, cn, Count, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Spinner, StatCard, Table, Td, Textarea, Th } from "@/components/ui";
+import { EXPENSE_CATEGORIES } from "@/lib/constants";
 import { DateRange } from "@/components/date-range";
 import { BranchFilter } from "@/components/branch-filter";
 import { useCan, useSession } from "@/components/session";
@@ -62,6 +63,21 @@ const billsHref = (s: Pick<Shift, "_id" | "openedAt" | "closedAt">) =>
 
 const NOTES = [5000, 1000, 500, 100, 50, 20, 10];
 
+/** A simple note breakdown for an amount, e.g. "2×500, 1×100, 50 coins" — a hint for the change float. */
+function suggestFloat(amount: number, tr: ReturnType<typeof useT>): string {
+  let rem = Math.round(amount);
+  const parts: string[] = [];
+  for (const n of NOTES) {
+    const c = Math.floor(rem / n);
+    if (c > 0) {
+      parts.push(`${c}×${n.toLocaleString("en-PK")}`);
+      rem -= c * n;
+    }
+  }
+  if (rem > 0) parts.push(`${rem.toLocaleString("en-PK")} ${tr("coins")}`);
+  return parts.length ? parts.join(", ") : "—";
+}
+
 function diffBadge(diff: number | undefined, tr: ReturnType<typeof useT>) {
   if (diff === undefined || diff === null) return null;
   if (Math.abs(diff) < 0.5) return <Badge color="green">Exact</Badge>;
@@ -80,6 +96,7 @@ export default function DrawerPage() {
   const [closing, setClosing] = useState(false);
   const [closed, setClosed] = useState<Shift | null>(null);
   const [closedSummary, setClosedSummary] = useState<Summary | null>(null);
+  const [expenseOpen, setExpenseOpen] = useState(false);
 
   const load = useCallback(() => {
     api<Current>("/api/shifts/current").then(setCurrent).catch((e) => toast.error(e.message));
@@ -88,6 +105,23 @@ export default function DrawerPage() {
   useEffect(load, [load]);
 
   const shift = current?.shift;
+
+  // Per-cashier scorecard (owner/manager): how each person's closes added up — short / over / exact.
+  const byCashier = useMemo(() => {
+    const m = new Map<string, { name: string; closes: number; net: number; exact: number; short: number; over: number }>();
+    for (const h of history ?? []) {
+      if (h.status !== "closed" || h.difference === undefined) continue;
+      const name = h.closedByName ?? "—";
+      const e = m.get(name) ?? { name, closes: 0, net: 0, exact: 0, short: 0, over: 0 };
+      e.closes++;
+      e.net = round2(e.net + h.difference);
+      if (Math.abs(h.difference) < 0.5) e.exact++;
+      else if (h.difference < 0) e.short++;
+      else e.over++;
+      m.set(name, e);
+    }
+    return [...m.values()].sort((a, b) => a.net - b.net);
+  }, [history]);
 
   return (
     <div>
@@ -130,6 +164,7 @@ export default function DrawerPage() {
           <div className="flex flex-wrap gap-2 p-4">
             <Button variant="outline" icon={<ArrowDownCircle className="h-4 w-4 text-emerald-600" />} onClick={() => setMove("in")}>Cash in</Button>
             <Button variant="outline" icon={<ArrowUpCircle className="h-4 w-4 text-rose-600" />} onClick={() => setMove("out")}>Cash out</Button>
+            <Button variant="outline" icon={<Wallet className="h-4 w-4 text-amber-600" />} onClick={() => setExpenseOpen(true)}>Pay expense</Button>
             <Link href={billsHref(shift)}>
               <Button variant="outline" icon={<Receipt className="h-4 w-4" />}>Bills in this drawer</Button>
             </Link>
@@ -226,6 +261,32 @@ export default function DrawerPage() {
             <BranchFilter value={branch} onChange={setBranch} />
           </div>
         </div>
+        {can.manage && byCashier.length > 0 && (
+          <div className="border-b border-slate-100 p-4">
+            <h3 className="mb-3 text-sm font-semibold text-slate-700">{tr("By cashier (this period)")}</h3>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {byCashier.map((c) => (
+                <div key={c.name} className="rounded-xl border border-slate-200 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate font-semibold text-slate-800">{c.name}</span>
+                    {Math.abs(c.net) < 0.5 ? (
+                      <Badge color="green">Exact</Badge>
+                    ) : c.net < 0 ? (
+                      <Badge color="red">{tr("Short {amount}", { amount: formatPKR(-c.net) })}</Badge>
+                    ) : (
+                      <Badge color="amber">{tr("Over {amount}", { amount: formatPKR(c.net) })}</Badge>
+                    )}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    <Count n={c.closes} one="{n} close" many="{n} closes" /> · {tr("{n} exact", { n: c.exact })}
+                    {c.short > 0 && <span className="text-rose-600"> · {tr("{n} short", { n: c.short })}</span>}
+                    {c.over > 0 && <span className="text-amber-600"> · {tr("{n} over", { n: c.over })}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {!history ? (
           <Spinner />
         ) : history.length === 0 ? (
@@ -293,6 +354,7 @@ export default function DrawerPage() {
       </Card>
 
       {shift && <MoveModal shiftId={shift._id} kind={move} onClose={() => setMove(null)} onSaved={() => { setMove(null); load(); }} />}
+      <ExpenseModal open={expenseOpen} onClose={() => setExpenseOpen(false)} onSaved={() => { setExpenseOpen(false); load(); }} />
       {shift && (
         <CloseModal
           shift={shift}
@@ -394,6 +456,56 @@ function OpenDrawer({ branchName, lastClose, onOpened }: { branchName: string; l
         </form>
       </div>
     </Card>
+  );
+}
+
+function ExpenseModal({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => void }) {
+  const toast = useToast();
+  const tr = useT();
+  const [category, setCategory] = useState<string>("Tea & Food");
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (open) {
+      setAmount("");
+      setNote("");
+    }
+  }, [open]);
+  if (!open) return null;
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api("/api/expenses", { body: { category, amount: Number(amount), note: note || undefined, method: "cash" } });
+      toast.success(tr("Expense paid from the drawer"));
+      onSaved();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <Modal open onClose={onClose} title="Pay an expense (cash)" size="sm">
+      <form onSubmit={save} className="space-y-4">
+        <Field label="Category">
+          <Select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Expense category">
+            {EXPENSE_CATEGORIES.map((c) => (
+              <option key={c} value={c}>{tr(c)}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Amount (Rs)">
+          <Input autoFocus required type="number" inputMode="decimal" min="1" step="any" value={amount} onChange={(e) => setAmount(e.target.value)} className="h-14 text-2xl font-bold" aria-label="Expense amount" />
+        </Field>
+        <Field label="Note (optional)">
+          <Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} aria-label="Expense note" />
+        </Field>
+        <p className="text-xs text-slate-500">{tr("This cash expense comes out of the drawer and is added to today's expenses.")}</p>
+        <Button type="submit" size="lg" className="w-full" loading={saving}>Save</Button>
+      </form>
+    </Modal>
   );
 }
 
@@ -589,6 +701,11 @@ function CloseModal({ shift, open, onClose, onClosed }: { shift: Shift; open: bo
           <div className="flex justify-between"><span className="text-slate-500">{tr("Taken out")}</span><b>{formatPKR(Math.max(0, takenOut))}</b></div>
         </div>
       </div>
+      {keepNum > 0 && (
+        <p className="mt-2 text-xs text-slate-500">
+          <span className="font-medium text-slate-600">{tr("Notes to keep for change")}:</span> {suggestFloat(keepNum, tr)}
+        </p>
+      )}
       {(waiting.held > 0 || waiting.offline > 0) && (
         <div className="mt-4 flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
