@@ -28,6 +28,7 @@ export type ShopSettings = {
   waPaymentTemplate?: string;
   loyaltyEnabled?: boolean;
   requireOpenDrawer?: boolean;
+  drawerVariance?: number;
   loyaltyEarnPer?: number;
   loyaltyPointValue?: number;
   loyaltyMinRedeem?: number;

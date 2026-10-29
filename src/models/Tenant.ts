@@ -44,6 +44,8 @@ const TenantSchema = new Schema(
     loyaltyEnabled: { type: Boolean, default: false },
     /** Bills only while the branch's cash drawer is open (bills made offline are still accepted). */
     requireOpenDrawer: { type: Boolean, default: false },
+    /** At the day close, a count off by more than this many rupees needs a recount or a written reason. */
+    drawerVariance: { type: Number, default: 100, min: 0, max: 1_000_000 },
     /** Customer earns 1 point for every this many rupees paid. */
     loyaltyEarnPer: { type: Number, default: 100, min: 1 },
     /** What one point is worth when spent (Rs). */

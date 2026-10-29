@@ -15,7 +15,7 @@ import { WaModePicker } from "@/components/wa-mode";
 import { DEFAULT_WA_PAYMENT_TEMPLATE, DEFAULT_WA_TEMPLATE, paymentMessage, reminderMessage } from "@/lib/whatsapp";
 import { useT } from "@/lib/i18n";
 
-type User = { _id: string; name: string; username: string; role: "owner" | "manager" | "cashier"; active: boolean; branch?: string; hasPin?: boolean; maxDiscountPct?: number; allowUdhaar?: boolean };
+type User = { _id: string; name: string; username: string; role: "owner" | "manager" | "cashier"; active: boolean; branch?: string; hasPin?: boolean; maxDiscountPct?: number; allowUdhaar?: boolean; allowCashOut?: boolean };
 type BranchRow = { _id: string; name: string; address?: string; phone?: string; isMain: boolean; active: boolean; staff: number };
 type BranchData = { branches: BranchRow[]; maxBranches: number; activeBranches: number };
 type SettingsForm = ShopSettings & { ownerName?: string; fbrToken?: string; fbrTokenSet?: boolean; fbrPending?: number };
@@ -89,6 +89,7 @@ export default function SettingsPage() {
           ownerPhone: form.ownerPhone ?? "",
           loyaltyEnabled: !!form.loyaltyEnabled,
           requireOpenDrawer: !!form.requireOpenDrawer,
+          drawerVariance: Number(form.drawerVariance ?? 100),
           loyaltyEarnPer: Number(form.loyaltyEarnPer) || 100,
           loyaltyPointValue: Number(form.loyaltyPointValue) || 0,
           loyaltyMinRedeem: Number(form.loyaltyMinRedeem) || 0,
@@ -209,6 +210,9 @@ export default function SettingsPage() {
               title="Make bills only when the cash drawer is open"
               text="Before the first bill of the day, the cashier must open the drawer and count the cash in it, so every rupee is tracked for the day close. Bills made while the internet was off are still accepted."
             />
+            <Field className="mt-4 max-w-xs" label="Allowed difference at day close (Rs)" hint="If the counted cash is off by more than this, the cashier must recount or write a reason.">
+              <Input type="number" inputMode="decimal" min="0" value={form.drawerVariance ?? 100} onChange={(e) => setForm({ ...form, drawerVariance: e.target.value === "" ? undefined : Number(e.target.value) })} />
+            </Field>
           </Card>
           <Card className="p-6">
             <h2 className="mb-5 flex items-center gap-2 font-bold text-slate-900"><Gift className="h-5 w-5 text-violet-600" /> {t("Loyalty points")}</h2>
@@ -298,9 +302,9 @@ export default function SettingsPage() {
                 <Td>
                   <Badge color={ROLE_INFO[u.role].color}>{ROLE_INFO[u.role].label}</Badge>
                   {u.hasPin && <span className="ml-1"><Badge color="slate">PIN</Badge></span>}
-                  {u.role !== "owner" && (u.maxDiscountPct !== undefined || u.allowUdhaar === false) && (
+                  {u.role !== "owner" && (u.maxDiscountPct !== undefined || u.allowUdhaar === false || u.allowCashOut === false) && (
                     <div className="mt-0.5 text-xs text-slate-500">
-                      {[u.maxDiscountPct !== undefined && t("discount up to {n}%", { n: u.maxDiscountPct }), u.allowUdhaar === false && t("no udhaar")].filter(Boolean).join(" · ")}
+                      {[u.maxDiscountPct !== undefined && t("discount up to {n}%", { n: u.maxDiscountPct }), u.allowUdhaar === false && t("no udhaar"), u.allowCashOut === false && t("no cash out")].filter(Boolean).join(" · ")}
                     </div>
                   )}
                 </Td>
@@ -538,13 +542,13 @@ function UserModal({
 }) {
   const toast = useToast();
   const t = useT();
-  const [form, setForm] = useState({ name: "", username: "", password: "", role: "cashier", active: true, branch: "", pin: "", removePin: false, maxDiscountPct: "", allowUdhaar: true });
+  const [form, setForm] = useState({ name: "", username: "", password: "", role: "cashier", active: true, branch: "", pin: "", removePin: false, maxDiscountPct: "", allowUdhaar: true, allowCashOut: true });
   const [saving, setSaving] = useState(false);
   const isNew = value === "new";
 
   useEffect(() => {
     if (!value) return;
-    if (value === "new") setForm({ name: "", username: "", password: "", role: "cashier", active: true, branch: "", pin: "", removePin: false, maxDiscountPct: "", allowUdhaar: true });
+    if (value === "new") setForm({ name: "", username: "", password: "", role: "cashier", active: true, branch: "", pin: "", removePin: false, maxDiscountPct: "", allowUdhaar: true, allowCashOut: true });
     else
       setForm({
         name: value.name,
@@ -557,6 +561,7 @@ function UserModal({
         removePin: false,
         maxDiscountPct: value.maxDiscountPct !== undefined ? String(value.maxDiscountPct) : "",
         allowUdhaar: value.allowUdhaar !== false,
+        allowCashOut: value.allowCashOut !== false,
       });
   }, [value]);
   if (!value) return null;
@@ -567,7 +572,7 @@ function UserModal({
     try {
       const extra = {
         ...(form.pin ? { pin: form.pin } : form.removePin ? { pin: "" } : {}),
-        ...(form.role !== "owner" ? { maxDiscountPct: form.maxDiscountPct === "" ? "" : Number(form.maxDiscountPct), allowUdhaar: form.allowUdhaar } : {}),
+        ...(form.role !== "owner" ? { maxDiscountPct: form.maxDiscountPct === "" ? "" : Number(form.maxDiscountPct), allowUdhaar: form.allowUdhaar, allowCashOut: form.allowCashOut } : {}),
       };
       if (isNew) {
         const created = await api<{ _id: string }>("/api/users", { body: { name: form.name, username: form.username, password: form.password, role: form.role, branch: form.branch } });
@@ -640,6 +645,10 @@ function UserModal({
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input type="checkbox" checked={form.allowUdhaar} onChange={(e) => setForm({ ...form, allowUdhaar: e.target.checked })} className="h-4 w-4 accent-brand-600" aria-label="May give udhaar" />
               {t("May give udhaar and installments")}
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" checked={form.allowCashOut} onChange={(e) => setForm({ ...form, allowCashOut: e.target.checked })} className="h-4 w-4 accent-brand-600" aria-label="May take cash out of the drawer" />
+              {t("May take cash out of the drawer (bank deposit, etc.)")}
             </label>
           </div>
         )}

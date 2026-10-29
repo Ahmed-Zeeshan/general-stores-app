@@ -30,6 +30,22 @@ const ShiftSchema = new Schema(
     openingCash: { type: Number, required: true, min: 0 },
     openNote: { type: String, trim: true },
     movements: { type: [DrawerMovementSchema], default: [] },
+    /** Mid-day handovers between cashiers: who counted the drawer and when. Variance still settles at the day close. */
+    handovers: {
+      type: [
+        {
+          _id: false,
+          at: { type: Date, default: Date.now },
+          byName: String,
+          toName: String,
+          counted: Number,
+          expected: Number,
+          difference: Number,
+          note: String,
+        },
+      ],
+      default: undefined,
+    },
     closedAt: { type: Date },
     closedBy: { type: Schema.Types.ObjectId, ref: "User" },
     closedByName: { type: String },

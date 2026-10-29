@@ -5,7 +5,7 @@ import { requireBranch } from "@/lib/branches";
 import { round2 } from "@/lib/money";
 import { VARIANCE_NEEDS_REASON } from "@/lib/drawer-rule";
 import { shiftSummary } from "@/lib/shifts";
-import { Shift } from "@/models";
+import { Shift, Tenant } from "@/models";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -43,7 +43,9 @@ export const POST = handle<Ctx>(async (req, { params }) => {
   const closedAt = new Date();
   const summary = await shiftSummary(tid, shift, closedAt);
   const variance = round2(countedCash - summary.expectedCash);
-  if (Math.abs(variance) >= VARIANCE_NEEDS_REASON && !body.note) {
+  const t = await Tenant.findById(tid).select("drawerVariance").lean();
+  const threshold = t?.drawerVariance ?? VARIANCE_NEEDS_REASON;
+  if (Math.abs(variance) >= threshold && !body.note) {
     // Blind count: a cashier is not told the amount, only to count again or give a reason.
     throw new ApiError(
       400,

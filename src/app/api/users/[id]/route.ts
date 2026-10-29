@@ -17,6 +17,7 @@ const Body = z.object({
   /** Empty = no limit. */
   maxDiscountPct: z.union([z.literal(""), z.null(), z.coerce.number().min(0).max(100)]).optional(),
   allowUdhaar: z.boolean().optional(),
+  allowCashOut: z.boolean().optional(),
 });
 
 export const PUT = handle<Ctx>(async (req, { params }) => {
@@ -52,6 +53,7 @@ export const PUT = handle<Ctx>(async (req, { params }) => {
   if (typeof body.maxDiscountPct === "number") update.maxDiscountPct = body.maxDiscountPct;
   else if (body.maxDiscountPct === "" || body.maxDiscountPct === null) unset.maxDiscountPct = 1;
   if (body.allowUdhaar !== undefined) update.allowUdhaar = body.allowUdhaar;
+  if (body.allowCashOut !== undefined) update.allowCashOut = body.allowCashOut;
   const updated = await User.findOneAndUpdate({ _id: id, tenant: tid }, { $set: update, $unset: unset, ...(body.password ? { $inc: { sessionVersion: 1 } } : {}) }, { new: true }).lean();
   forgetUser(id);
   const changes = [

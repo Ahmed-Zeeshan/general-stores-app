@@ -22,6 +22,8 @@ const UserSchema = new Schema(
     /** Limits for staff set by the owner: largest discount on a bill (% of the bill), and udhaar allowed or not. */
     maxDiscountPct: { type: Number, min: 0, max: 100 },
     allowUdhaar: { type: Boolean, default: true },
+    /** May this staff member take cash OUT of the drawer (bank deposit, owner took cash)? */
+    allowCashOut: { type: Boolean, default: true },
   },
   { timestamps: true },
 );

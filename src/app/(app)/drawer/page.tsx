@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, Banknote, CheckCircle2, FileText, Lock, LockOpen, Printer, Receipt, Wallet } from "lucide-react";
+import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, Banknote, CheckCircle2, FileText, Lock, LockOpen, Printer, Receipt, Users, Wallet } from "lucide-react";
 import { DayCloseWhatsApp } from "@/components/day-summary";
 import { Badge, Button, Card, cn, Count, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Spinner, StatCard, Table, Td, Textarea, Th } from "@/components/ui";
 import { EXPENSE_CATEGORIES } from "@/lib/constants";
@@ -37,6 +37,8 @@ type Shift = {
   openingDifference?: number;
   /** Offline bills / refunds of this session that arrived after the close. */
   late?: { kind: "sale" | "return"; cash: number }[];
+  /** Mid-day handovers between cashiers (count vs what should be there so far). */
+  handovers?: { at: string; byName?: string; toName?: string; counted: number; expected: number; difference: number; note?: string }[];
 };
 type Summary = {
   bills: number;
@@ -97,6 +99,7 @@ export default function DrawerPage() {
   const [closed, setClosed] = useState<Shift | null>(null);
   const [closedSummary, setClosedSummary] = useState<Summary | null>(null);
   const [expenseOpen, setExpenseOpen] = useState(false);
+  const [handoverOpen, setHandoverOpen] = useState(false);
 
   const load = useCallback(() => {
     api<Current>("/api/shifts/current").then(setCurrent).catch((e) => toast.error(e.message));
@@ -165,6 +168,7 @@ export default function DrawerPage() {
             <Button variant="outline" icon={<ArrowDownCircle className="h-4 w-4 text-emerald-600" />} onClick={() => setMove("in")}>Cash in</Button>
             <Button variant="outline" icon={<ArrowUpCircle className="h-4 w-4 text-rose-600" />} onClick={() => setMove("out")}>Cash out</Button>
             <Button variant="outline" icon={<Wallet className="h-4 w-4 text-amber-600" />} onClick={() => setExpenseOpen(true)}>Pay expense</Button>
+            <Button variant="outline" icon={<Users className="h-4 w-4 text-sky-600" />} onClick={() => setHandoverOpen(true)}>Hand over</Button>
             <Link href={billsHref(shift)}>
               <Button variant="outline" icon={<Receipt className="h-4 w-4" />}>Bills in this drawer</Button>
             </Link>
@@ -231,6 +235,26 @@ export default function DrawerPage() {
                       {m.kind === "in" ? "+" : "−"}
                       {formatPKR(m.amount)}
                     </b>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {can.manage && (shift.handovers?.length ?? 0) > 0 && (
+            <div className="border-t border-slate-100 p-4">
+              <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-700"><Users className="h-4 w-4 text-sky-600" /> {tr("Handovers")}</h3>
+              <ul className="space-y-1.5 text-sm">
+                {shift.handovers!.map((h, i) => (
+                  <li key={i} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
+                    <span className="text-slate-600">
+                      {formatDate(h.at, true)} · {h.byName}
+                      {h.toName && <> → {h.toName}</>}
+                      {h.note && <span className="text-slate-400"> · {h.note}</span>}
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-slate-500">{tr("counted")} {formatPKR(h.counted)}</span>
+                      {diffBadge(h.difference, tr)}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -355,6 +379,7 @@ export default function DrawerPage() {
 
       {shift && <MoveModal shiftId={shift._id} kind={move} onClose={() => setMove(null)} onSaved={() => { setMove(null); load(); }} />}
       <ExpenseModal open={expenseOpen} onClose={() => setExpenseOpen(false)} onSaved={() => { setExpenseOpen(false); load(); }} />
+      {shift && <HandoverModal shiftId={shift._id} open={handoverOpen} onClose={() => setHandoverOpen(false)} onSaved={() => { setHandoverOpen(false); load(); }} />}
       {shift && (
         <CloseModal
           shift={shift}
@@ -456,6 +481,53 @@ function OpenDrawer({ branchName, lastClose, onOpened }: { branchName: string; l
         </form>
       </div>
     </Card>
+  );
+}
+
+function HandoverModal({ shiftId, open, onClose, onSaved }: { shiftId: string; open: boolean; onClose: () => void; onSaved: () => void }) {
+  const toast = useToast();
+  const tr = useT();
+  const [counted, setCounted] = useState("");
+  const [toName, setToName] = useState("");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (open) {
+      setCounted("");
+      setToName("");
+      setNote("");
+    }
+  }, [open]);
+  if (!open) return null;
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api(`/api/shifts/${shiftId}/handover`, { body: { counted: Number(counted), toName: toName || undefined, note: note || undefined } });
+      toast.success(tr("Handover recorded"));
+      onSaved();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <Modal open onClose={onClose} title="Hand over the drawer" size="sm">
+      <form onSubmit={save} className="space-y-4">
+        <p className="text-sm text-slate-500">{tr("Count the cash now so the handover is on record. The day's short/over still settles at the close.")}</p>
+        <Field label="Cash counted now (Rs)">
+          <Input autoFocus required type="number" inputMode="decimal" min="0" step="any" value={counted} onChange={(e) => setCounted(e.target.value)} className="h-14 text-2xl font-bold" aria-label="Counted at handover" />
+        </Field>
+        <Field label="Handing over to (optional)">
+          <Input value={toName} onChange={(e) => setToName(e.target.value)} maxLength={60} placeholder={tr("Next cashier's name")} aria-label="Handing over to" />
+        </Field>
+        <Field label="Note (optional)">
+          <Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} aria-label="Handover note" />
+        </Field>
+        <Button type="submit" size="lg" className="w-full" loading={saving}>Record handover</Button>
+      </form>
+    </Modal>
   );
 }
 
