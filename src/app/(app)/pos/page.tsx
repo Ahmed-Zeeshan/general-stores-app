@@ -12,6 +12,7 @@ import {
   CreditCard,
   HandCoins,
   Landmark,
+  Keyboard,
   Maximize2,
   MessageCircle,
   Star,
@@ -28,7 +29,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { Badge, Button, cn, Count, Field, Input, Modal, Segmented, Spinner } from "@/components/ui";
+import { Badge, Button, cn, Count, Field, Input, Menu, Modal, Segmented, Spinner } from "@/components/ui";
 import { CustomerPicker, type PartyLite } from "@/components/customer-picker";
 import { CameraButton, CameraScanner, beep, useBarcodeScanner } from "@/components/barcode-scanner";
 import { useCan, useSession } from "@/components/session";
@@ -135,6 +136,9 @@ export default function PosPage() {
   // Lines whose "discount on this item" box is open.
   const [discOpen, setDiscOpen] = useState<Set<string>>(new Set());
   const [billDiscount, setBillDiscount] = useState("");
+  // Clarity helpers: Undo the last removed line, and a brief pulse on the item count when one is added.
+  const [lastRemoved, setLastRemoved] = useState<CartItem | null>(null);
+  const [pulse, setPulse] = useState(false);
   const [pickCustomer, setPickCustomer] = useState(false);
   const [looseFor, setLooseFor] = useState<Product | null>(null);
   const [phoneFor, setPhoneFor] = useState<Product | null>(null);
@@ -404,7 +408,16 @@ export default function PosPage() {
         return { ...next, discount: Math.min(next.discount, round2(next.qty * next.price)) };
       }),
     );
-  const removeItem = (key: string) => setCart((c) => c.filter((i) => i.key !== key));
+  const removeItem = (key: string) => {
+    const it = cart.find((i) => i.key === key);
+    if (it) setLastRemoved(it);
+    setCart((c) => c.filter((i) => i.key !== key));
+  };
+  function undoRemove() {
+    if (!lastRemoved) return;
+    setCart((c) => (c.some((i) => i.key === lastRemoved.key) ? c : [...c, lastRemoved]));
+    setLastRemoved(null);
+  }
 
   const offers = useMemo(
     () =>
@@ -441,6 +454,19 @@ export default function PosPage() {
   const tax = taxRate ? round2(inclusive ? (afterDiscount * taxRate) / (100 + taxRate) : (afterDiscount * taxRate) / 100) : 0;
   const total = inclusive ? afterDiscount : round2(afterDiscount + tax);
   const itemCount = cart.length;
+  // A quick visual pulse on the item count whenever a line is added.
+  useEffect(() => {
+    if (itemCount === 0) return;
+    setPulse(true);
+    const id = setTimeout(() => setPulse(false), 300);
+    return () => clearTimeout(id);
+  }, [itemCount]);
+  // The "Undo remove" banner clears itself after a few seconds.
+  useEffect(() => {
+    if (!lastRemoved) return;
+    const id = setTimeout(() => setLastRemoved(null), 6000);
+    return () => clearTimeout(id);
+  }, [lastRemoved]);
 
   const billPayload = {
     items: cart.map((i) => ({
@@ -573,7 +599,7 @@ export default function PosPage() {
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t("New Bill")} {lang === "en" && <span className="urdu ml-2 text-base text-slate-400">نیا بل</span>}</h1>
-            <p className="hidden text-xs text-slate-400 sm:block">{t("Tip: scan a barcode or type and press Enter · F2 search · F9 pay · F4 hold · F6 held bills · F8 receive udhaar")}</p>
+            <p className="hidden text-xs text-slate-400 sm:block">{t("Scan a barcode or search, then tap an item to add it to the bill.")}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {usingSaved && (
@@ -604,6 +630,19 @@ export default function PosPage() {
                 {t("Held bills")} <Badge color="amber">{held.length}</Badge>
               </Button>
             )}
+            <Menu
+              align="right"
+              trigger={<Button size="sm" variant="ghost" className="hidden whitespace-nowrap sm:inline-flex" icon={<Keyboard className="h-4 w-4" />} aria-label="Keyboard shortcuts">{t("Shortcuts")}</Button>}
+            >
+              <div className="w-56 space-y-1.5 px-3.5 py-2.5 text-xs text-slate-600">
+                {([["F2", t("Search")], ["F9", t("Take Payment")], ["F4", t("Hold bill")], ["F6", t("Held bills")], ["F8", t("Receive udhaar")]] as const).map(([k, label]) => (
+                  <div key={k} className="flex items-center justify-between gap-4">
+                    <span>{label}</span>
+                    <kbd className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[11px] text-slate-500">{k}</kbd>
+                  </div>
+                ))}
+              </div>
+            </Menu>
             <Button
               size="sm"
               variant={big ? "secondary" : "outline"}
@@ -729,10 +768,15 @@ export default function PosPage() {
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <h2 className="flex items-center gap-2 font-bold text-slate-900">
             <ShoppingCart className="h-5 w-5 text-brand-600" /> {t("Bill items")}
-            {itemCount > 0 && <Badge color="green">{itemCount}</Badge>}
+            {itemCount > 0 && <span className={cn("inline-block transition-transform duration-200", pulse && "scale-125")}><Badge color="green">{itemCount}</Badge></span>}
           </h2>
           {cart.length > 0 && (
-            <button onClick={resetBill} className="text-sm font-semibold text-rose-600 hover:text-rose-700">
+            <button
+              onClick={async () => {
+                if (await ask({ title: t("Clear the whole bill?"), message: t("All items on this bill will be removed."), tone: "danger", icon: "delete", confirmLabel: t("Clear all") })) resetBill();
+              }}
+              className="text-sm font-semibold text-rose-600 hover:text-rose-700"
+            >
               {t("Clear all")}
             </button>
           )}
@@ -777,10 +821,27 @@ export default function PosPage() {
               {correcting.phones.length > 0 && <p className="mt-1 text-xs font-semibold">{t("Add these again from the list (by IMEI): {items}", { items: correcting.phones.join(", ") })}</p>}
             </div>
           )}
+          {lastRemoved && (
+            <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-slate-800 px-3 py-2 text-sm text-white" role="status">
+              <span className="truncate">{t("Removed {name}", { name: lastRemoved.product.name })}</span>
+              <button type="button" onClick={undoRemove} className="shrink-0 font-semibold text-brand-300 hover:underline">{t("Undo")}</button>
+            </div>
+          )}
           {cart.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center py-12 text-center text-slate-400">
-              <Search className="mb-3 h-10 w-10" />
-              <p className="text-sm">{t("Tap a product or scan a barcode to add it to the bill.")}</p>
+            <div className="flex h-full flex-col items-center justify-center px-4 py-10 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
+                <ScanBarcode className="h-8 w-8" />
+              </div>
+              <p className="mt-4 font-semibold text-slate-700">{t("Start a new bill")}</p>
+              <p className="mt-1 max-w-[16rem] text-sm text-slate-500">{t("Scan a barcode or tap an item on the left — it will appear here.")}</p>
+              <div className="mt-5 space-y-2.5 text-left text-sm text-slate-600">
+                {[t("Find the item (scan or search)"), t("Tap it to add to the bill"), t("Press Take Payment")].map((step, i) => (
+                  <div key={i} className="flex items-center gap-2.5">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">{i + 1}</span>
+                    {step}
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
             <ul className="space-y-2">
@@ -920,7 +981,7 @@ export default function PosPage() {
           )}
         </div>
 
-        <div className="border-t border-slate-100 bg-white px-5 py-4">
+        <div className="sticky bottom-0 z-10 border-t border-slate-200 bg-white px-5 py-4 lg:static lg:border-slate-100">
           <div className="space-y-1.5 text-sm">
             <Row label={t("Subtotal")} value={formatPKR(subtotal)} />
             {offers.bill && billOffer > 0 && (
