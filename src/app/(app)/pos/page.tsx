@@ -570,12 +570,12 @@ export default function PosPage() {
     <div className="flex flex-col lg:h-[calc(100vh-var(--banner-h,0px))] lg:flex-row">
       {/* Products */}
       <section className="flex min-w-0 flex-1 flex-col p-4 sm:p-6 lg:overflow-hidden">
-        <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t("New Bill")} {lang === "en" && <span className="urdu ml-2 text-base text-slate-400">نیا بل</span>}</h1>
-            <p className="hidden text-xs text-slate-500 sm:block">{t("Tip: scan a barcode or type and press Enter · F2 search · F9 pay · F4 hold · F6 held bills · F8 receive udhaar")}</p>
+            <p className="hidden text-xs text-slate-400 sm:block">{t("Tip: scan a barcode or type and press Enter · F2 search · F9 pay · F4 hold · F6 held bills · F8 receive udhaar")}</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {usingSaved && (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800">
                 <CloudOff className="h-4 w-4" /> {t("Offline mode")}
@@ -687,6 +687,7 @@ export default function PosPage() {
                       "relative flex flex-col rounded-2xl border bg-white text-left shadow-xs transition hover:-translate-y-0.5 hover:border-brand-400 hover:shadow-md active:translate-y-0",
                       big ? "p-4" : "p-3.5",
                       inCart ? "border-brand-500 ring-2 ring-brand-100" : "border-slate-200",
+                      p.stock <= 0 && !inCart && "opacity-70",
                     )}
                   >
                     {p.favourite && <Star className="absolute left-2 top-2 h-4 w-4 fill-amber-400 text-amber-400" aria-label="Favourite" />}
@@ -712,8 +713,8 @@ export default function PosPage() {
                       {!p.trackSerial && priceOf(p, null) !== p.salePrice && <span className="ml-1 text-xs font-medium text-slate-400 line-through">{formatPKR(p.salePrice)}</span>}
                       <span className="text-xs font-medium text-slate-400">/{unitLabel(p.unit, t)}</span>
                     </span>
-                    <span className={cn("text-xs font-medium", p.stock <= 0 ? "text-rose-600" : "text-slate-500")}>
-                      {t("Stock: {n}", { n: formatQty(p.stock) })}
+                    <span className={cn("mt-1 inline-flex w-fit items-center rounded-md px-1.5 py-0.5 text-xs font-semibold", p.stock <= 0 ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-500")}>
+                      {p.stock <= 0 ? t("Out of stock") : t("Stock: {n}", { n: formatQty(p.stock) })}
                     </span>
                   </button>
                 );
@@ -960,7 +961,10 @@ export default function PosPage() {
               {t("Hold")}
             </Button>
             <Button size="xl" className="flex-1" disabled={!cart.length || cart.some((i) => i.qty <= 0)} onClick={startPayment}>
-              {t("Take Payment")}
+              <span className="flex w-full items-center justify-between gap-3">
+                <span className="flex items-center gap-2">{t("Take Payment")}{itemCount > 0 && <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-bold">{itemCount}</span>}</span>
+                <span className="tabular-nums">{formatPKR(total)}</span>
+              </span>
             </Button>
           </div>
         </div>

@@ -44,7 +44,8 @@ ok(await page.locator(`tr:has-text('${r.invoiceNo}') >> text=Returned`).count() 
 // product remove dialog
 await page.goto(B + "/products");
 await page.waitForSelector("tr:has-text('Sugar')");
-await page.locator("tr:has-text('Sugar') button[aria-label='Remove']").click();
+await page.locator("tr:has-text('Sugar') button[aria-label='More actions']").click();
+await page.click("text='Remove'");
 await page.waitForSelector("[role=alertdialog]");
 await page.waitForTimeout(300);
 await page.screenshot({ path: `${out}/confirm-delete.png` });

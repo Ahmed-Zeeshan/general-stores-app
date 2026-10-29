@@ -51,7 +51,8 @@ await page.keyboard.press("Escape");
 // ---- Products: stock history, each row opens its record
 await page.goto(B + "/products");
 await page.waitForSelector("tr:has-text('Tapal Tea')");
-await page.locator("tr:has-text('Tapal Tea') button[aria-label='Stock history']").click();
+await page.locator("tr:has-text('Tapal Tea') button[aria-label='More actions']").click();
+await page.click("text=Stock history");
 await page.waitForSelector("text=Stock history — Tapal Tea");
 const sh = norm(await page.locator("[role=dialog]").innerText());
 ok(sh.includes("Purchase") && sh.includes(pur.purchaseNo) && sh.includes("Sold") && sh.includes(sale.invoiceNo), "stock history lists the purchase and the bills");

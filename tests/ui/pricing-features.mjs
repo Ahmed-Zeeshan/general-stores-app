@@ -90,7 +90,8 @@ ok(bill.total === 585 && bill.items.find((i) => i.name === "Sugar").qty === 5 &&
 // ---- Products: price history and bulk update
 await page.goto(B + "/products");
 await page.waitForSelector("tr:has-text('Sugar')");
-await page.locator("tr:has-text('Sugar') button[aria-label='Price history']").click();
+await page.locator("tr:has-text('Sugar') button[aria-label='More actions']").click();
+await page.click("text=Price history");
 await page.waitForSelector("text=Price history — Sugar");
 ok(norm(await page.locator("[role=dialog]").innerText()).includes("New item"), "price history shows the first price (New item)");
 await page.keyboard.press("Escape");
@@ -111,7 +112,8 @@ await page.locator("[role=alertdialog] button:has-text('Change prices')").click(
 await page.waitForSelector("text=2 prices changed");
 ok((await get(`/api/products/${sugar._id}`)).product.salePrice === 130, "Sugar is now Rs 130");
 await page.waitForTimeout(500);
-await page.locator("tr:has-text('Sugar') button[aria-label='Price history']").click();
+await page.locator("tr:has-text('Sugar') button[aria-label='More actions']").click();
+await page.click("text=Price history");
 await page.waitForSelector("text=Bulk price update");
 dlg = norm(await page.locator("[role=dialog]").innerText());
 ok(dlg.includes("Imran") && dlg.includes("Rs 130"), "price history shows the bulk change by Imran");
