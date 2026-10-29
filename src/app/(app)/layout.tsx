@@ -52,32 +52,44 @@ import { NoAccessContent } from "@/components/not-found-page";
 
 const SHOP: Role[] = ["owner", "manager", "cashier"];
 type ModuleKey = "phones" | "repairs" | "wallets" | "installments";
-const NAV: { href: string; label: string; urdu: string; icon: typeof Package; roles: Role[]; multiBranch?: boolean; module?: ModuleKey; hideFor?: string[] }[] = [
+type GroupKey = "daily" | "customers" | "stock" | "shop";
+const NAV: { href: string; label: string; urdu: string; icon: typeof Package; roles: Role[]; group?: GroupKey; multiBranch?: boolean; module?: ModuleKey; hideFor?: string[] }[] = [
   { href: "/admin", label: "Shops", urdu: "دکانیں", icon: Building2, roles: ["superadmin"] },
-  { href: "/", label: "Dashboard", urdu: "ڈیش بورڈ", icon: LayoutDashboard, roles: SHOP },
-  { href: "/pos", label: "New Bill", urdu: "نیا بل", icon: ShoppingCart, roles: SHOP },
-  { href: "/sales", label: "Sales History", urdu: "فروخت", icon: Receipt, roles: SHOP },
-  { href: "/products", label: "Products & Stock", urdu: "اشیاء", icon: Package, roles: SHOP },
-  { href: "/customers", label: "Customers Khata", urdu: "کھاتہ", icon: BookOpen, roles: SHOP },
-  { href: "/phones", label: "Phones (IMEI)", urdu: "موبائل فون", icon: Smartphone, roles: SHOP, module: "phones" },
-  { href: "/used-phones", label: "Used Phones Bought", urdu: "پرانے فون", icon: Repeat, roles: ["owner", "manager"], module: "phones" },
-  { href: "/repairs", label: "Repairs", urdu: "مرمت", icon: Wrench, roles: SHOP, module: "repairs" },
-  { href: "/installments", label: "Installments", urdu: "قسطیں", icon: CalendarRange, roles: SHOP, module: "installments" },
-  { href: "/wallets", label: "Easyload & Wallets", urdu: "ایزی لوڈ", icon: Zap, roles: SHOP, module: "wallets" },
-  { href: "/drawer", label: "Cash Drawer", urdu: "کیش دراز", icon: Banknote, roles: SHOP },
-  { href: "/udhaar", label: "Udhaar Report", urdu: "ادھار رپورٹ", icon: BellRing, roles: ["owner", "manager"] },
-  { href: "/promotions", label: "Offers", urdu: "آفرز", icon: BadgePercent, roles: ["owner", "manager"] },
-  { href: "/expiry", label: "Expiry", urdu: "میعاد", icon: CalendarClock, roles: ["owner", "manager"] },
-  { href: "/labels", label: "Barcode Labels", urdu: "لیبل", icon: Barcode, roles: ["owner", "manager"] },
-  { href: "/production", label: "Production", urdu: "تیاری", icon: ChefHat, roles: ["owner", "manager"], hideFor: ["mobile"] },
-  { href: "/transfers", label: "Stock Transfer", urdu: "منتقلی", icon: ArrowLeftRight, roles: ["owner", "manager"], multiBranch: true },
-  { href: "/purchases", label: "Purchases", urdu: "خریداری", icon: PackagePlus, roles: ["owner", "manager"] },
-  { href: "/suppliers", label: "Suppliers", urdu: "سپلائرز", icon: Truck, roles: ["owner", "manager"] },
-  { href: "/reorder", label: "Reorder List", urdu: "آرڈر لسٹ", icon: ClipboardList, roles: ["owner", "manager"] },
-  { href: "/expenses", label: "Expenses", urdu: "اخراجات", icon: Wallet, roles: ["owner", "manager"] },
-  { href: "/reports", label: "Reports", urdu: "رپورٹس", icon: BarChart3, roles: ["owner", "manager"] },
-  { href: "/activity", label: "Activity Log", urdu: "سرگرمی", icon: History, roles: ["owner"] },
-  { href: "/settings", label: "Settings", urdu: "ترتیبات", icon: SettingsIcon, roles: ["owner"] },
+  // Daily
+  { href: "/", label: "Dashboard", urdu: "ڈیش بورڈ", icon: LayoutDashboard, roles: SHOP, group: "daily" },
+  { href: "/pos", label: "New Bill", urdu: "نیا بل", icon: ShoppingCart, roles: SHOP, group: "daily" },
+  { href: "/sales", label: "Sales History", urdu: "فروخت", icon: Receipt, roles: SHOP, group: "daily" },
+  { href: "/drawer", label: "Cash Drawer", urdu: "کیش دراز", icon: Banknote, roles: SHOP, group: "daily" },
+  { href: "/expenses", label: "Expenses", urdu: "اخراجات", icon: Wallet, roles: ["owner", "manager"], group: "daily" },
+  // Customers & services
+  { href: "/customers", label: "Customers Khata", urdu: "کھاتہ", icon: BookOpen, roles: SHOP, group: "customers" },
+  { href: "/udhaar", label: "Udhaar Report", urdu: "ادھار رپورٹ", icon: BellRing, roles: ["owner", "manager"], group: "customers" },
+  { href: "/installments", label: "Installments", urdu: "قسطیں", icon: CalendarRange, roles: SHOP, group: "customers", module: "installments" },
+  { href: "/repairs", label: "Repairs", urdu: "مرمت", icon: Wrench, roles: SHOP, group: "customers", module: "repairs" },
+  { href: "/wallets", label: "Easyload & Wallets", urdu: "ایزی لوڈ", icon: Zap, roles: SHOP, group: "customers", module: "wallets" },
+  // Stock
+  { href: "/products", label: "Products & Stock", urdu: "اشیاء", icon: Package, roles: SHOP, group: "stock" },
+  { href: "/phones", label: "Phones (IMEI)", urdu: "موبائل فون", icon: Smartphone, roles: SHOP, group: "stock", module: "phones" },
+  { href: "/used-phones", label: "Used Phones Bought", urdu: "پرانے فون", icon: Repeat, roles: ["owner", "manager"], group: "stock", module: "phones" },
+  { href: "/purchases", label: "Purchases", urdu: "خریداری", icon: PackagePlus, roles: ["owner", "manager"], group: "stock" },
+  { href: "/suppliers", label: "Suppliers", urdu: "سپلائرز", icon: Truck, roles: ["owner", "manager"], group: "stock" },
+  { href: "/reorder", label: "Reorder List", urdu: "آرڈر لسٹ", icon: ClipboardList, roles: ["owner", "manager"], group: "stock" },
+  { href: "/transfers", label: "Stock Transfer", urdu: "منتقلی", icon: ArrowLeftRight, roles: ["owner", "manager"], group: "stock", multiBranch: true },
+  { href: "/expiry", label: "Expiry", urdu: "میعاد", icon: CalendarClock, roles: ["owner", "manager"], group: "stock" },
+  { href: "/labels", label: "Barcode Labels", urdu: "لیبل", icon: Barcode, roles: ["owner", "manager"], group: "stock" },
+  { href: "/production", label: "Production", urdu: "تیاری", icon: ChefHat, roles: ["owner", "manager"], group: "stock", hideFor: ["mobile"] },
+  // Shop management
+  { href: "/promotions", label: "Offers", urdu: "آفرز", icon: BadgePercent, roles: ["owner", "manager"], group: "shop" },
+  { href: "/reports", label: "Reports", urdu: "رپورٹس", icon: BarChart3, roles: ["owner", "manager"], group: "shop" },
+  { href: "/activity", label: "Activity Log", urdu: "سرگرمی", icon: History, roles: ["owner"], group: "shop" },
+  { href: "/settings", label: "Settings", urdu: "ترتیبات", icon: SettingsIcon, roles: ["owner"], group: "shop" },
+];
+
+const GROUPS: { key: GroupKey; label: string; urdu: string }[] = [
+  { key: "daily", label: "Daily", urdu: "روزانہ" },
+  { key: "customers", label: "Customers", urdu: "گاہک" },
+  { key: "stock", label: "Stock", urdu: "اسٹاک" },
+  { key: "shop", label: "Shop", urdu: "دکان" },
 ];
 
 const ROLE_LABEL: Record<Role, string> = { superadmin: "Super Admin", owner: "Owner", manager: "Manager", cashier: "Cashier" };
@@ -154,77 +166,89 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const page = NAV.filter((n) => n.href !== "/" && (pathname === n.href || pathname.startsWith(n.href + "/"))).sort((x, y) => y.href.length - x.href.length)[0];
   const blocked = page && !page.roles.includes(data.user.role) ? page : null;
 
+  const navItem = (item: (typeof NAV)[number]) => (
+    <Link
+      key={item.href}
+      href={item.href}
+      className={cn(
+        "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition",
+        isActive(item.href) ? "bg-brand-600 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+      )}
+    >
+      <item.icon className={cn("h-[18px] w-[18px] shrink-0", isActive(item.href) ? "text-white" : "text-slate-400 group-hover:text-slate-600")} />
+      {lang === "ur" ? (
+        <>
+          <span className="urdu flex-1 text-left text-[15px] leading-loose">{item.urdu}</span>
+          <span className={cn("text-[11px] font-medium", isActive(item.href) ? "text-brand-100" : "text-slate-400")}>{item.label}</span>
+        </>
+      ) : (
+        <>
+          <span className="flex-1">{lang === "roman" ? t(item.label) : item.label}</span>
+          <span className={cn("urdu text-xs", isActive(item.href) ? "text-brand-100" : "text-slate-400")}>{item.urdu}</span>
+        </>
+      )}
+    </Link>
+  );
+
   const sidebar = (
     <div className="flex h-full flex-col">
-      <div className="px-5 py-5">
+      <div className="px-5 pb-3 pt-5">
         <Logo />
       </div>
-      <div className="mx-4 mb-3 rounded-xl bg-brand-50 px-3 py-2.5">
-        <div className="flex items-start gap-1">
+
+      {/* Which shop · who's signed in · quick actions */}
+      <div className="mx-3 mb-2 rounded-xl border border-brand-100 bg-brand-50/60 px-3 py-2.5">
+        <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-bold text-brand-900">{isAdmin ? t("Admin Panel") : data.settings?.shopName ?? t("My Shop")}</div>
-            <div className="text-xs text-brand-700">
+            <div className="truncate text-xs text-brand-700">
               {data.user.name} · {t(ROLE_LABEL[data.user.role])}
             </div>
-            {!isAdmin && <SwitchUserButton className="mt-0.5" />}
           </div>
-          {!isAdmin && <TasksBell className="-mr-1 -mt-1" />}
+          {!isAdmin && <TasksBell className="-mr-1 -mt-0.5" />}
         </div>
+        {!isAdmin && (
+          <div className="mt-2 flex items-center gap-2">
+            <SwitchUserButton />
+            <span className="text-brand-200">·</span>
+            <SearchButton compact />
+          </div>
+        )}
         {multiBranch && data.branch && <BranchSwitcher data={data} />}
       </div>
-      {!isAdmin && (
-        <div className="mx-4 mb-2">
-          <SearchButton />
-        </div>
-      )}
-      <nav className="scrollbar-thin flex-1 space-y-1 overflow-y-auto px-3 py-2">
-        {nav.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition",
-              isActive(item.href) ? "bg-brand-600 text-white shadow-md shadow-brand-600/25" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-            )}
-          >
-            <item.icon className={cn("h-5 w-5 shrink-0", isActive(item.href) ? "text-white" : "text-slate-400 group-hover:text-slate-600")} />
-            {lang === "ur" ? (
-              <>
-                <span className="urdu flex-1 text-left text-[15px] leading-loose">{item.urdu}</span>
-                <span className={cn("text-[11px] font-medium", isActive(item.href) ? "text-brand-100" : "text-slate-400")}>{item.label}</span>
-              </>
-            ) : (
-              <>
-                <span className="flex-1">{lang === "roman" ? t(item.label) : item.label}</span>
-                <span className={cn("urdu text-xs", isActive(item.href) ? "text-brand-100" : "text-slate-400")}>{item.urdu}</span>
-              </>
-            )}
-          </Link>
-        ))}
+
+      {/* Navigation — grouped by how a shop runs its day */}
+      <nav className="scrollbar-thin flex-1 overflow-y-auto px-3 pb-2">
+        {isAdmin ? (
+          <div className="space-y-1 pt-1">{nav.map(navItem)}</div>
+        ) : (
+          GROUPS.map((g) => {
+            const items = nav.filter((n) => n.group === g.key);
+            if (!items.length) return null;
+            return (
+              <div key={g.key} className="pb-1">
+                <div className="px-3 pb-1 pt-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">{lang === "ur" ? g.urdu : g.label}</div>
+                <div className="space-y-0.5">{items.map(navItem)}</div>
+              </div>
+            );
+          })
+        )}
       </nav>
-      <div className="space-y-1 border-t border-slate-100 p-3">
-        <div className="flex justify-center pb-1">
+
+      <div className="space-y-0.5 border-t border-slate-100 p-3">
+        <div className="flex justify-center pb-1.5">
           <LangSwitch />
         </div>
         {!isAdmin && (
-          <Link
-            href="/help"
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
-          >
-            <HelpCircle className="h-5 w-5" /> {t("Help")}
+          <Link href="/help" className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
+            <HelpCircle className="h-[18px] w-[18px]" /> {t("Help")}
           </Link>
         )}
-        <button
-          onClick={() => setPwOpen(true)}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
-        >
-          <KeyRound className="h-5 w-5" /> {t("Change password")}
+        <button onClick={() => setPwOpen(true)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
+          <KeyRound className="h-[18px] w-[18px]" /> {t("Change password")}
         </button>
-        <button
-          onClick={logout}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-rose-50 hover:text-rose-700"
-        >
-          <LogOut className="h-5 w-5" /> {t("Log out")}
+        <button onClick={logout} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-rose-50 hover:text-rose-700">
+          <LogOut className="h-[18px] w-[18px]" /> {t("Log out")}
         </button>
       </div>
     </div>
